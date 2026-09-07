@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.9.41] — 2026-09-07
+
+- Person 360 › Governance shows each finding in full — what, why it matters, remediation — with only this person’s rows under it (their accounts or entitlements, click for the drawer) and a link to the whole finding; no detour through Risk & findings to find the row.
+
 ## [2026.9.40] — 2026-09-07
 
 - People and Person 360 are one view. The People table is the picker; a row opens the person at #people/<employee id>, “← People” returns to the table, tabs keep the person. The separate sidebar entry and its picker page are gone; old #person/… links redirect.

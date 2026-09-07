@@ -256,13 +256,40 @@
   /* -------------------------------------------------------------- governance */
   function governanceTab(m, d) {
     const wrap = el('div', { class: 'grid g2' });
-    wrap.appendChild(card(T('p3.findingsTitle'), T('p3.findingsNote'), d.findings.length
-      ? el('ul', { class: 'clean' }, d.findings.map(f => el('li', {}, [
-          el('span', { class: 'sev ' + f.severity, text: T('c.' + f.severity) }), document.createTextNode(' '),
-          el('a', { href: '#', text: f.title, onclick: e => { e.preventDefault(); HR.app.go('risk', { tab: 'findings', finding: f.id }); } }),
-          el('div', { class: 'note', text: f.what })
-        ])))
-      : el('p', { class: 'note', text: T('p3.noFindings') })));
+    /* Each finding in full, but only this person's rows: what, why, how to fix, and the
+       accounts or entitlements it named for them — no detour through Risk & findings. */
+    const accountKeys = new Set(d.accounts.map(a => a.key));
+    const mine = f => f.entities.filter(e => (e.type === 'person' && e.key === d.person.personId) || (e.type === 'account' && accountKeys.has(e.key)));
+    const findingCard = f => {
+      const rows = mine(f);
+      const det = el('details', { class: 'finding', open: true });
+      const sum = el('summary');
+      sum.append(...[
+        el('span', { class: 'sev ' + f.severity, text: T('c.' + f.severity) }),
+        el('span', { class: 'f-title', text: f.title }),
+        el('span', { class: 'pill solid', text: T('p3.forThisPerson', { n: U.fmtInt(rows.length) }) }),
+        f.impactMonthly ? el('span', { class: 'pill', text: U.fmtMoney(f.impactMonthly) + '/mo' }) : null,
+        el('a', { href: '#', class: 'note', text: T('p3.allInFinding', { n: U.fmtInt(f.count) }), onclick: e => { e.preventDefault(); e.stopPropagation(); HR.app.go('risk', { tab: 'findings', finding: f.id }); } })
+      ].filter(Boolean));
+      det.appendChild(sum);
+      const body = el('div', { class: 'f-body' });
+      body.appendChild(dl([[T('rk.what'), f.what], [T('rk.why'), f.why], [T('rk.fix'), f.fix]]));
+      if (rows.length) body.appendChild(el('div', { style: 'margin-top:8px' }, HR.table.make({
+        columns: [
+          { key: 'label', label: T(rows[0].type === 'permission' ? 'c.permission' : rows[0].type === 'person' ? 'c.person' : 'c.account'), value: r => r.label },
+          { key: 'detail', label: T('rk.detail'), value: r => r.detail || '' }
+        ],
+        rows, pageSize: 10, exportName: 'finding-' + f.id + '-' + d.person.externalId,
+        onRowClick: r => { if (r.type === 'account') { const a = m.accounts.get(r.key); if (a) drawerAccount(a); } else if (r.type === 'permission') { const p = m.permissions.get(r.key); if (p) drawerPermission(p, m); } }
+      })));
+      det.appendChild(body);
+      return det;
+    };
+    const fCard = card(T('p3.findingsTitle'), T('p3.findingsNote'), d.findings.length
+      ? el('div', { class: 'stack' }, d.findings.map(findingCard))
+      : el('p', { class: 'note', text: T('p3.noFindings') }));
+    fCard.style.gridColumn = '1 / -1';
+    wrap.appendChild(fCard);
     wrap.appendChild(card(T('sod.tab'), T('dr.toxicNote'), d.sod.length
       ? el('ul', { class: 'clean' }, d.sod.map(v => el('li', {}, [
           el('span', { class: 'sev ' + v.severity, text: T('c.' + v.severity) }), document.createTextNode(' '),

@@ -18,6 +18,12 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.41', date: '2026-09-07',
+      changes: [
+        'Person 360 › Governance shows each finding in full — what, why it matters, remediation — with only this person’s rows under it (their accounts or entitlements, click for the drawer) and a link to the whole finding; no detour through Risk & findings to find the row.'
+      ]
+    },
+    {
       version: '2026.9.40', date: '2026-09-07',
       changes: [
         'People and Person 360 are one view. The People table is the picker; a row opens the person at #people/<employee id>, “← People” returns to the table, tabs keep the person. The separate sidebar entry and its picker page are gone; old #person/… links redirect.'
