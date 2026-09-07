@@ -366,17 +366,7 @@
     if (HR.policy && model.hasRecon) {
       try { Object.assign(model.summary, HR.policy.summaryOf(model)); } catch (e) { console.error(e); }
     }
-    /* One number for the board, higher is better: half how little risk sits in the
-       accounts, half how many controls are met. Without an evaluated scorecard it is
-       the risk half alone, and the summary says so. */
-    {
-      const s = model.summary;
-      const hasPolicy = s.policyEvaluated > 0 && s.policyScore != null;
-      const hasRisk = Number.isFinite(s.riskScore);
-      s.governanceScore = !hasRisk ? null : Math.round(hasPolicy ? 0.5 * (100 - s.riskScore) + 0.5 * 100 * s.policyScore : 100 - s.riskScore);
-      s.governancePartial = !hasPolicy;
-      s.governanceBand = s.governanceScore == null ? null : s.governanceScore >= 80 ? 'good' : s.governanceScore >= 60 ? 'watch' : 'poor';
-    }
+    governance(model.summary);
     /* What a trend needs beyond the totals: the finding ids (so a finding's age can be
        read off the snapshots that carried it), the biggest departments, the JML breaches. */
     try {
@@ -541,5 +531,18 @@
     };
   }
 
-  HR.model = { build, accountKey, permissionKey };
+  /* One number for the board, higher is better: half how little risk sits in the
+     accounts, half how many controls are met. Without an evaluated scorecard it is
+     the risk half alone, and the summary says so. Re-run whenever the policy half
+     changes (a limit edited, an exception accepted) so the two never drift apart. */
+  function governance(s) {
+    const hasPolicy = s.policyEvaluated > 0 && s.policyScore != null;
+    const hasRisk = Number.isFinite(s.riskScore);
+    s.governanceScore = !hasRisk ? null : Math.round(hasPolicy ? 0.5 * (100 - s.riskScore) + 0.5 * 100 * s.policyScore : 100 - s.riskScore);
+    s.governancePartial = !hasPolicy;
+    s.governanceBand = s.governanceScore == null ? null : s.governanceScore >= 80 ? 'good' : s.governanceScore >= 60 ? 'watch' : 'poor';
+    return s;
+  }
+
+  HR.model = { build, accountKey, permissionKey, governance };
 })(window.HR);

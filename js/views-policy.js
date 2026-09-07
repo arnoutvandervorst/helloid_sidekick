@@ -41,7 +41,8 @@
     HR.policy.set(id, patch);
     delete m._policy;
     /* The summary carries the score into snapshots and deltas; keep it current. */
-    try { Object.assign(m.summary, HR.policy.summaryOf(m)); } catch (e) { /* not scoreable yet */ }
+    try { Object.assign(m.summary, HR.policy.summaryOf(m)); HR.model.governance(m.summary); } catch (e) { /* not scoreable yet */ }
+    HR.app.updateTopbar && HR.app.updateTopbar();
     HR.app.render();
   }
 
@@ -254,11 +255,18 @@
     const ev = HR.policy.evaluate(m);
     const s = ev.summary;
     const score = s.score;
-    f.appendChild(el('div', { class: 'grid g4', style: 'margin-bottom:14px' }, [
+    /* The same headline as everywhere else leads; the controls share is its second half. */
+    const gs = m.summary;
+    const gsSev = { good: 'good', watch: 'medium', poor: 'critical' }[gs.governanceBand] || 'medium';
+    const diffGs = HR.app.state.diff && HR.app.state.diff.summary.governanceScore;
+    f.appendChild(el('div', { class: 'grid g5', style: 'margin-bottom:14px' }, [
+      tile(T('gs.title'), gs.governanceScore == null ? '\u2014' : String(gs.governanceScore),
+        gs.governancePartial ? T('gs.footPartial', { risk: gs.riskScore }) : T('gs.foot', { risk: gs.riskScore, pct: U.fmtPct(score, 0) }),
+        { severity: gsSev, delta: diffGs, inverse: true, onClick: () => HR.app.go('overview') }),
       tile(T('po.kScore'), U.fmtPct(score, 0),
-        T('po.kScoreFoot', { passed: s.passed, n: s.evaluated }) + ' \u00b7 ' + T('po.kScoreWeighted') + ' \u00b7 ' + T('gs.halfOf', { n: m.summary.governanceScore }),
-        { severity: score >= 1 ? 'good' : score >= 0.7 ? 'medium' : 'high', delta: HR.app.state.diff && HR.app.state.diff.summary.policyScore
-          ? { change: Math.round(100 * HR.app.state.diff.summary.policyScore.change) } : undefined, deltaFormat: v => v + 'pp' }),
+        T('po.kScoreFoot', { passed: s.passed, n: s.evaluated }) + ' \u00b7 ' + T('po.kScoreWeighted') + ' \u00b7 ' + T('gs.halfOfShort'),
+        { small: true, severity: score >= 1 ? 'good' : score >= 0.7 ? 'medium' : 'high', delta: HR.app.state.diff && HR.app.state.diff.summary.policyScore
+          ? { change: Math.round(100 * HR.app.state.diff.summary.policyScore.change) } : undefined, deltaFormat: v => v + 'pp', inverse: true }),
       tile(T('po.kCritical'), U.fmtInt(s.criticalOpen),
         s.worstOpen ? T('po.kCriticalFoot', { control: T('po.p.' + s.worstOpen.def.id) }) : T('po.kCriticalNone'),
         { severity: s.criticalOpen ? 'critical' : 'good', small: true }),

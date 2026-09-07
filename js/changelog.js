@@ -18,6 +18,12 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.44', date: '2026-09-07',
+      changes: [
+        'Compliance leads with the governance score too; “controls met” is the smaller tile beside it, marked as the score’s second half. Editing a limit or accepting an exception now recomputes the governance score and the topbar at once — it used to lag until the next import.'
+      ]
+    },
+    {
       version: '2026.9.43', date: '2026-09-07',
       changes: [
         'One governance score. The app carried three headline numbers pointing two ways — risk (lower is better) printed on the board cover as “24 / 100”, controls met (higher is better) and identity coverage — and a reader could not tell which was the score. There is one now: the governance score, 0–100, higher is better, half how little risk sits in the accounts (100 minus the risk exposure) and half the severity-weighted share of controls met; when no control can be evaluated it is the risk half alone and says so. It leads the Overview, the topbar, the board cover (with both halves printed under it and the verdict keyed to it), the Snapshots trend, the Diff and the “what changed” table; the risk figure is now called risk exposure and says “lower is better” wherever it appears; the compliance tile says it is half of the score. The board’s method page explains the formula.'
