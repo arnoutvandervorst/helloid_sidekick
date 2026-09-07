@@ -18,6 +18,13 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.39', date: '2026-09-07',
+      changes: [
+        'Person 360. One page per person with everything Sidekick knows, under Identity: header with org path, manager chain, contract and account chips; tiles for accounts, entitlements, risk, monthly cost, outlier score and findings; and six tabs — Overview (person and directory fields, contracts, the lifecycle in order with the first access and what a move left behind), Access (every entitlement with what grants it: rule, product, baseline or nobody; what a matching rule grants that is missing; the accounts with their toxic pairs and exclusions), Rules & products, Timeline (contracts, moves, history, audit events, exclusions, product requests and approvals, attestation decisions — one stream, filterable by kind), Governance (findings, toxic pairs, exclusions with reasons, attestation status, risk build-up per account, outlier factors) and Cost & impact (priced access, leaver burn, who reports to them, what they approved, what only they hold, what leaves with them). Deep-linkable as #person/<employee id>; exports as JSON.',
+        'People rows open the 360; the quick-view drawer, the account drawer’s person line and finding rows that name a person link to it. The People tiles — persons, current, past, future, identity outliers — are tappable and narrow the table to what they count.'
+      ]
+    },
+    {
       version: '2026.9.38', date: '2026-09-04',
       changes: [
         'Mined rules draw the same forest as Roles from HR. Above the rule table, Mining › Mined rules now shows one block per root rule with its specialisations indented under it: bar length is the group, opacity how alike its members are, the meta says entitlements and weakest coverage, pills flag missing people, combination or condensed rules and a rank beyond the cap (striped bar); the baseline is the trunk on top. Click a row for the rule’s drawer; search and “show all” as on the HR proposal.'

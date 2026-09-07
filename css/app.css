@@ -531,6 +531,25 @@ button.pill { background: none; font: inherit; font-size: 11px; line-height: inh
 details.finding.finding-target { animation: finding-flash 2.4s ease-out 1; scroll-margin-top: 80px; }
 .forest-trunk { padding: 6px 0 8px; border-bottom: 1px solid var(--border); margin-bottom: 8px; font-size: 12.5px; }
 .forest-row.over .forest-bar { background-image: repeating-linear-gradient(135deg, transparent 0 4px, rgba(255,255,255,.35) 4px 8px); }
+/* ---------- person 360 ---------- */
+.p360-head .p360-crumbs { font-size: 12.5px; margin-top: 4px; }
+.p360-head .p360-crumbs a { color: var(--text-secondary); text-decoration: none; }
+.p360-head .p360-crumbs a:hover { color: var(--accent, #4a7cf6); text-decoration: underline; }
+.p360-managers { font-size: 12.5px; margin-top: 2px; }
+.p360-life { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--border-strong); }
+.p360-life li { margin: 6px 0; font-size: 12.5px; position: relative; }
+.p360-life li::before { content: ''; position: absolute; left: -19px; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--border-strong); }
+.p360-timeline { list-style: none; margin: 10px 0 0; padding: 0; }
+.p360-timeline li { display: grid; grid-template-columns: 14px 92px 1fr auto; gap: 8px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+.p360-timeline .tl-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.p360-timeline .tl-employment .tl-dot { background: var(--accent, #4a7cf6); }
+.p360-timeline .tl-access .tl-dot { background: var(--good, #2e9e5b); }
+.p360-timeline .tl-account .tl-dot { background: var(--warning, #d9a13a); }
+.p360-timeline .tl-decision .tl-dot { background: var(--critical, #d64545); }
+.p360-timeline .tl-product .tl-dot { background: #8a5cf6; }
+.p360-timeline .tl-body { min-width: 0; overflow-wrap: anywhere; }
+.grid.g6 { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1100px) { .grid.g6 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .sod-why { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 10px 0 6px; font-size: 12.5px; }
 .sod-why dt { color: var(--text-primary); }
 .sod-why dd { margin: 0; color: var(--text-secondary); }

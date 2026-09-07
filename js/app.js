@@ -118,11 +118,18 @@
     ]));
   }
 
+  /* The hash names the view and, when the view is about one thing, that thing:
+     "#person/500107" survives a reload and can be sent to a colleague. */
   function go(view, params) {
     state.view = view; state.params = params || {};
-    location.hash = view;
+    location.hash = view + (state.params.id ? '/' + encodeURIComponent(state.params.id) : '');
     render();
     HR.usage.view(view);
+  }
+  function parseHash() {
+    const raw = location.hash.replace('#', '');
+    const i = raw.indexOf('/');
+    return i < 0 ? { view: raw, params: {} } : { view: raw.slice(0, i), params: { id: decodeURIComponent(raw.slice(i + 1)) } };
   }
 
   /* ---------------------------------------------------------------- import */
@@ -1009,8 +1016,10 @@
     });
 
     window.addEventListener('hashchange', () => {
-      const v = location.hash.replace('#', '');
-      if (v && HR.views[v] && v !== state.view) { state.view = v; state.params = {}; render(); }
+      const h = parseHash();
+      if (h.view && HR.views[h.view] && (h.view !== state.view || (h.params.id || null) !== (state.params.id || null))) {
+        state.view = h.view; state.params = h.params; render();
+      }
     });
 
     /* A reload used to lose the vault and the rules, which quietly downgraded views that
@@ -1042,8 +1051,8 @@
     }));
 
     restoreContext.then(() => refreshSnapshots()).then(async () => {
-      const v = location.hash.replace('#', '');
-      if (v && HR.views[v]) state.view = v;
+      const h = parseHash();
+      if (h.view && HR.views[h.view]) { state.view = h.view; state.params = h.params; }
       if (state.snapshots.length && !state.noAutoRecon) {
         await loadSnapshot(state.snapshots[0].id);
         if (state.snapshots.length > 1) await setBaseline(state.snapshots[1].id, true);

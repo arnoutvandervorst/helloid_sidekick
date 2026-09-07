@@ -182,7 +182,7 @@
   const REQUIRES = {
     overview: ['recon'], policies: ['recon'], audit: ['audit'], risk: ['recon'], cost: ['recon'],
     accounts: ['recon'], permissions: ['recon'],
-    people: ['vault|recon'], org: ['vault'], matching: ['recon', 'vault'],
+    people: ['vault|recon'], person: ['vault'], org: ['vault'], matching: ['recon', 'vault'],
     mining: ['vault'], rules: ['rules'],
     products: ['products|assignments'], activity: ['granted|history'],
     explain: ['recon'], diff: ['recon'], board: ['recon'],
@@ -256,7 +256,8 @@
       el('button', {
         class: 'tab' + (section === active ? ' active' : ''),
         role: 'tab',
-        onclick: () => HR.app.go(view, { tab: section.id })
+        /* A view about one thing keeps that thing while its tabs change. */
+        onclick: () => HR.app.go(view, Object.assign(params && params.id ? { id: params.id } : {}, { tab: section.id }))
       }, [
         document.createTextNode(section.label),
         section.count != null
@@ -1060,6 +1061,7 @@
         search: (r, q) => (r.label + ' ' + r.detail).toLowerCase().includes(q),
         onRowClick: r => {
           if (r.type === 'account') { const a = m.accounts.get(r.key); if (a) drawerAccount(a); }
+          else if (r.type === 'person') { const vp = m.vault && HR.person360 ? HR.person360.find(m, r.key) : null; if (vp) HR.app.go('person', { id: vp.externalId || vp.personId }); }
           else { const p = m.permissions.get(r.key); if (p) drawerPermission(p, m); }
         }
       })));
@@ -1594,9 +1596,11 @@
     return '—';
   }
 
-  function peopleView(m) {
+  function peopleView(m, params) {
     const f = document.createDocumentFragment();
     const hasVault = !!m.vault;
+    const flt = (params && params.filter) || '';
+    const pick = filter => HR.app.go('people', flt === filter ? {} : { filter });
 
     f.appendChild(el('div', { class: 'view-head' }, el('div', {}, [
       el('h1', { text: T('pp.title') }),
@@ -1651,10 +1655,10 @@
     } else {
       const counts = U.counts(rows, r => r.life.state);
       k.append(
-        tile(T('pp.persons'), U.fmtInt(rows.length), T('pp.personsFoot'), { small: true }),
-        tile(T('pp.stateCurrent'), U.fmtInt(counts.get('current') || 0), T('pp.contracts'), { small: true, severity: 'good' }),
-        tile(T('pp.statePast'), U.fmtInt(counts.get('past') || 0), T('pp.statePast'), { small: true, severity: (counts.get('past') || 0) ? 'critical' : 'good' }),
-        tile(T('pp.stateFuture'), U.fmtInt(counts.get('future') || 0), T('pp.stateFuture'), { small: true, severity: 'info' })
+        tile(T('pp.persons'), U.fmtInt(rows.length), T('pp.personsFoot'), { small: true, onClick: () => pick('') }),
+        tile(T('pp.stateCurrent'), U.fmtInt(counts.get('current') || 0), T('pp.contracts'), { small: true, severity: 'good', onClick: () => pick('current') }),
+        tile(T('pp.statePast'), U.fmtInt(counts.get('past') || 0), T('pp.statePast'), { small: true, severity: (counts.get('past') || 0) ? 'critical' : 'good', onClick: () => pick('past') }),
+        tile(T('pp.stateFuture'), U.fmtInt(counts.get('future') || 0), T('pp.stateFuture'), { small: true, severity: 'info', onClick: () => pick('future') })
       );
     }
     f.appendChild(k);
@@ -1685,13 +1689,22 @@
     if (outliers && outliers.rows.length) {
       f.appendChild(el('div', { class: 'grid g4', style: 'margin-top:14px' }, [
         tile(T('ol.kHigh'), U.fmtInt(outliers.summary.high), T('ol.kHighFoot', { of: U.fmtInt(outliers.summary.people), mean: outliers.summary.mean }),
-          { severity: outliers.summary.high ? 'medium' : 'good', small: true })
+          { severity: outliers.summary.high ? 'medium' : 'good', small: true, onClick: () => pick('outliers') })
+      ]));
+    }
+    /* A tapped tile narrows the table to what it counted; tap again, or the pill, to widen. */
+    const isHigh = r => { const o = outliers && outliers.byPerson.get(r.person.personId); return !!o && o.score >= HR.outlier.HIGH; };
+    const shownRows = !flt ? rows : rows.filter(r => flt === 'outliers' ? isHigh(r) : r.life.state === flt);
+    if (flt) {
+      f.appendChild(el('div', { class: 'row', style: 'margin-top:10px;gap:8px;align-items:center' }, [
+        el('span', { class: 'pill solid', text: T('c.filtered', { what: flt === 'outliers' ? T('ol.kHigh') : stateLabel(flt) }) + ' \u00b7 ' + U.fmtInt(shownRows.length) }),
+        el('a', { href: '#', class: 'note', text: T('c.showAll'), onclick: e => { e.preventDefault(); pick(''); } })
       ]));
     }
     f.appendChild(el('div', { style: 'margin-top:14px' }, card(null, null, HR.table.make({
       columns,
-      rows, pageSize: 40, exportName: 'people',
-      initialSort: synthetic ? { key: 'risk', dir: -1 } : { key: 'state', dir: 1 },
+      rows: shownRows, pageSize: 40, exportName: 'people',
+      initialSort: flt === 'outliers' ? { key: 'outlier', dir: -1 } : synthetic ? { key: 'risk', dir: -1 } : { key: 'state', dir: 1 },
       search: (r, q) => (r.person.displayName + ' ' + r.person.externalId + ' ' + r.department + ' ' + r.title +
         ' ' + r.accounts.map(a => a.userName).join(' ')).toLowerCase().includes(q),
       filters: [
@@ -1702,7 +1715,7 @@
           options: [{ value: 'with', label: '1+' }, { value: 'without', label: '0' }],
           match: (r, v) => (v === 'with') === (r.accounts.length > 0) }
       ].filter(Boolean),
-      onRowClick: r => drawerVaultPerson(r, m)
+      onRowClick: r => HR.app.go('person', { id: r.person.externalId || r.person.personId })
     }))));
     return f;
   }
@@ -1880,7 +1893,10 @@
   function drawerVaultPerson(row, m) {
     const p = row.person;
     const head = el('div', {}, [
-      el('h2', { text: p.displayName }),
+      el('div', { class: 'row', style: 'justify-content:space-between;align-items:center;gap:8px' }, [
+        el('h2', { text: p.displayName }),
+        el('button', { class: 'btn sm primary', text: T('p3.open') + ' \u2192', onclick: () => { closeDrawer(); HR.app.go('person', { id: p.externalId || p.personId }); } })
+      ]),
       el('div', { class: 'row' }, [
         el('span', { class: 'sev ' + STATE_SEV[row.life.state], text: stateLabel(row.life.state) }),
         el('span', { class: 'pill', text: offsetText(row.life) }),
@@ -3756,7 +3772,12 @@
     body.appendChild(dl([
       [T('c.system'), el('a', { href: '#', text: a.system, onclick: e => { e.preventDefault(); const sys = m.systemList.find(x => x.name === a.system); if (sys) drawerSystem(sys, m); } })],
       [T('c.displayName'), a.displayName],
-      [T('c.person'), a.personRaw || T('dr.notLinked')],
+      [T('c.person'), (() => {
+        /* The person's own page, when the vault knows them. */
+        const vp = a.personRaw && m.vault && HR.person360 ? HR.person360.find(m, a.personRaw) : null;
+        return vp ? el('a', { href: '#', text: a.personRaw, onclick: e => { e.preventDefault(); closeDrawer(); HR.app.go('person', { id: vp.externalId || vp.personId }); } })
+          : (a.personRaw || T('dr.notLinked'));
+      })()],
       [T('c.empCategory'), ecatControl(a)],
       [T('dr.permsHeld'), String(a.permCount)],
       [T('dr.unmanagedAssign'), String(a.unmanagedPermCount)],
