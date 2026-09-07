@@ -17,6 +17,9 @@ COPY collect-ad.ps1 collect-entra.ps1 /usr/share/nginx/html/
 # They ask for a key at run time; none is inside them.
 COPY helloid-export.py helloid-audit.py helloid_creds.py helloid-export.ps1 helloid-audit.ps1 HelloIDCreds.ps1 /usr/share/nginx/html/
 COPY docs/ENTRA-CONSENT.md /usr/share/nginx/html/docs/
+# The restore scripts for the rollback pack. They write only what a pack tells them to,
+# and only with -Apply; the pack itself never passes through here.
+COPY restore-ad.ps1 restore-entra.ps1 /usr/share/nginx/html/
 
 # Deliberately absent: *.csv, vault*.json and dist/. Exports carry account, person and
 # contract data and have no business on a public host.
