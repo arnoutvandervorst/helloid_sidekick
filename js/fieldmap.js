@@ -202,51 +202,17 @@
   /* ---- the evaluation-side Person objects --------------------------------- */
 
   /**
-   * Genuine PascalCase Persons when a real vault is loaded (the raw text is
-   * kept precisely for cases like this); a reconstruction from the collected
-   * directory otherwise — good fidelity for AD-source mappings, and the UI
-   * says which one it got.
+   * Genuine PascalCase Persons from the loaded vault (the raw text is kept
+   * precisely for cases like this). Nothing else will do: a Person rebuilt from
+   * a directory has no contracts to speak of, so every mapping that reads
+   * Person.PrimaryContract comes out empty and the simulation lies.
    */
   function personObjects(state) {
     if (state.vault && state.raw.vault) {
-      try {
-        const persons = JSON.parse(state.raw.vault).Persons || [];
-        return { persons, reconstructed: false };
-      } catch (e) { /* fall through to reconstruction */ }
+      try { return { persons: JSON.parse(state.raw.vault).Persons || [] }; }
+      catch (e) { /* unreadable: no persons */ }
     }
-    const dir = state.directory;
-    if (!dir) return { persons: [], reconstructed: false };
-    const persons = dir.users.map(u => ({
-      PersonId: u.id,
-      ExternalId: String(u.employeeId || ''),
-      DisplayName: u.displayName,
-      Name: {
-        GivenName: u.givenName || '', NickName: u.givenName || '',
-        Initials: u.initials || '',
-        FamilyName: u.surname || '', FamilyNamePrefix: '',
-        FamilyNamePartner: '', FamilyNamePartnerPrefix: '',
-        Convention: 'B'
-      },
-      Contact: {
-        Business: {
-          Email: u.mail || '',
-          Phone: { Fixed: u.phone || '', Mobile: u.mobile || '' },
-          Address: { Street: u.street || '', PostalCode: u.postalCode || '',
-            Locality: u.city || '', Country: u.country || '' }
-        },
-        Personal: { Email: '' }
-      },
-      Custom: Object.assign({}, u.extensionAttributes || {}),
-      PrimaryContract: {
-        StartDate: u.hireDate || null, EndDate: null,
-        Department: { DisplayName: u.department || '', ExternalId: u.department || '' },
-        Title: { Name: u.title || '', Code: '', ExternalId: u.title || '' },
-        Employer: { Name: u.company || '' }
-      },
-      PrimaryManager: { DisplayName: u.managerName || '', Email: '' },
-      Accounts: {}
-    }));
-    return { persons, reconstructed: true };
+    return { persons: [] };
   }
 
   /** Person.Accounts.<System> from the collected user — spaced and de-spaced keys. */
@@ -494,20 +460,28 @@
     };
   }
 
+  /**
+   * @param {Object} [opts] { action, person } — `person` narrows the run to the
+   *   vault persons whose name, external id or account contains that text.
+   */
   function simulate(mapping, state, opts) {
     const action = (opts && opts.action) || 'Update';
     const dir = state.directory;
     if (!dir) return { unavailable: 'no-directory' };
-    const { persons, reconstructed } = personObjects(state);
-    if (!persons.length) return { unavailable: 'no-persons' };
+    let { persons } = personObjects(state);
+    if (!persons.length) return { unavailable: 'no-vault' };
+    const q = String((opts && opts.person) || '').trim().toLowerCase();
+    if (q) {
+      persons = persons.filter(p => [p.DisplayName, p.ExternalId, p.UserName,
+        ...(Array.isArray(p.Accounts) ? p.Accounts.map(a => (a.Data || {}).sAMAccountName || (a.Data || {}).userName || '') : [])]
+        .some(v => String(v || '').toLowerCase().includes(q)));
+    }
 
     /* join: person -> collected user */
     const byName = new Map();
-    const byId = new Map();
     dir.users.forEach(u => {
       byName.set(String(u.userName).toLowerCase(), u);
       if (u.upn) byName.set(String(u.upn).toLowerCase().split('@')[0], u);
-      byId.set(u.id, u);
     });
     const inScope = mapping.fields
       .map(f => ({ field: f, set: actionFor(f, action) }))
@@ -524,10 +498,9 @@
     let joined = 0;
 
     for (const raw of persons) {
-      /* raw vault persons: find the collected account via Accounts[] userName;
-         reconstructed persons: PersonId === directory user id */
-      let user = byId.get(raw.PersonId) || null;
-      if (!user && Array.isArray(raw.Accounts)) {
+      /* find the collected account via the vault person's Accounts[] userName */
+      let user = null;
+      if (Array.isArray(raw.Accounts)) {
         for (const a of raw.Accounts) {
           const d = a.Data || {};
           user = byName.get(String(d.sAMAccountName || d.userName || d.UserName ||
@@ -570,7 +543,7 @@
     }
 
     return {
-      action, reconstructed, joined,
+      action, joined, person: q,
       total: persons.length,
       rows,
       perField: [...perField.values()].sort((a, b) => b.changed - a.changed || b.errors - a.errors),

@@ -18,6 +18,12 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.48', date: '2026-09-07',
+      changes: [
+        'The field-mapping simulation needs a vault. It used to run without one by rebuilding Person objects from the collected directory, and a Person built that way has no contract to speak of — every mapping that reads Person.PrimaryContract came out empty (“Medewerker: ” on account after account) and the run looked like a finding. The simulation now asks for a vault export and says why; with one loaded, the Persons are the vault’s own. It can also run for one person: type a name, employee id or account beside the action, and the run narrows to the matches and shows every field, changed or not, opening the person straight away when there is exactly one.'
+      ]
+    },
+    {
       version: '2026.9.47', date: '2026-09-07',
       changes: [
         'Field mapping: CN and Container no longer show up as “mapped attributes that are empty today”. They are not stored on an AD account — they are the two halves of its distinguished name — so an export that lacks them now answers from the account’s DN, in the attribute profile and in the simulation alike. The simulation itself works again on the hosted app: the server’s content-security policy forbade running the Complex mappings (which are JavaScript from the customer’s own export) and it failed with “Evaluating a string as JavaScript violates the following Content Security Policy directive”; eval is now the policy’s one allowance, and nginx.conf says why.'

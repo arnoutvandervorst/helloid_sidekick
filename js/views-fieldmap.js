@@ -204,6 +204,10 @@
       wrap.appendChild(el('p', { class: 'note', text: T('fm.needsDirectory') }));
       return wrap;
     }
+    if (!st.vault) {
+      wrap.appendChild(el('p', { class: 'note', text: T('fm.needsVault') }));
+      return wrap;
+    }
     const gap = gapCard(fm);
     if (gap) wrap.appendChild(gap);
 
@@ -215,9 +219,6 @@
       if (sim.unavailable) {
         results.appendChild(el('p', { class: 'note', text: T('fm.simUnavailable') }));
         return;
-      }
-      if (sim.reconstructed) {
-        results.appendChild(el('p', { class: 'note', style: 'margin-bottom:10px', text: T('fm.reconstructedNote') }));
       }
       const tiles = el('div', { class: 'grid g4' });
       tiles.append(
@@ -243,9 +244,10 @@
         onRowClick: f => drawerSimField(f, sim)
       }))));
 
-      const changedRows = sim.rows.filter(r => r.anyChange);
+      /* A run narrowed to one person shows that person whether or not anything changes. */
+      const changedRows = sim.person ? sim.rows : sim.rows.filter(r => r.anyChange);
       results.appendChild(el('div', { style: 'margin-top:14px' }, card(T('fm.perPersonTitle'),
-        T('fm.perPersonNote', { n: changedRows.length }), HR.table.make({
+        sim.person ? T('fm.perPersonOne', { q: sim.person, n: changedRows.length }) : T('fm.perPersonNote', { n: changedRows.length }), HR.table.make({
           columns: [
             { key: 'name', label: T('c.person'), value: r => r.user.displayName || r.user.userName },
             { key: 'userName', label: T('c.account'), value: r => r.user.userName },
@@ -260,19 +262,25 @@
           search: (r, q) => ((r.user.displayName || '') + ' ' + r.user.userName).toLowerCase().includes(q),
           onRowClick: r => drawerSimPerson(r, sim)
         }))));
+      if (sim.person && sim.rows.length === 1) drawerSimPerson(sim.rows[0], sim);
     };
 
     const run = () => {
-      SIM = HR.fieldmap.simulate(fm, st, { action: sel.value });
-      SIM_STAMP = stamp + '|' + sel.value;
+      SIM = HR.fieldmap.simulate(fm, st, { action: sel.value, person: who.value });
+      SIM_STAMP = stamp + '|' + sel.value + '|' + who.value;
       draw(SIM);
     };
 
     const sel = el('select', {}, ACTIONS.map(a =>
       el('option', { value: a, text: a, selected: a === 'Update' })));
+    const who = el('input', { type: 'search', placeholder: T('fm.personPh'), title: T('fm.personTitle') });
+    who.style.minWidth = '260px';
+    who.onkeydown = e => { if (e.key === 'Enter') run(); };
+    if (SIM && SIM.person) who.value = SIM.person;
     const btn = el('button', { class: 'btn primary', text: T('fm.run'), onclick: run });
     wrap.appendChild(card(T('fm.simTitle'), T('fm.simNote'), el('div', { class: 'row' }, [
       el('label', { class: 'inline' }, [document.createTextNode(T('fm.action')), sel]),
+      who,
       btn,
       el('span', { class: 'note', text: T('fm.iterationNote') })
     ])));
