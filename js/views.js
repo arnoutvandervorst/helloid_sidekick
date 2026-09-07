@@ -661,6 +661,13 @@
 
 
   /* ================================================================ OVERVIEW */
+  /** The governance score's own footnote: the two halves it is made of. */
+  function governanceFoot(s) {
+    return s.governancePartial
+      ? T('gs.footPartial', { risk: s.riskScore })
+      : T('gs.foot', { risk: s.riskScore, pct: U.fmtPct(s.policyScore || 0, 0) });
+  }
+
   function overview(m) {
     const f = document.createDocumentFragment();
     const s = m.summary;
@@ -673,9 +680,13 @@
 
     f.appendChild(el('div', { class: 'grid', style: 'margin-bottom:14px' }, sourcesCard(m)));
 
-    const kpis = el('div', { class: 'grid g4' });
+    const gsSev = { good: 'good', watch: 'medium', poor: 'critical' }[s.governanceBand] || 'medium';
+    const kpis = el('div', { class: 'grid g5' });
     kpis.append(
-      tile(T('ov.overallRisk'), String(s.riskScore), T('ov.weighted'), {
+      tile(T('gs.title'), String(s.governanceScore), governanceFoot(s), {
+        severity: gsSev, delta: bDelta('governanceScore'), inverse: true, onClick: () => HR.app.go('policies')
+      }),
+      tile(T('gs.risk'), String(s.riskScore), T('gs.lowerBetter'), {
         severity: s.riskBand, delta: bDelta('riskScore'), onClick: () => HR.app.go('risk')
       }),
       tile(T('ov.unownedAccounts'), U.fmtInt(s.orphanAccounts),
@@ -848,7 +859,7 @@
 
     const top = el('div', { class: 'grid g4' });
     top.append(
-      tile(T('ov.overallRisk'), String(m.risk.overall), T('c.' + m.summary.riskBand), { severity: m.summary.riskBand, delta: bDelta('riskScore') }),
+      tile(T('gs.risk'), String(m.risk.overall), T('c.' + m.summary.riskBand) + ' \u00b7 ' + T('gs.lowerBetter'), { severity: m.summary.riskBand, delta: bDelta('riskScore') }),
       tile(T('rk.criticalFindings'), String(m.summary.criticalFindings), T('rk.actWeek'), { severity: 'critical' }),
       tile(T('rk.highFindings'), String(m.summary.highFindings), T('rk.actQuarter'), { severity: 'high' }),
       tile(T('rk.atHigh'), String((m.risk.bands.critical || 0) + (m.risk.bands.high || 0)), T('rk.ofN', { n: m.summary.accounts }), { severity: 'high' })
@@ -2057,7 +2068,8 @@
         { small: true, delta: x, deltaFormat: fmt, inverse });
     };
     k.append(
-      dt(T('ov.overallRisk'), 'riskScore'),
+      dt(T('gs.title'), 'governanceScore', null, true),
+      dt(T('gs.risk'), 'riskScore'),
       dt(T('ov.unownedAccounts'), 'orphanAccounts'),
       dt(T('ov.unmanagedEnt'), 'unmanagedPermissionRows'),
       dt(T('df.licenceSpendMo'), 'monthlyCost', U.fmtMoney)
@@ -2166,6 +2178,11 @@
       const ordered = snaps.slice().sort((a, b) => a.importedAt - b.importedAt);
       const labels = ordered.map(s => new Date(s.importedAt).toLocaleDateString(HR.i18n.locale, { day: '2-digit', month: 'short' }));
       const g = el('div', { class: 'grid g2' });
+      if (ordered.some(s => s.summary.governanceScore != null)) {
+        g.appendChild(card(T('sn.governanceOverTime'), T('sn.perImport'), C.line(
+          [{ label: T('gs.title'), color: C.STATUS.good, points: ordered.map((s, i) => ({ x: i, y: s.summary.governanceScore })).filter(p => p.y != null) }],
+          labels, { maxY: 100 })));
+      }
       g.appendChild(card(T('sn.riskOverTime'), T('sn.perImport'), C.line(
         [{ label: T('ov.overallRisk'), color: C.slot(1), points: ordered.map((s, i) => ({ x: i, y: s.summary.riskScore, tip: '<div class="t-title">' + U.esc(s.name) + '</div><div class="t-row"><span>' + T('app.riskShort') + '</span><b>' + s.summary.riskScore + '</b></div>' })) }],
         labels, { maxY: 100 })));

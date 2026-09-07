@@ -256,7 +256,7 @@
     const score = s.score;
     f.appendChild(el('div', { class: 'grid g4', style: 'margin-bottom:14px' }, [
       tile(T('po.kScore'), U.fmtPct(score, 0),
-        T('po.kScoreFoot', { passed: s.passed, n: s.evaluated }) + ' \u00b7 ' + T('po.kScoreWeighted'),
+        T('po.kScoreFoot', { passed: s.passed, n: s.evaluated }) + ' \u00b7 ' + T('po.kScoreWeighted') + ' \u00b7 ' + T('gs.halfOf', { n: m.summary.governanceScore }),
         { severity: score >= 1 ? 'good' : score >= 0.7 ? 'medium' : 'high', delta: HR.app.state.diff && HR.app.state.diff.summary.policyScore
           ? { change: Math.round(100 * HR.app.state.diff.summary.policyScore.change) } : undefined, deltaFormat: v => v + 'pp' }),
       tile(T('po.kCritical'), U.fmtInt(s.criticalOpen),

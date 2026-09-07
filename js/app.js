@@ -914,7 +914,7 @@
     const parts = [T('app.sources', { n: sources.length })];
     if (state.model.hasRecon) parts.push(U.fmtInt(s.accounts) + ' ' + T('app.accounts'));
     if (state.vault) parts.push(U.fmtInt(state.vault.persons.length) + ' ' + T('app.persons'));
-    if (state.model.hasRecon) parts.push(T('app.riskShort') + ' ' + s.riskScore);
+    if (state.model.hasRecon) parts.push(T('gs.short') + ' ' + s.governanceScore + ' \u00b7 ' + T('app.riskShort') + ' ' + s.riskScore);
     if (state.baselineSnapshot) parts.push(T('app.vs') + ' ' + state.baselineSnapshot.name);
 
     sub.textContent = parts.join(' · ');

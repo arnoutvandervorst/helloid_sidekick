@@ -157,9 +157,7 @@
     rules: 'unmanaged-share', overent: 'over-provisioned', baseline: 'rule-coverage', stacked: 'disabled-licensed' };
 
   function verdict(m) {
-    const score = m.summary.riskScore;
-    const band = score >= 70 ? 'critical' : score >= 45 ? 'high' : score >= 20 ? 'medium' : 'low';
-    return T('bd.verdict.' + band);
+    return T('bd.verdict.' + (m.summary.governanceBand || 'watch'));
   }
 
   /* --------------------------------------------------------------- render */
@@ -253,12 +251,15 @@
               ' · ' + T('bd.records', { n: U.fmtInt(s.rows) }) + ' · ' + m.systemList.map(x => x.name).join(', ')
           })
         ]),
-        el('div', { class: 'verdict tone-' + (s.riskScore >= 70 ? 'bad' : s.riskScore >= 45 ? 'watch' : 'good') }, [
-          el('div', { class: 'verdict-label', text: T('bd.verdictLabel') }),
+        el('div', { class: 'verdict tone-' + ({ good: 'good', watch: 'watch', poor: 'bad' }[s.governanceBand] || 'watch') }, [
+          el('div', { class: 'verdict-label', text: T('gs.title') }),
           el('div', { class: 'verdict-score' }, [
-            el('span', { class: 'vs-num', text: String(s.riskScore) }),
+            el('span', { class: 'vs-num', text: String(s.governanceScore) }),
             el('span', { class: 'vs-den', text: '/100' })
           ]),
+          el('div', { class: 'verdict-parts', text: s.governancePartial
+            ? T('gs.partsPartial', { risk: s.riskScore })
+            : T('gs.parts', { risk: s.riskScore, pct: U.fmtPct(s.policyScore || 0, 0) }) }),
           el('p', { class: 'verdict-text', text: verdict(m) })
         ]),
         el('h2', { class: 'sheet-h', text: T('bd.execSummary') }),
@@ -362,7 +363,8 @@
         changeChildren.push(el('p', { class: 'lead', text: T('bd.noBaseline') }));
       } else {
         const rows = [
-          [T('bd.mOverall'), d.summary.riskScore, v => String(Math.round(v))],
+          [T('gs.title'), d.summary.governanceScore || { was: 0, now: 0, change: 0 }, v => String(Math.round(v)), true],
+          [T('gs.risk'), d.summary.riskScore, v => String(Math.round(v))],
           [T('bd.mUnowned'), d.summary.orphanAccounts, U.fmtInt],
           [T('bd.mGrants'), d.summary.unmanagedPermissionRows, U.fmtInt],
           [T('bd.mCostMo'), d.summary.monthlyCost, U.fmtMoney],
@@ -376,8 +378,8 @@
           el('th', { class: 'num', text: T('bd.changeCol') })
         ])));
         const tb2 = el('tbody');
-        rows.forEach(([label, delta, fmt]) => {
-          const better = delta.change < 0;
+        rows.forEach(([label, delta, fmt, higherIsBetter]) => {
+          const better = higherIsBetter ? delta.change > 0 : delta.change < 0;
           tb2.appendChild(el('tr', {}, [
             el('td', { text: label }),
             el('td', { class: 'num', text: fmt(delta.was) }),
@@ -407,7 +409,7 @@
             n: history.length,
             since: U.fmtDate(first.importedAt).split(',')[0],
             drift: (pct > 0 ? '+' : '') + pct + '%',
-            risk: first.summary.riskScore + ' \u2192 ' + latest.summary.riskScore,
+            risk: (first.summary.governanceScore != null ? first.summary.governanceScore : first.summary.riskScore) + ' \u2192 ' + (latest.summary.governanceScore != null ? latest.summary.governanceScore : latest.summary.riskScore),
             spend: U.fmtMoney(first.summary.monthlyCost || 0) + ' \u2192 ' + U.fmtMoney(latest.summary.monthlyCost || 0)
           }) }));
         }
@@ -648,7 +650,7 @@
       paper.appendChild(page([
         el('h2', { class: 'sheet-h', text: T('bd.secMethod') }),
         el('p', { class: 'lead', text: T('bd.methodLead') }),
-        el('ul', { class: 'method' }, [1, 2, 3, 4, 5].map(i => el('li', { text: T('bd.method' + i) }))
+        el('ul', { class: 'method' }, [1, 2, 3, 4, 5, 7].map(i => el('li', { text: T('bd.method' + i) }))
           .concat(m.comparison ? [el('li', { text: T('bd.method6') })] : [])),
         el('p', { class: 'footnote', text: T('bd.methodFoot') })
       ]));
