@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.9.47] — 2026-09-07
+
+- Field mapping: CN and Container no longer show up as “mapped attributes that are empty today”. They are not stored on an AD account — they are the two halves of its distinguished name — so an export that lacks them now answers from the account’s DN, in the attribute profile and in the simulation alike. The simulation itself works again on the hosted app: the server’s content-security policy forbade running the Complex mappings (which are JavaScript from the customer’s own export) and it failed with “Evaluating a string as JavaScript violates the following Content Security Policy directive”; eval is now the policy’s one allowance, and nginx.conf says why.
+
 ## [2026.9.46] — 2026-09-07
 
 - Workspaces: one browser, many customers. Everything the app remembers — settings, branding, favourites, the snapshot archive and the raw imports — used to live under one set of keys, so a partner’s second customer overwrote the first. The topbar now has a workspace picker with a manage drawer (new, rename, open, delete); each workspace keeps its own snapshots, imports, settings, branding and edition, so the board pack carries that customer’s name and logo. Switching reloads the page. The first workspace keeps the storage the app always used, so nothing migrates. Loading the demo moves to a workspace of its own instead of overwriting a customer, and turning storage off wipes every workspace.

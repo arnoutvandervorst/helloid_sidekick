@@ -285,6 +285,7 @@
     usagelocation: 'usageLocation', accountenabled: 'enabled',
     employeetype: 'employeeType',
     cn: 'cn', commonname: 'cn',
+    container: 'ou', path: 'ou', ou: 'ou', parentcontainer: 'ou',
     homedirectory: 'homeDirectory', homedrive: 'homeDrive',
     scriptpath: 'scriptPath', profilepath: 'profilePath',
     wwwhomepage: 'webPage', preferredlanguage: 'preferredLanguage',
@@ -294,6 +295,17 @@
   /* Never a directory attribute — a mapping writes it, but there is nothing
      to diff against and nothing a collector could fetch. */
   const NON_ATTRS = new Set(['password']);
+
+  /* cn and the container are not stored on an AD account: they are the two halves
+     of its distinguished name. An export that lacks them still answers, from the id. */
+  const isDn = id => /^cn=/i.test(String(id || ''));
+  const rdnOf = dn => String(dn).replace(/^cn=/i, '').split(/(?<!\\),/)[0].trim();
+  const derived = (user, alias) => {
+    if (!isDn(user.id)) return undefined;
+    if (alias === 'cn') return rdnOf(user.id);
+    if (alias === 'ou') return String(user.id).replace(/^[^,]+,/, '');
+    return undefined;
+  };
 
   /* Fields the source's API simply does not have: the collector emits '' for
      them, which must read as a gap, not as "currently empty". */
@@ -323,6 +335,8 @@
       /* The key must actually exist on the collected user: an export made
          before the collector learned this field is a gap, not an empty value. */
       if (alias in user) return { known: true, value: user[alias] };
+      const d = derived(user, alias);
+      if (d !== undefined) return { known: true, value: d };
       return { known: false };
     }
     /* A re-collect with -ExtraAttributes lands here, under the raw name. */
@@ -430,6 +444,7 @@
       }
       for (const k in (u.extensionAttributes || {})) note(k, u.extensionAttributes[k]);
       for (const k in (u.extra || {})) note(k, u.extra[k]);
+      for (const k of ['cn', 'ou']) if (!(k in u)) { const d = derived(u, k); if (d !== undefined) note(k, d); }
     }
 
     /* Which profiled attribute each mapping field writes. */
