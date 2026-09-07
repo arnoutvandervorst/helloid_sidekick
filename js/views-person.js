@@ -4,7 +4,7 @@
    never together. This page is the "show me everything about Milan" screen: who they are
    and where they sit, what they hold and why, what happened to them and when, what they
    cost and what depends on them. Everything comes from HR.person360.build; the page only
-   lays it out. Deep-linkable as #person/<employee id>. */
+   lays it out. Deep-linkable as #people/<employee id>. */
 (function (HR) {
   'use strict';
 
@@ -22,38 +22,8 @@
     if (days > 0) return T('wf.daysAgo', { n: U.fmtInt(days) });
     return T('pp.startsIn', { n: U.fmtInt(-days) });
   };
-  const goPerson = p => HR.app.go('person', { id: p.externalId || p.personId });
+  const goPerson = p => HR.app.go('people', { id: p.externalId || p.personId });
   const permName = (m, key) => { const p = m.permissions.get(key); return p ? p.name : String(key); };
-
-  /* ------------------------------------------------------------------ picker */
-  function picker(m, params) {
-    const f = document.createDocumentFragment();
-    f.appendChild(el('div', { class: 'view-head' }, el('div', {}, [
-      el('h1', { text: T('p3.title') }), el('p', { text: T('p3.lead') })
-    ])));
-    const index = HR.correlate.personAccountIndex(m, m.vault, m.correlation);
-    const rows = m.vault.persons.map(p => {
-      const entry = index.get(p.personId) || { accounts: [] };
-      const pc = p.primaryContract || p.contracts[0] || null;
-      return { person: p, life: HR.vault.lifecycle(p), accounts: entry.accounts,
-        department: pc ? (pc.department.name || pc.department.externalId) : '', title: pc ? (pc.title.name || pc.title.code) : '' };
-    });
-    f.appendChild(card(T('p3.pickTitle'), T('p3.pickNote'), HR.table.make({
-      columns: [
-        { key: 'name', label: T('c.person'), value: r => r.person.displayName },
-        { key: 'id', label: T('c.employeeId'), value: r => r.person.externalId },
-        { key: 'state', label: T('pp.state'), value: r => r.life.state, render: r => el('span', { class: 'sev ' + STATE_SEV[r.life.state], text: stateLabel(r.life.state) }) },
-        { key: 'department', label: T('pp.department'), value: r => r.department },
-        { key: 'title', label: T('pp.jobTitle'), value: r => r.title },
-        { key: 'accounts', label: T('pp.accounts'), num: true, value: r => r.accounts.length, render: r => el('span', { text: r.accounts.map(a => a.userName).join(', ') || '—' }) }
-      ],
-      rows, pageSize: 25, exportName: 'people', initialSort: { key: 'name', dir: 1 },
-      search: (r, q) => (r.person.displayName + ' ' + r.person.externalId + ' ' + r.accounts.map(a => a.userName).join(' ') + ' ' + r.department).toLowerCase().includes(q),
-      searchPlaceholder: T('p3.search'),
-      onRowClick: r => goPerson(r.person)
-    })));
-    return f;
-  }
 
   /* ------------------------------------------------------------------ header */
   function header(m, d) {
@@ -362,19 +332,13 @@
   }
 
   /* -------------------------------------------------------------------- view */
-  function personView(m, params) {
-    if (!m || !m.vault) { const f = document.createDocumentFragment(); f.appendChild(partialNotice(['vault'])); return f; }
-    const person = params && params.id ? HR.person360.find(m, params.id) : null;
-    if (!person) {
-      const f = picker(m, params);
-      if (params && params.id) f.insertBefore(el('div', { class: 'notice', text: T('p3.notFound', { id: params.id }) }), f.firstChild.nextSibling);
-      return f;
-    }
+  /** The 360 for one person; the People view calls this when its hash carries an id. */
+  function personPage(m, person, params) {
     const d = HR.person360.build(m, person);
     const f = document.createDocumentFragment();
     f.appendChild(header(m, d));
     f.appendChild(tiles(m, d));
-    f.appendChild(el('div', { style: 'margin-top:14px' }, tabbed('person', [
+    f.appendChild(el('div', { style: 'margin-top:14px' }, tabbed('people', [
       { id: 'overview', label: T('p3.tab.overview'), build: () => overviewTab(m, d) },
       { id: 'access', label: T('p3.tab.access'), count: d.access.held.length, build: () => accessTab(m, d) },
       { id: 'rules', label: T('p3.tab.rules'), count: d.access.matchedRules.length + d.products.length, build: () => rulesTab(m, d) },
@@ -385,5 +349,7 @@
     return f;
   }
 
-  HR.views.person = personView;
+  HR.views.personPage = personPage;
+  /* Old links: #person/<id> is #people/<id> now. */
+  HR.views.person = (m, params) => { setTimeout(() => HR.app.go('people', params && params.id ? { id: params.id } : {}), 0); return document.createDocumentFragment(); };
 })(window.HR);

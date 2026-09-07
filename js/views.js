@@ -182,7 +182,7 @@
   const REQUIRES = {
     overview: ['recon'], policies: ['recon'], audit: ['audit'], risk: ['recon'], cost: ['recon'],
     accounts: ['recon'], permissions: ['recon'],
-    people: ['vault|recon'], person: ['vault'], org: ['vault'], matching: ['recon', 'vault'],
+    people: ['vault|recon'], org: ['vault'], matching: ['recon', 'vault'],
     mining: ['vault'], rules: ['rules'],
     products: ['products|assignments'], activity: ['granted|history'],
     explain: ['recon'], diff: ['recon'], board: ['recon'],
@@ -1061,7 +1061,7 @@
         search: (r, q) => (r.label + ' ' + r.detail).toLowerCase().includes(q),
         onRowClick: r => {
           if (r.type === 'account') { const a = m.accounts.get(r.key); if (a) drawerAccount(a); }
-          else if (r.type === 'person') { const vp = m.vault && HR.person360 ? HR.person360.find(m, r.key) : null; if (vp) HR.app.go('person', { id: vp.externalId || vp.personId }); }
+          else if (r.type === 'person') { const vp = m.vault && HR.person360 ? HR.person360.find(m, r.key) : null; if (vp) HR.app.go('people', { id: vp.externalId || vp.personId }); }
           else { const p = m.permissions.get(r.key); if (p) drawerPermission(p, m); }
         }
       })));
@@ -1599,6 +1599,12 @@
   function peopleView(m, params) {
     const f = document.createDocumentFragment();
     const hasVault = !!m.vault;
+    /* One view for the population and for one person: #people lists, #people/<id> opens. */
+    if (hasVault && params && params.id) {
+      const person = HR.person360.find(m, params.id);
+      if (person) return HR.views.personPage(m, person, params);
+      f.appendChild(el('div', { class: 'notice', text: T('p3.notFound', { id: params.id }) }));
+    }
     const flt = (params && params.filter) || '';
     const pick = filter => HR.app.go('people', flt === filter ? {} : { filter });
 
@@ -1715,7 +1721,7 @@
           options: [{ value: 'with', label: '1+' }, { value: 'without', label: '0' }],
           match: (r, v) => (v === 'with') === (r.accounts.length > 0) }
       ].filter(Boolean),
-      onRowClick: r => HR.app.go('person', { id: r.person.externalId || r.person.personId })
+      onRowClick: r => HR.app.go('people', { id: r.person.externalId || r.person.personId })
     }))));
     return f;
   }
@@ -1895,7 +1901,7 @@
     const head = el('div', {}, [
       el('div', { class: 'row', style: 'justify-content:space-between;align-items:center;gap:8px' }, [
         el('h2', { text: p.displayName }),
-        el('button', { class: 'btn sm primary', text: T('p3.open') + ' \u2192', onclick: () => { closeDrawer(); HR.app.go('person', { id: p.externalId || p.personId }); } })
+        el('button', { class: 'btn sm primary', text: T('p3.open') + ' \u2192', onclick: () => { closeDrawer(); HR.app.go('people', { id: p.externalId || p.personId }); } })
       ]),
       el('div', { class: 'row' }, [
         el('span', { class: 'sev ' + STATE_SEV[row.life.state], text: stateLabel(row.life.state) }),
@@ -3775,7 +3781,7 @@
       [T('c.person'), (() => {
         /* The person's own page, when the vault knows them. */
         const vp = a.personRaw && m.vault && HR.person360 ? HR.person360.find(m, a.personRaw) : null;
-        return vp ? el('a', { href: '#', text: a.personRaw, onclick: e => { e.preventDefault(); closeDrawer(); HR.app.go('person', { id: vp.externalId || vp.personId }); } })
+        return vp ? el('a', { href: '#', text: a.personRaw, onclick: e => { e.preventDefault(); closeDrawer(); HR.app.go('people', { id: vp.externalId || vp.personId }); } })
           : (a.personRaw || T('dr.notLinked'));
       })()],
       [T('c.empCategory'), ecatControl(a)],

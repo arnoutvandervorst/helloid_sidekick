@@ -18,6 +18,12 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.40', date: '2026-09-07',
+      changes: [
+        'People and Person 360 are one view. The People table is the picker; a row opens the person at #people/<employee id>, “← People” returns to the table, tabs keep the person. The separate sidebar entry and its picker page are gone; old #person/… links redirect.'
+      ]
+    },
+    {
       version: '2026.9.39', date: '2026-09-07',
       changes: [
         'Person 360. One page per person with everything Sidekick knows, under Identity: header with org path, manager chain, contract and account chips; tiles for accounts, entitlements, risk, monthly cost, outlier score and findings; and six tabs — Overview (person and directory fields, contracts, the lifecycle in order with the first access and what a move left behind), Access (every entitlement with what grants it: rule, product, baseline or nobody; what a matching rule grants that is missing; the accounts with their toxic pairs and exclusions), Rules & products, Timeline (contracts, moves, history, audit events, exclusions, product requests and approvals, attestation decisions — one stream, filterable by kind), Governance (findings, toxic pairs, exclusions with reasons, attestation status, risk build-up per account, outlier factors) and Cost & impact (priced access, leaver burn, who reports to them, what they approved, what only they hold, what leaves with them). Deep-linkable as #person/<employee id>; exports as JSON.',
