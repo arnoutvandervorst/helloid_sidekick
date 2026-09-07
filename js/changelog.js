@@ -18,6 +18,12 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.49', date: '2026-09-07',
+      changes: [
+        'The one-person simulation has a picker: the field beside the action lists the vault’s persons (name and employee id) and completes as you type; a name that is not in the list does not run. The picked person opens straight away with every field, changed or not; a person without an account in the collected directory says so.'
+      ]
+    },
+    {
       version: '2026.9.48', date: '2026-09-07',
       changes: [
         'The field-mapping simulation needs a vault. It used to run without one by rebuilding Person objects from the collected directory, and a Person built that way has no contract to speak of — every mapping that reads Person.PrimaryContract came out empty (“Medewerker: ” on account after account) and the run looked like a finding. The simulation now asks for a vault export and says why; with one loaded, the Persons are the vault’s own. It can also run for one person: type a name, employee id or account beside the action, and the run narrows to the matches and shows every field, changed or not, opening the person straight away when there is exactly one.'

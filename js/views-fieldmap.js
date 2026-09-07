@@ -245,9 +245,9 @@
       }))));
 
       /* A run narrowed to one person shows that person whether or not anything changes. */
-      const changedRows = sim.person ? sim.rows : sim.rows.filter(r => r.anyChange);
+      const changedRows = sim.personId ? sim.rows : sim.rows.filter(r => r.anyChange);
       results.appendChild(el('div', { style: 'margin-top:14px' }, card(T('fm.perPersonTitle'),
-        sim.person ? T('fm.perPersonOne', { q: sim.person, n: changedRows.length }) : T('fm.perPersonNote', { n: changedRows.length }), HR.table.make({
+        sim.personId ? T('fm.perPersonOne') : T('fm.perPersonNote', { n: changedRows.length }), HR.table.make({
           columns: [
             { key: 'name', label: T('c.person'), value: r => r.user.displayName || r.user.userName },
             { key: 'userName', label: T('c.account'), value: r => r.user.userName },
@@ -262,25 +262,35 @@
           search: (r, q) => ((r.user.displayName || '') + ' ' + r.user.userName).toLowerCase().includes(q),
           onRowClick: r => drawerSimPerson(r, sim)
         }))));
-      if (sim.person && sim.rows.length === 1) drawerSimPerson(sim.rows[0], sim);
+      if (sim.personId && sim.rows.length === 1) drawerSimPerson(sim.rows[0], sim);
+      else if (sim.personId && !sim.rows.length) results.appendChild(el('p', { class: 'note', text: T('fm.personNoAccount') }));
     };
 
+    /* The picker lists the vault's persons; a label must resolve to exactly one. */
+    const persons = HR.fieldmap.personObjects(st).persons;
+    const labelOf = p => (p.DisplayName || '') + (p.ExternalId && !String(p.DisplayName || '').includes(p.ExternalId) ? ' (' + p.ExternalId + ')' : '');
+    const byLabel = new Map(persons.map(p => [labelOf(p), p.PersonId]));
     const run = () => {
-      SIM = HR.fieldmap.simulate(fm, st, { action: sel.value, person: who.value });
-      SIM_STAMP = stamp + '|' + sel.value + '|' + who.value;
+      const label = who.value.trim();
+      const personId = label ? byLabel.get(label) : null;
+      if (label && !personId) { U.toast(T('fm.personPick'), 4000); return; }
+      SIM = HR.fieldmap.simulate(fm, st, { action: sel.value, personId });
+      SIM_STAMP = stamp + '|' + sel.value + '|' + (personId || '');
       draw(SIM);
     };
 
     const sel = el('select', {}, ACTIONS.map(a =>
       el('option', { value: a, text: a, selected: a === 'Update' })));
-    const who = el('input', { type: 'search', placeholder: T('fm.personPh'), title: T('fm.personTitle') });
-    who.style.minWidth = '260px';
+    const list = el('datalist', { id: 'fm-sim-person' });
+    persons.slice().sort((a, b) => labelOf(a).localeCompare(labelOf(b))).forEach(p => list.appendChild(el('option', { value: labelOf(p) })));
+    const who = el('input', { type: 'search', list: 'fm-sim-person', placeholder: T('fm.personPh'), title: T('fm.personTitle'), autocomplete: 'off' });
+    who.style.minWidth = '280px';
     who.onkeydown = e => { if (e.key === 'Enter') run(); };
-    if (SIM && SIM.person) who.value = SIM.person;
+    if (SIM && SIM.personId) { const p = persons.find(x => x.PersonId === SIM.personId); if (p) who.value = labelOf(p); }
     const btn = el('button', { class: 'btn primary', text: T('fm.run'), onclick: run });
     wrap.appendChild(card(T('fm.simTitle'), T('fm.simNote'), el('div', { class: 'row' }, [
       el('label', { class: 'inline' }, [document.createTextNode(T('fm.action')), sel]),
-      who,
+      list, who,
       btn,
       el('span', { class: 'note', text: T('fm.iterationNote') })
     ])));

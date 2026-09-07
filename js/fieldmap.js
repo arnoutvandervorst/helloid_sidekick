@@ -461,8 +461,8 @@
   }
 
   /**
-   * @param {Object} [opts] { action, person } — `person` narrows the run to the
-   *   vault persons whose name, external id or account contains that text.
+   * @param {Object} [opts] { action, personId } — `personId` narrows the run to
+   *   that one vault person.
    */
   function simulate(mapping, state, opts) {
     const action = (opts && opts.action) || 'Update';
@@ -470,12 +470,8 @@
     if (!dir) return { unavailable: 'no-directory' };
     let { persons } = personObjects(state);
     if (!persons.length) return { unavailable: 'no-vault' };
-    const q = String((opts && opts.person) || '').trim().toLowerCase();
-    if (q) {
-      persons = persons.filter(p => [p.DisplayName, p.ExternalId, p.UserName,
-        ...(Array.isArray(p.Accounts) ? p.Accounts.map(a => (a.Data || {}).sAMAccountName || (a.Data || {}).userName || '') : [])]
-        .some(v => String(v || '').toLowerCase().includes(q)));
-    }
+    const personId = (opts && opts.personId) || null;
+    if (personId) persons = persons.filter(p => p.PersonId === personId);
 
     /* join: person -> collected user */
     const byName = new Map();
@@ -543,7 +539,7 @@
     }
 
     return {
-      action, joined, person: q,
+      action, joined, personId,
       total: persons.length,
       rows,
       perField: [...perField.values()].sort((a, b) => b.changed - a.changed || b.errors - a.errors),
