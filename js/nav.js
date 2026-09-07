@@ -17,7 +17,7 @@
   'use strict';
 
   const U = HR.util, el = U.el, T = (k, p) => HR.i18n.t(k, p);
-  const KEY = 'hr.nav.v1';
+  const KEY = HR.workspace ? HR.workspace.key('hr.nav.v1') : 'hr.nav.v1';
 
   /* 16×16 on a 24 grid, stroked with currentColor so themes need no second set. */
   const ICONS = {

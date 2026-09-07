@@ -41,6 +41,12 @@
   async function load() {
     const m = await available();
     if (!m) { U.toast(T('demo.unavailable'), 6000); return false; }
+    /* A customer's workspace never gets the fiction: the demo lives in its own. */
+    if (HR.workspace && HR.workspace.active().id !== 'demo') {
+      if (!HR.workspace.list().some(w => w.id === 'demo')) HR.workspace.create('Demo');
+      HR.workspace.switchTo('demo', { pendingDemo: true });
+      return false;
+    }
 
     HR.app.state.demo = { generatedOn: m.generatedOn, seed: m.seed, files: m.files.length };
     HR.app.applyChrome();

@@ -4,7 +4,7 @@
 (function (HR) {
   'use strict';
 
-  const DB_NAME = 'helloid-recon';
+  const DB_NAME = HR.workspace ? HR.workspace.dbName('helloid-recon') : 'helloid-recon';
   const DB_VERSION = 2;
   const STORE = 'snapshots';
   /* The vault, the rules and the activity exports describe the tenant rather than a

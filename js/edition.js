@@ -13,7 +13,7 @@
 (function (HR) {
   'use strict';
 
-  const KEY = 'hr.edition';
+  const KEY = HR.workspace ? HR.workspace.key('hr.edition') : 'hr.edition';
 
   /* Group keys reuse nav.g.* labels; view ids are the registered views. Overlap is
      deliberate: mining serves the optimiser and the designer, evidence serves the

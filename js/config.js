@@ -3,7 +3,7 @@
 (function (HR) {
   'use strict';
 
-  const KEY = 'hr.config.v1';
+  const KEY = HR.workspace ? HR.workspace.key('hr.config.v1') : 'hr.config.v1';
 
   /* --- structured matchers --------------------------------------------------
      Regex is the engine's language, not the analyst's. Every pattern field can

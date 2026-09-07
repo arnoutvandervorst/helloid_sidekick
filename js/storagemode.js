@@ -14,7 +14,7 @@
   'use strict';
 
   const KEY = 'hr.storage.v1';
-  const OWNED = ['hr.config.v1', 'hr.brand', 'hr.nav.v1', 'hr.theme', 'hr.lang'];
+  const OWNED = ['hr.config.v1', 'hr.brand', 'hr.nav.v1', 'hr.edition', 'hr.theme', 'hr.lang'];
 
   let flags = { enabled: true, noticeSeen: false, usage: true };
   try {
@@ -28,11 +28,15 @@
 
   /** Remove every store this app owns; the flag object itself survives. */
   function wipe() {
-    OWNED.forEach(k => { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } });
+    /* Every workspace's copy of every owned key, not just the active one's. */
+    const keys = HR.workspace ? OWNED.flatMap(k => HR.workspace.allKeys(k)) : OWNED;
+    keys.forEach(k => { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } });
+    try { localStorage.removeItem('hr.workspaces'); } catch (e) { /* ignore */ }
     /* store.js knows how to close its own connection first; fall back to a
        raw delete when it is not loaded (early boot). */
     if (HR.store && HR.store.wipeDb) HR.store.wipeDb();
     else try { indexedDB.deleteDatabase('helloid-recon'); } catch (e) { /* ignore */ }
+    (HR.workspace ? HR.workspace.allDbs('helloid-recon') : []).forEach(n => { try { indexedDB.deleteDatabase(n); } catch (e) { /* ignore */ } });
   }
 
   function set(on) {

@@ -48,6 +48,15 @@ one it is for (`#choose`, or `?edition=govern|health|consult`; the hostname pref
 An edition is a sidebar and a landing page, not a build: every view stays reachable by its
 hash and says which edition it belongs to; `?edition=all` shows everything.
 
+## Workspaces
+
+A partner runs Sidekick for several customers in one browser. The topbar picker holds one
+workspace per customer: snapshots, imports, settings, branding and the chosen edition are
+kept apart, so the board pack carries that customer's name and logo and the next customer
+does not overwrite the last. Switching reloads the page. The first workspace keeps the
+storage the app always used, so nothing migrates; the demo loads into its own workspace
+and never touches a customer's.
+
 ## Demo data
 
 `make-demo-set.py` writes a fictional organisation into `demo/`: nine exports describing

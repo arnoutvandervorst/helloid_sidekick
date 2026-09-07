@@ -18,6 +18,12 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.46', date: '2026-09-07',
+      changes: [
+        'Workspaces: one browser, many customers. Everything the app remembers — settings, branding, favourites, the snapshot archive and the raw imports — used to live under one set of keys, so a partner’s second customer overwrote the first. The topbar now has a workspace picker with a manage drawer (new, rename, open, delete); each workspace keeps its own snapshots, imports, settings, branding and edition, so the board pack carries that customer’s name and logo. Switching reloads the page. The first workspace keeps the storage the app always used, so nothing migrates. Loading the demo moves to a workspace of its own instead of overwriting a customer, and turning storage off wipes every workspace.'
+      ]
+    },
+    {
       version: '2026.9.45', date: '2026-09-07',
       changes: [
         'Three editions. Sidekick does three jobs — governance analytics for partners and their customers (Govern), a HelloID health check and optimiser (Health check), and a helper for the consultant designing the model before HelloID exists (Consult) — and one sidebar for all of it read as no goal at all. A session now starts by choosing one (#choose; ?edition=govern|health|consult; a helloid-govern. / helloid-health. / helloid-consult. hostname presets it); the sidebar lists that edition’s views, the empty page asks for that edition’s first imports, the Imports view puts them first and the board cover names the edition. Every view stays reachable by its hash and says which edition it belongs to; “Everything” is the old sidebar. Existing sessions keep everything until a choice is made.'

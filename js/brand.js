@@ -9,7 +9,7 @@
 (function (HR) {
   'use strict';
 
-  const KEY = 'hr.brand';
+  const KEY = HR.workspace ? HR.workspace.key('hr.brand') : 'hr.brand';
   const AUTO = {
     icon: ['assets/icon.svg', 'assets/icon.png'],
     logo: ['assets/logo.svg', 'assets/logo.png'],

@@ -114,6 +114,59 @@
     measureChrome();
   }
 
+  /* ---- workspaces: the customer this browser tab is about ---- */
+  function renderWorkspacePicker() {
+    const sel = document.getElementById('workspace-select');
+    if (!sel || !HR.workspace) return;
+    sel.innerHTML = '';
+    sel.title = T('ws.title');
+    const active = HR.workspace.active();
+    HR.workspace.list().forEach(w => sel.appendChild(el('option', { value: w.id, text: w.name, selected: w.id === active.id })));
+    sel.appendChild(el('option', { value: '__manage', text: T('ws.manage') + '\u2026' }));
+    sel.onchange = () => {
+      if (sel.value === '__manage') { sel.value = active.id; workspaceDrawer(); return; }
+      if (sel.value !== active.id) HR.workspace.switchTo(sel.value);
+    };
+  }
+
+  function workspaceDrawer() {
+    const active = HR.workspace.active();
+    const body = el('div', { class: 'stack' });
+    const rows = el('div', { class: 'stack' });
+    const draw = () => {
+      rows.innerHTML = '';
+      HR.workspace.list().forEach(w => {
+        const name = el('input', { type: 'text', value: w.name });
+        name.style.minWidth = '220px';
+        name.onchange = () => { HR.workspace.rename(w.id, name.value); renderWorkspacePicker(); };
+        rows.appendChild(el('div', { class: 'row', style: 'gap:8px;align-items:center' }, [
+          el('span', { class: 'pill ' + (w.id === active.id ? 'ok' : ''), text: w.id === active.id ? T('ws.current') : w.id }),
+          name,
+          w.id !== active.id ? el('button', { class: 'btn sm', text: T('ws.open'), onclick: () => HR.workspace.switchTo(w.id) }) : null,
+          w.id !== HR.workspace.DEFAULT.id && w.id !== active.id
+            ? el('button', { class: 'btn sm ghost', text: T('ws.delete'), onclick: async () => { if (!confirm(T('ws.deleteConfirm', { name: w.name }))) return; await HR.workspace.remove(w.id); draw(); renderWorkspacePicker(); } })
+            : null
+        ].filter(Boolean)));
+      });
+    };
+    draw();
+    const newName = el('input', { type: 'text', placeholder: T('ws.newPh') });
+    newName.style.minWidth = '220px';
+    body.append(
+      el('p', { text: T('ws.note') }),
+      rows,
+      el('div', { class: 'row', style: 'gap:8px;align-items:center;margin-top:12px' }, [
+        newName,
+        el('button', { class: 'btn primary sm', text: T('ws.create'), onclick: () => {
+          if (!newName.value.trim()) return;
+          const id = HR.workspace.create(newName.value.trim());
+          HR.workspace.switchTo(id);
+        } })
+      ])
+    );
+    HR.viewkit.openDrawer(el('div', {}, [el('h2', { text: T('ws.title') })]), body);
+  }
+
   function emptyState(root) {
     /* No edition chosen yet: the choice comes before the first import. */
     if (HR.edition && !HR.edition.chosen()) { root.appendChild(HR.views.choose(null, {})); return; }
@@ -958,6 +1011,7 @@
     ver.onclick = () => HR.viewkit.drawerChangelog();
     titleEl.append(' ', ver);
     document.getElementById('btn-import-label').textContent = T('app.import');
+    renderWorkspacePicker();
     document.getElementById('btn-theme').title = T('app.theme');
     const repo = document.getElementById('link-repo');
     repo.textContent = T('app.repo');
@@ -1072,6 +1126,8 @@
     }));
 
     restoreContext.then(() => refreshSnapshots()).then(async () => {
+      /* Switched into the demo workspace to load the demo: finish that now. */
+      if (HR.workspace && HR.workspace.takePendingDemo()) { await HR.demo.load(); return; }
       const h = parseHash();
       if (h.view && HR.views[h.view]) { state.view = h.view; state.params = h.params; }
       else if (HR.edition && HR.edition.chosen()) state.view = HR.edition.landing();
