@@ -18,6 +18,12 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.42', date: '2026-09-07',
+      changes: [
+        'The “future” contract pill rendered as a bare circle: its class name collided with the tooltip glyph’s. Fixed.'
+      ]
+    },
+    {
       version: '2026.9.41', date: '2026-09-07',
       changes: [
         'Person 360 › Governance shows each finding in full — what, why it matters, remediation — with only this person’s rows under it (their accounts or entitlements, click for the drawer) and a link to the whole finding; no detour through Risk & findings to find the row.'
