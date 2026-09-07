@@ -62,10 +62,19 @@
     const root = document.getElementById('view-root');
     root.innerHTML = '';
     const worksEmpty = state.view === 'settings' || state.view === 'snapshots' || state.view === 'sources' ||
-      state.view === 'nedap' || state.view === 'fieldmap';
+      state.view === 'nedap' || state.view === 'fieldmap' || state.view === 'choose';
     if (!state.model && !worksEmpty) { emptyState(root); return; }
     const fn = HR.views[state.view] || HR.views.overview;
     const missing = HR.views.missingFor ? HR.views.missingFor(state.view) : [];
+    /* A view outside this edition still opens (a colleague's link must work) but says
+       where it lives, so the sidebar's silence about it is not a mystery. */
+    if (HR.edition && HR.edition.chosen() && HR.edition.get() !== 'all' && HR.views[state.view] && !HR.edition.has(state.view) && state.view !== 'choose') {
+      const owners = HR.edition.ownersOf(state.view);
+      root.appendChild(el('div', { class: 'notice' }, [
+        el('span', { text: T('ed.elsewhere', { edition: owners.map(id => T('ed.' + id + '.name')).join(' / ') || T('ed.all.name') }) + ' ' }),
+        el('a', { href: '#', text: T('ed.switch'), onclick: e => { e.preventDefault(); go('choose'); } })
+      ]));
+    }
     if (state.fit && state.fit.worst === 'mismatch' && state.view !== 'sources' && HR.viewkit.fitNotice) {
       root.appendChild(HR.viewkit.fitNotice(state.fit));
     }
@@ -106,10 +115,13 @@
   }
 
   function emptyState(root) {
+    /* No edition chosen yet: the choice comes before the first import. */
+    if (HR.edition && !HR.edition.chosen()) { root.appendChild(HR.views.choose(null, {})); return; }
+    const ed = HR.edition ? HR.edition.get() : 'all';
     root.appendChild(el('section', { class: 'empty-state' }, [
       el('h1', { text: T('empty.title') }),
       HR.brand.state.welcome ? el('p', { text: HR.brand.state.welcome }) : null,
-      el('p', { text: T('empty.body') }),
+      el('p', { text: ed && ed !== 'all' ? T('ed.' + ed + '.start') : T('empty.body') }),
       el('p', {}, [
         el('button', { class: 'btn primary', text: T('empty.sources'), onclick: () => go('sources') }),
         sampleFile ? el('button', { class: 'btn', style: 'margin-left:8px',
@@ -925,9 +937,18 @@
   /** Fill the static chrome (nav, buttons, labels) from the dictionary. */
   function applyChrome() {
     document.documentElement.lang = HR.i18n.lang;
-    document.title = (HR.brand.state.productName || T('app.title'));
+    const edId = HR.edition && HR.edition.chosen() ? HR.edition.get() : null;
+    const edName = edId ? T('ed.' + edId + '.name') : '';
+    document.title = (HR.brand.state.productName || T('app.title')) + (edName ? ' \u00b7 ' + edName : '');
     const titleEl = document.getElementById('topbar-title');
     titleEl.textContent = HR.brand.state.productName || T('app.title');
+    if (edName) {
+      /* The edition word is the way back to the chooser. */
+      titleEl.append(' \u00b7 ', el('span', { class: 'topbar-edition', text: edName, title: T('ed.switch'), onclick: () => go('choose') }));
+    } else if (HR.edition && !HR.edition.chosen()) {
+      /* Data from before editions existed: nothing is hidden until a choice is made. */
+      titleEl.append(' \u00b7 ', el('span', { class: 'topbar-edition', text: T('ed.pick'), title: T('ed.switch'), onclick: () => go('choose') }));
+    }
     /* The version rides on the title, rebuilt here because the line above
        wipes it on every chrome refresh. Clicking it opens the changelog. */
     const ver = document.createElement('span');
@@ -1053,6 +1074,7 @@
     restoreContext.then(() => refreshSnapshots()).then(async () => {
       const h = parseHash();
       if (h.view && HR.views[h.view]) { state.view = h.view; state.params = h.params; }
+      else if (HR.edition && HR.edition.chosen()) state.view = HR.edition.landing();
       if (state.snapshots.length && !state.noAutoRecon) {
         await loadSnapshot(state.snapshots[0].id);
         if (state.snapshots.length > 1) await setBaseline(state.snapshots[1].id, true);

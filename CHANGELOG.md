@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.9.45] — 2026-09-07
+
+- Three editions. Sidekick does three jobs — governance analytics for partners and their customers (Govern), a HelloID health check and optimiser (Health check), and a helper for the consultant designing the model before HelloID exists (Consult) — and one sidebar for all of it read as no goal at all. A session now starts by choosing one (#choose; ?edition=govern|health|consult; a helloid-govern. / helloid-health. / helloid-consult. hostname presets it); the sidebar lists that edition’s views, the empty page asks for that edition’s first imports, the Imports view puts them first and the board cover names the edition. Every view stays reachable by its hash and says which edition it belongs to; “Everything” is the old sidebar. Existing sessions keep everything until a choice is made.
+
 ## [2026.9.44] — 2026-09-07
 
 - Compliance leads with the governance score too; “controls met” is the smaller tile beside it, marked as the score’s second half. Editing a limit or accepting an exception now recomputes the governance score and the topbar at once — it used to lag until the next import.

@@ -237,7 +237,7 @@
           logo,
           el('div', {}, [
             el('h1', { class: 'cover-title', text: T('bd.title') }),
-            el('div', { class: 'cover-sub', text: T('bd.subtitle') })
+            el('div', { class: 'cover-sub', text: HR.edition && HR.edition.chosen() && HR.edition.get() !== 'all' ? T('bd.subtitle.' + HR.edition.get()) : T('bd.subtitle') })
           ])
         ]),
         el('dl', { class: 'cover-meta' }, [

@@ -154,7 +154,9 @@
       nav.appendChild(el('div', { class: 'nav-divider' }));
     }
 
-    GROUPS.forEach(group => {
+    /* The edition decides which groups exist; the constant above is the full map. */
+    const groups = HR.edition ? HR.edition.groups() : GROUPS;
+    groups.forEach(group => {
       const views = group.views.filter(v => HR.views[v]);
       if (!views.length) return;
       nav.appendChild(el('div', { class: 'nav-group-label', text: T('nav.g.' + group.key) }));

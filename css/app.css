@@ -554,6 +554,18 @@ details.finding.finding-target { animation: finding-flash 2.4s ease-out 1; scrol
 .p360-timeline .tl-body { min-width: 0; overflow-wrap: anywhere; }
 .grid.g6 { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 1100px) { .grid.g6 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* ---------- editions ---------- */
+.topbar-edition { color: var(--accent, #4a7cf6); cursor: pointer; font-weight: 500; }
+.topbar-edition:hover { text-decoration: underline; }
+.ed-grid { margin-top: 6px; }
+.ed-card { display: flex; flex-direction: column; gap: 6px; }
+.ed-card.current { outline: 2px solid var(--accent, #4a7cf6); }
+.ed-card h2 { margin: 0; }
+.ed-card p { margin: 0; }
+.ed-kicker { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.ed-views { font-size: 12px; color: var(--text-secondary); columns: 2; margin: 4px 0 8px; padding: 0; }
+.ed-views li { break-inside: avoid; padding: 1px 0; }
+.ed-card .slot-actions { margin-top: auto; }
 .sod-why { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 10px 0 6px; font-size: 12.5px; }
 .sod-why dt { color: var(--text-primary); }
 .sod-why dd { margin: 0; color: var(--text-secondary); }

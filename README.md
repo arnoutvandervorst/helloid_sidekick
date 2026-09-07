@@ -30,6 +30,24 @@ Serve it from a laptop or any static host — it is plain files, with no build s
 no CDN and no back end. Wherever it runs, the exports are read and analysed in the browser
 that opened the page: they are never uploaded to the host serving it.
 
+## Three editions
+
+Sidekick does three jobs for three audiences, and the first thing a session asks is which
+one it is for (`#choose`, or `?edition=govern|health|consult`; the hostname prefix
+`helloid-govern.` etc. presets it):
+
+- **Govern** — governance analytics for partners and their customers: compliance against
+  NIS2 / ISO 27001 / BIO, risk, cost, evidence of decisions, one person end to end, the
+  board pack.
+- **Health check** — is this HelloID well built and does it run: rules against reality,
+  what the engine did and failed, naming conventions, correlation quality, what to
+  condense, add or retire.
+- **Consult** — design the model before HelloID exists: roles from HR, naming
+  conventions, field-mapping simulation, the Nedap ONS workbench, matching.
+
+An edition is a sidebar and a landing page, not a build: every view stays reachable by its
+hash and says which edition it belongs to; `?edition=all` shows everything.
+
 ## Demo data
 
 `make-demo-set.py` writes a fictional organisation into `demo/`: nine exports describing

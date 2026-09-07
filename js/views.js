@@ -632,7 +632,13 @@
        three siblings whose spacing lived only inside the grid, so they sat flush. */
     const stack = el('div', { class: 'stack' });
     if (HR.demo.isOn() || HR.app.demoAvailable()) stack.appendChild(demoCard());
-    stack.appendChild(el('div', { class: 'grid g3' }, SOURCE_SLOTS.map(sourceSlot)));
+    /* The edition's starting imports come first; the rest keep their order. */
+    const first = HR.edition ? HR.edition.firstSlots() : [];
+    const ordered = SOURCE_SLOTS.slice().sort((a, b) => {
+      const ia = first.indexOf(a.kind), ib = first.indexOf(b.kind);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+    stack.appendChild(el('div', { class: 'grid g3' }, ordered.map(sourceSlot)));
     const fits = fitCard();
     if (fits) stack.appendChild(fits);
 
