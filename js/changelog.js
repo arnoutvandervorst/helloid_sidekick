@@ -18,6 +18,12 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.50', date: '2026-09-07',
+      changes: [
+        'Rollback pack. When HelloID goes live it rewrites the attributes the field mapping targets, and until now nothing kept what was there. Every simulation run now offers a rollback pack: per account and per field the run would change, the value the directory held when it was collected and the value the mapping produces. Two new scripts, restore-ad.ps1 and restore-entra.ps1, read the pack and put the collected values back — dry-run by default (before, predicted and live per attribute, with same / restore / restore? when something else changed it), writing only with -Apply, filtered by -Account and -Attribute, -SkipUnexpected to leave the unpredicted alone. AD moves the container back and renames the cn; Entra skips users synced from AD and the Graph read-only properties. A run narrowed to one person makes a one-account pack.'
+      ]
+    },
+    {
       version: '2026.9.49', date: '2026-09-07',
       changes: [
         'The one-person simulation has a picker: the field beside the action lists the vault’s persons (name and employee id) and completes as you type; a name that is not in the list does not run. The picked person opens straight away with every field, changed or not; a person without an account in the collected directory says so.'

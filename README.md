@@ -436,11 +436,24 @@ provides them, each field against a fresh Person copy — and diffs the result
 against the attribute the collected AD/Entra directory holds today. The output
 is the answer no HelloID screen gives up front: which attributes an update run
 would rewrite, per field and per person, current → would-become, exportable.
-`None` on Update is honoured as out-of-scope, a real vault gives full-fidelity
-Person objects (the raw export is replayed), and without one the simulator
-reconstructs Persons from the collected directory and says so. Source mappings
-(HR → person model) are recognised and refused with a pointer to the right
-export.
+`None` on Update is honoured as out-of-scope and the Person objects are the
+vault's own (the raw export is replayed) — the simulation needs a vault as well
+as a directory, because a Person rebuilt from a directory has no contract to
+read. It runs for everyone or, picked from the vault's persons, for one. Source
+mappings (HR → person model) are recognised and refused with a pointer to the
+right export.
+
+Every run also offers the way back. The **rollback pack** keeps, per account and
+per field the run would change, the value the directory held when it was
+collected and the value the mapping produces; `restore-ad.ps1` and
+`restore-entra.ps1` read that pack and put the collected values back once HelloID
+has gone live and written over them — dry-run by default, printing before,
+predicted and live per attribute with what would happen (`same`, `restore`,
+`restore?` when something else changed it), writing only with `-Apply`, filtered
+by `-Account` / `-Attribute`, `-SkipUnexpected` to leave the unpredicted alone.
+AD moves the container back and renames the cn; Entra skips users synced from
+AD (restore them there) and the Graph read-only properties. The pack is a
+snapshot of its collection: re-collect and re-run just before go-live.
 
 The simulation also audits its own footing: a **collection gap** card names every
 mapped attribute the loaded directory never collected — their current value is

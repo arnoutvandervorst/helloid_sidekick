@@ -552,7 +552,80 @@
     };
   }
 
+  /* ---- the rollback pack --------------------------------------------------- */
+
+  /* Mapping / alias name -> the Graph property restore-entra.ps1 writes. AD needs no
+     table: HelloID's AD mapping names are the LDAP names themselves. */
+  const ENTRA_PROPS = {
+    displayname: 'displayName', givenname: 'givenName', surname: 'surname', sn: 'surname',
+    userprincipalname: 'userPrincipalName', upn: 'userPrincipalName', mailnickname: 'mailNickname',
+    mail: 'mail', proxyaddresses: 'proxyAddresses', othermails: 'otherMails',
+    title: 'jobTitle', jobtitle: 'jobTitle', department: 'department',
+    company: 'companyName', companyname: 'companyName',
+    office: 'officeLocation', officelocation: 'officeLocation', physicaldeliveryofficename: 'officeLocation',
+    phone: 'businessPhones', businessphones: 'businessPhones', telephonenumber: 'businessPhones',
+    mobile: 'mobilePhone', mobilephone: 'mobilePhone',
+    street: 'streetAddress', streetaddress: 'streetAddress', city: 'city', l: 'city',
+    state: 'state', st: 'state', postalcode: 'postalCode', country: 'country', c: 'country',
+    usagelocation: 'usageLocation', employeeid: 'employeeId', employeenumber: 'employeeId',
+    employeetype: 'employeeType', preferredlanguage: 'preferredLanguage',
+    accountenabled: 'accountEnabled'
+  };
+  const ENTRA_ARRAYS = new Set(['businessPhones', 'proxyAddresses', 'otherMails']);
+
+  /** The target attribute a mapping field restores to, for the pack. */
+  function restoreAttribute(fieldName, source) {
+    const lower = targetAttr(fieldName);
+    const extM = /^extensionattribute(\d{1,2})$/.exec(lower);
+    if (source === 'entra') {
+      if (extM) return { attribute: 'onPremisesExtensionAttributes.extensionAttribute' + extM[1] };
+      const prop = ENTRA_PROPS[lower];
+      return prop ? { attribute: prop, array: ENTRA_ARRAYS.has(prop) } : { attribute: fieldName.replace(/^AdditionalFields\./i, ''), unverified: true };
+    }
+    if (extM) return { attribute: 'extensionAttribute' + extM[1] };
+    if (lower === 'cn' || lower === 'commonname') return { attribute: 'cn', op: 'rename' };
+    if (['container', 'path', 'ou', 'parentcontainer'].includes(lower)) return { attribute: 'container', op: 'move' };
+    const known = ATTR_ALIASES[lower] !== undefined;
+    return Object.assign({ attribute: fieldName.replace(/^AdditionalFields\./i, '') },
+      lower === 'proxyaddresses' ? { array: true } : {}, known ? {} : { unverified: true });
+  }
+
+  /**
+   * What restore-ad.ps1 / restore-entra.ps1 need to put the collected values back
+   * once HelloID has written over them: per account, every field the run would
+   * change, with the value the target held at collection time (before) and the
+   * value the mapping produces (after). Fields with no collected counterpart
+   * cannot be restored and are listed as skipped.
+   */
+  function rollbackPack(sim, state) {
+    const dir = state.directory;
+    const fields = state.fieldMapping ? state.fieldMapping.fields : [];
+    const accounts = [];
+    for (const row of sim.rows) {
+      const changed = Object.keys(row.values).filter(k => row.values[k].known && row.values[k].changed && !row.values[k].error);
+      if (!changed.length) continue;
+      accounts.push({
+        id: row.user.id, userName: row.user.userName || '', upn: row.user.upn || '', displayName: row.user.displayName || '',
+        fields: changed.map(name => {
+          const v = row.values[name];
+          const norm = x => Array.isArray(x) ? x.map(y => String(y == null ? '' : y)) : (x === undefined || x === null ? '' : (typeof x === 'boolean' ? x : String(x)));
+          return Object.assign({ field: name }, restoreAttribute(name, dir.source), { before: norm(v.current), after: norm(v.desired) });
+        })
+      });
+    }
+    const skipped = sim.perField.filter(f => f.noCounterpart).map(f => ({ field: f.name, reason: NON_ATTRS.has(targetAttr(f.name)) ? 'non-attribute' : 'no-counterpart' }));
+    return {
+      kind: 'helloid-sidekick-rollback', version: 1,
+      source: dir.source || '', system: dir.system || '', action: sim.action,
+      savedAt: new Date().toISOString(), collectedAt: dir.meta && dir.meta.collectedAt ? new Date(dir.meta.collectedAt).toISOString() : null,
+      mappingFile: (state.fileNames && state.fileNames.fieldMapping) || null,
+      personId: sim.personId || null,
+      accounts, skipped,
+      summary: { accounts: accounts.length, values: U.sum(accounts, a => a.fields.length), skipped: skipped.length, fieldsInScope: fields.length }
+    };
+  }
+
   HR.fieldmap = { looksLikeFieldMapping, looksLikeSourceMapping, parse, actionFor, attributeProfile,
     evaluateField, personObjects, accountsFor, simulate, wrapComplex,
-    deleteDiacriticalMarks, ATTR_ALIASES, targetAttr, coverage, currentValueOf };
+    deleteDiacriticalMarks, ATTR_ALIASES, targetAttr, coverage, currentValueOf, rollbackPack, restoreAttribute };
 })(window.HR);

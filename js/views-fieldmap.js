@@ -262,6 +262,7 @@
           search: (r, q) => ((r.user.displayName || '') + ' ' + r.user.userName).toLowerCase().includes(q),
           onRowClick: r => drawerSimPerson(r, sim)
         }))));
+      results.appendChild(el('div', { style: 'margin-top:14px' }, rollbackCard(sim)));
       if (sim.personId && sim.rows.length === 1) drawerSimPerson(sim.rows[0], sim);
       else if (sim.personId && !sim.rows.length) results.appendChild(el('p', { class: 'note', text: T('fm.personNoAccount') }));
     };
@@ -298,6 +299,43 @@
 
     if (SIM && SIM_STAMP.startsWith(stamp)) draw(SIM);
     return wrap;
+  }
+
+  /* The way back: the collected values, saved before HelloID writes over them,
+     and the script that puts them back. */
+  function rollbackCard(sim) {
+    const st = HR.app.state;
+    const pack = HR.fieldmap.rollbackPack(sim, st);
+    const dir = st.directory;
+    const collected = dir.meta && dir.meta.collectedAt ? U.fmtDate(dir.meta.collectedAt) : '—';
+    const script = dir.source === 'entra' ? 'restore-entra.ps1' : 'restore-ad.ps1';
+    const body = el('div', { class: 'stack' });
+    body.appendChild(el('p', { text: T('fm.rb.lead', { collected }) }));
+    if (sim.personId) body.appendChild(el('p', { class: 'note', text: T('fm.rb.onePerson') }));
+    body.appendChild(dl([
+      [T('fm.rb.accounts'), U.fmtInt(pack.summary.accounts)],
+      [T('fm.rb.values'), U.fmtInt(pack.summary.values)],
+      [T('fm.rb.skipped'), pack.skipped.length ? pack.skipped.map(x => x.field).join(', ') : '0']
+    ]));
+    const actions = el('div', { class: 'slot-actions' });
+    actions.appendChild(el('button', { class: 'btn primary', text: T('fm.rb.download'), disabled: !pack.accounts.length, onclick: () => {
+      HR.usage.exported('rollback-pack');
+      U.download('rollback-' + (dir.source || 'directory') + '-' + new Date().toISOString().slice(0, 10) + '.json',
+        JSON.stringify(pack, null, 2), 'application/json;charset=utf-8');
+    } }));
+    fetch(script, { method: 'HEAD' }).then(res => {
+      if (res.ok && !(res.headers.get('content-type') || '').includes('html')) {
+        actions.appendChild(el('a', { class: 'btn', href: script, download: script, text: T('fm.rb.script', { script }) }));
+      }
+    }).catch(() => { /* not served: the repo has it */ });
+    body.appendChild(actions);
+    body.appendChild(el('pre', { class: 'mono', style: 'white-space:pre-wrap' }, [document.createTextNode(
+      '.\\' + script + ' -Pack rollback-' + (dir.source || 'directory') + '-' + new Date().toISOString().slice(0, 10) + '.json' + '            # ' + T('fm.rb.dry') + '\n' +
+      '.\\' + script + ' -Pack … -Apply                              # ' + T('fm.rb.apply') + '\n' +
+      '.\\' + script + ' -Pack … -Apply -Account jan.jansen          # ' + T('fm.rb.one') + '\n' +
+      '.\\' + script + ' -Pack … -Apply -SkipUnexpected              # ' + T('fm.rb.skipUnexpected'))]));
+    body.appendChild(el('p', { class: 'note', text: T('fm.rb.age') }));
+    return card(T('fm.rb.title'), T('fm.rb.note'), body);
   }
 
   /* ------------------------------------------------------- target attributes */
