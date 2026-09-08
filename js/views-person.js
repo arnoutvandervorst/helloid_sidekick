@@ -99,7 +99,8 @@
       [T('p3.status'), (p.blocked ? T('p3.blocked') : '') + (p.excluded ? ' ' + T('p3.excluded') : '') || T('p3.statusOk')]
     ])));
     const du = d.directoryUser;
-    wrap.appendChild(card(T('p3.directory'), du ? T('p3.directoryNote', { file: m.directory.meta.fileName }) : T('p3.directoryNone'), du ? dl([
+    /* A dashboard reader cannot run a collector: without a directory the card stays out. */
+    if (du || !(HR.dashboard && HR.dashboard.readOnly())) wrap.appendChild(card(T('p3.directory'), du ? T('p3.directoryNote', { file: m.directory.meta.fileName }) : T('p3.directoryNone'), du ? dl([
       [T('c.account'), du.userName + (du.upn ? ' · ' + du.upn : '')],
       [T('c.state'), T(du.enabled ? 'c.enabled' : 'c.disabled')],
       [T('p3.ou'), du.ou || '—'],
