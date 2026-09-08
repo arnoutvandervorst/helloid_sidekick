@@ -63,7 +63,17 @@
     root.innerHTML = '';
     const worksEmpty = state.view === 'settings' || state.view === 'snapshots' || state.view === 'sources' ||
       state.view === 'nedap' || state.view === 'fieldmap' || state.view === 'choose';
-    if (!state.model && !worksEmpty) { emptyState(root); return; }
+    if (!state.model && (!worksEmpty || (HR.dashboard && HR.dashboard.active()))) { emptyState(root); return; }
+    /* A dashboard is a fence, not a hint: a view outside it does not render. */
+    if (HR.dashboard && HR.dashboard.active() && !HR.dashboard.views().includes(state.view)) {
+      root.appendChild(el('section', { class: 'empty-state' }, [
+        el('h1', { text: T('db.notHere', { name: HR.dashboard.name() }) }),
+        el('p', { text: T('db.notHereBody') }),
+        el('p', {}, el('button', { class: 'btn primary', text: T('db.toLanding', { view: T('nav.' + HR.dashboard.landing()) }), onclick: () => go(HR.dashboard.landing()) }))
+      ]));
+      if (HR.nav) HR.nav.render();
+      return;
+    }
     const fn = HR.views[state.view] || HR.views.overview;
     const missing = HR.views.missingFor ? HR.views.missingFor(state.view) : [];
     /* A view outside this edition still opens (a colleague's link must work) but says
@@ -121,7 +131,8 @@
     sel.innerHTML = '';
     sel.title = T('ws.title');
     const active = HR.workspace.active();
-    HR.workspace.list().forEach(w => sel.appendChild(el('option', { value: w.id, text: w.name, selected: w.id === active.id })));
+    /* A dashboard's workspace is chosen by the dashboard, not here. */
+    HR.workspace.list().filter(w => !w.dashboard || w.id === active.id).forEach(w => sel.appendChild(el('option', { value: w.id, text: w.name, selected: w.id === active.id })));
     sel.appendChild(el('option', { value: '__manage', text: T('ws.manage') + '\u2026' }));
     sel.onchange = () => {
       if (sel.value === '__manage') { sel.value = active.id; workspaceDrawer(); return; }
@@ -168,6 +179,17 @@
   }
 
   function emptyState(root) {
+    /* A dashboard has no import to offer: the data is published, or it is not. */
+    if (HR.dashboard && HR.dashboard.active()) {
+      const err = state.dashboardError, src = HR.dashboard.source();
+      root.appendChild(el('section', { class: 'empty-state' }, [
+        el('h1', { text: HR.dashboard.name() }),
+        el('p', { text: !src ? T('db.noSource') : err ? T('db.loadFailed', { source: src, error: err }) : T('db.noData', { source: src }) }),
+        src ? el('p', {}, el('button', { class: 'btn primary', text: T('db.reload'), onclick: () => syncDashboardData(true).then(() => location.reload()) })) : null
+      ]));
+      if (HR.nav) HR.nav.render();
+      return;
+    }
     /* No edition chosen yet: the choice comes before the first import. */
     if (HR.edition && !HR.edition.chosen()) { root.appendChild(HR.views.choose(null, {})); return; }
     const ed = HR.edition ? HR.edition.get() : 'all';
@@ -841,6 +863,7 @@
 
   function handleFile(file) {
     if (!file) return;
+    if (HR.dashboard && HR.dashboard.readOnly()) { U.toast(T('db.noImport'), 5000); return; }
     readFile(file, (text, encoding) => {
       if (encoding !== 'utf-8' && encoding !== 'utf-8 (BOM)') {
         U.toast(T('toast.encoding', { encoding: encoding }), 4000);
@@ -966,6 +989,41 @@
   }
 
   /**
+   * The dashboard's data, fetched from where the deployment says it is published. A
+   * bundle newer than the one this browser holds replaces every data point and the
+   * companions; the same one is left alone. Resolves to whether anything changed.
+   */
+  async function syncDashboardData(force) {
+    if (!HR.dashboard || !HR.dashboard.active()) return false;
+    const src = HR.dashboard.source();
+    state.dashboardError = null;
+    if (!src) return false;
+    const stampKey = HR.workspace ? HR.workspace.key('hr.dashboard.stamp') : 'hr.dashboard.stamp';
+    let stored = 0;
+    try { stored = Number(localStorage.getItem(stampKey) || 0); } catch (e) { /* ignore */ }
+    try {
+      const res = await fetch(src, { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if (!data || !Array.isArray(data.snapshots)) throw new Error(T('db.badBundle'));
+      const stamp = Number(data.exportedAt || 0);
+      if (!force && stored && stamp <= stored) return false;
+      await withBusy(T('db.loading'), async () => {
+        await HR.store.clear();
+        await HR.store.clearContext();
+        await HR.store.importJSON(data);
+        try { localStorage.setItem(stampKey, String(stamp)); } catch (e) { /* ignore */ }
+      });
+      state.dashboardLoaded = stamp;
+      U.toast(T('db.loaded', { date: U.fmtDate(stamp) }), 6000);
+      return true;
+    } catch (e) {
+      state.dashboardError = e.message || String(e);
+      return false;
+    }
+  }
+
+  /**
    * Every data point's summary, recomputed under today's settings, thresholds and
    * companions. A stored summary is frozen at import time: change a limit and the
    * trend compares numbers that were scored differently. This makes the line honest
@@ -1083,7 +1141,7 @@
     const parts = [T('app.sources', { n: sources.length })];
     if (state.model.hasRecon) parts.push(U.fmtInt(s.accounts) + ' ' + T('app.accounts'));
     if (state.vault) parts.push(U.fmtInt(state.vault.persons.length) + ' ' + T('app.persons'));
-    if (state.model.hasRecon) parts.push(T('gs.short') + ' ' + s.governanceScore + ' \u00b7 ' + T('app.riskShort') + ' ' + s.riskScore);
+    if (state.model.hasRecon && !(HR.dashboard && HR.dashboard.hides('risk'))) parts.push(T('gs.short') + ' ' + s.governanceScore + ' \u00b7 ' + T('app.riskShort') + ' ' + s.riskScore);
     /* Which moment this is, and against which: the two dates a monthly reader needs. */
     const day = t => U.fmtDate(t).split(',')[0];
     if (cur && state.snapshots.length > 1) parts.push(day(cur.dataDate));
@@ -1102,7 +1160,11 @@
     document.title = (HR.brand.state.productName || T('app.title')) + (edName ? ' \u00b7 ' + edName : '');
     const titleEl = document.getElementById('topbar-title');
     titleEl.textContent = HR.brand.state.productName || T('app.title');
-    if (edName) {
+    const dash = HR.dashboard && HR.dashboard.active();
+    if (dash) {
+      titleEl.append(' \u00b7 ', el('span', { class: 'topbar-edition', text: HR.dashboard.name(), title: T('db.title') }));
+      document.title = (HR.brand.state.productName || T('app.title')) + ' \u00b7 ' + HR.dashboard.name();
+    } else if (edName) {
       /* The edition word is the way back to the chooser. */
       titleEl.append(' \u00b7 ', el('span', { class: 'topbar-edition', text: edName, title: T('ed.switch'), onclick: () => go('choose') }));
     } else if (HR.edition && !HR.edition.chosen()) {
@@ -1119,6 +1181,20 @@
     titleEl.append(' ', ver);
     document.getElementById('btn-import-label').textContent = T('app.import');
     renderWorkspacePicker();
+    /* A dashboard has nothing to import and no workspace to pick: the only action is
+       fetching the published data again. */
+    if (dash) {
+      document.getElementById('btn-import').hidden = true;
+      const ws = document.getElementById('workspace-select'); if (ws) ws.hidden = true;
+      let btn = document.getElementById('btn-dash-reload');
+      if (!btn) {
+        btn = el('button', { class: 'btn primary', id: 'btn-dash-reload' });
+        document.getElementById('btn-import').insertAdjacentElement('afterend', btn);
+      }
+      btn.textContent = T('db.reload');
+      btn.title = T('db.reloadTip');
+      btn.onclick = () => syncDashboardData(true).then(changed => { if (changed) location.reload(); else U.toast(T('db.upToDate'), 4000); });
+    }
     document.getElementById('btn-theme').title = T('app.theme');
     const repo = document.getElementById('link-repo');
     repo.textContent = T('app.repo');
@@ -1206,7 +1282,8 @@
 
     /* A reload used to lose the vault and the rules, which quietly downgraded views that
        depend on them — the People overview being the visible one. */
-    const restoreContext = HR.store.loadContext().then(ctx => withBusy(T('busy.restore'), () => {
+    const dashboardData = HR.dashboard ? HR.dashboard.ready.then(() => syncDashboardData(false)).catch(e => { console.error(e); }) : Promise.resolve();
+    const restoreContext = dashboardData.then(() => HR.store.loadContext()).then(ctx => withBusy(T('busy.restore'), () => {
       if (!ctx) return;
       state.raw = { rules: ctx.rules, vault: ctx.vault, granted: ctx.granted, history: ctx.history,
         products: ctx.products, assignments: ctx.assignments, directory: ctx.directory,
@@ -1237,6 +1314,7 @@
       if (HR.workspace && HR.workspace.takePendingDemo()) { await HR.demo.load(); return; }
       const h = parseHash();
       if (h.view && HR.views[h.view]) { state.view = h.view; state.params = h.params; }
+      else if (HR.dashboard && HR.dashboard.active()) state.view = HR.dashboard.landing();
       else if (HR.edition && HR.edition.chosen()) state.view = HR.edition.landing();
       if (state.snapshots.length && !state.noAutoRecon) {
         const byDate = (a, b) => (b.dataDate - a.dataDate) || (b.importedAt - a.importedAt);

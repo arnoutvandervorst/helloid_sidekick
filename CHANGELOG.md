@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.9.53] — 2026-09-08
+
+- Sub-dashboards. HR gets Person 360 and nothing else: the built-in HR dashboard (?dashboard=hr, remembered; ?dashboard=off leaves it; an hr. hostname presets it) shows People with Person 360, Organisation and the joiners / leavers / changes diff — no import button, no drop zone, no settings, no workspace picker, no money and no risk scores, and any other page says it is not part of the dashboard. HR imports nothing: the dashboard reads a bundle the partner publishes on the host — Data points › Publish for a dashboard exports one file with every data point (vaults included) and the companions; published/dashboards.json names it — and takes a newer bundle on its next open or on “Reload data”. It runs in a workspace of its own. The app cannot authenticate anyone: a dashboard is a preset; who may open the hostname is the proxy’s business. dashboards.json can define other dashboards (views, landing, what to hide, source); later the source may be a HelloID API.
+
 ## [2026.9.52] — 2026-09-08
 
 - Trends per KPI. With several data points the app could draw the score over time but not say which KPI moved it. Every data point now stores each KPI’s value and status and each finding’s count. The Overview leads with a Trend card: the governance score over every data point, and since the compared one the KPIs newly met, improved, worse or newly broken, findings resolved or new, people joined or left. Compliance shows each KPI’s movement against the compared data point (was → now) and a sparkline over all of them with the limit drawn in; chips keep only the KPIs that improved or got worse. The Diff gains a KPI-movement table, the Data points page draws any one KPI with its limit or any one finding over time, and the board’s change page names the KPIs that moved. “Recalculate trends with current settings” rebuilds every data point under today’s limits and weights, so the lines compare like with like and older data points get their KPI history.

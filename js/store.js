@@ -165,14 +165,29 @@
   }
 
   async function importJSON(text) {
-    const data = JSON.parse(text);
+    const data = typeof text === 'string' ? JSON.parse(text) : text;
     const snaps = Array.isArray(data) ? data : (data.snapshots || []);
     if (!snaps.length) throw new Error('No snapshots found in that file.');
     for (const s of snaps) {
       if (!s.id || !s.records || !s.summary) throw new Error('Snapshot file is malformed.');
       await put(s);
     }
+    /* A dashboard bundle also carries the companions the data points share. */
+    if (data.context && typeof data.context === 'object') await saveContext(data.context);
     return snaps.length;
+  }
+
+  /** Everything a dashboard needs, in one file: every data point (vaults included) and
+      the companions loaded now. Published on the host; the dashboard fetches it. */
+  async function exportBundle(workspaceName) {
+    const ids = (await list()).map(s => s.id);
+    const snapshots = [];
+    for (const id of ids) { const s = await get(id); if (s) snapshots.push(s); }
+    const ctx = (await loadContext()) || {};
+    const context = {};
+    ['rules', 'granted', 'history', 'audit', 'products', 'assignments', 'fileNames', 'importedAt'].forEach(k => { if (ctx[k] != null) context[k] = ctx[k]; });
+    return JSON.stringify({ kind: 'helloid-sidekick-bundle', version: 1, exportedAt: Date.now(),
+      workspace: workspaceName || null, snapshots, context });
   }
 
   /** The kill-switch's half: close the connection, delete the database, and
@@ -191,6 +206,6 @@
     });
   }
 
-  HR.store = { list, get, put, remove, clear, makeSnapshot, dateFromName, exportAll, importJSON, isMemory,
+  HR.store = { list, get, put, remove, clear, makeSnapshot, dateFromName, exportAll, exportBundle, importJSON, isMemory,
     saveContext, loadContext, clearContext, wipeDb };
 })(window.HR);

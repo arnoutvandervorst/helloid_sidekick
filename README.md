@@ -57,6 +57,26 @@ does not overwrite the last. Switching reloads the page. The first workspace kee
 storage the app always used, so nothing migrates; the demo loads into its own workspace
 and never touches a customer's.
 
+## Sub-dashboards
+
+A dashboard is what one audience gets and nothing more. The built-in **HR** dashboard
+(`?dashboard=hr`, remembered; `?dashboard=off` leaves it; an `hr.` or `helloid-hr.`
+hostname presets it) shows People with Person 360, Organisation and the joiners / leavers /
+changes diff — no imports, no settings, no workspace picker, no money, no risk scores.
+It cannot authenticate anyone: it is a preset, and who may open the hostname is the
+proxy's business (Cloudflare Access, for instance).
+
+HR imports nothing. The dashboard reads a **published bundle**: on Data points › *Publish
+for a dashboard* the partner exports one file with every data point (vaults included) and
+the rules and activity loaded now, puts it in `published/` on the host and names it in
+`published/dashboards.json` (see `docs/dashboards.example.json`). The dashboard fetches it
+on open and takes a newer bundle (higher `exportedAt`) over what the browser holds; "Reload
+data" fetches again. `published/` is mounted read-only into the container and is never in
+git or the image. A dashboard runs in a workspace of its own, so the partner's data in the
+same browser is untouched. Later the source may be a HelloID API that answers the same
+shape; the loader will not need to change. `dashboards.json` can also define other
+dashboards: `views`, `landing`, `hide` (`money`, `risk`), `source`.
+
 ## Demo data
 
 `make-demo-set.py` writes a fictional organisation into `demo/`: nine exports describing

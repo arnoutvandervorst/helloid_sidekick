@@ -1711,14 +1711,14 @@
       { key: 'title', label: T('pp.jobTitle'), value: r => r.title },
       { key: 'accounts', label: T('pp.accounts'), num: true, value: r => r.accounts.length },
       { key: 'perms', label: T('c.perms'), num: true, value: r => r.perms.length },
-      { key: 'cost', label: T('c.costMo'), num: true, value: r => r.monthlyCost, render: r => U.fmtMoney(r.monthlyCost) },
-      { key: 'risk', label: T('pp.maxRisk'), num: true, value: r => r.maxRisk, render: r => r.accounts.length ? scoreBar(r.maxRisk) : '—' },
-      outliers ? { key: 'outlier', label: T('ol.col'), num: true, hint: T('ol.colHint'),
+      HR.dashboard && HR.dashboard.hides('money') ? null : { key: 'cost', label: T('c.costMo'), num: true, value: r => r.monthlyCost, render: r => U.fmtMoney(r.monthlyCost) },
+      HR.dashboard && HR.dashboard.hides('risk') ? null : { key: 'risk', label: T('pp.maxRisk'), num: true, value: r => r.maxRisk, render: r => r.accounts.length ? scoreBar(r.maxRisk) : '—' },
+      outliers && !(HR.dashboard && HR.dashboard.hides('risk')) ? { key: 'outlier', label: T('ol.col'), num: true, hint: T('ol.colHint'),
         value: r => { const o = outliers.byPerson.get(r.person.personId); return o ? o.score : -1; },
         render: r => { const o = outliers.byPerson.get(r.person.personId); return o ? scoreBar(o.score) : el('span', { class: 'note', text: '\u2014' }); } } : null
     ].filter(Boolean);
 
-    if (outliers && outliers.rows.length) {
+    if (outliers && outliers.rows.length && !(HR.dashboard && HR.dashboard.hides('risk'))) {
       f.appendChild(el('div', { class: 'grid g4', style: 'margin-top:14px' }, [
         tile(T('ol.kHigh'), U.fmtInt(outliers.summary.high), T('ol.kHighFoot', { of: U.fmtInt(outliers.summary.people), mean: outliers.summary.mean }),
           { severity: outliers.summary.high ? 'medium' : 'good', small: true, onClick: () => pick('outliers') })
@@ -1769,9 +1769,9 @@
         { key: 'accountCount', label: T('pp.accounts'), num: true },
         { key: 'enabledAccounts', label: T('c.enabled'), num: true },
         { key: 'permCount', label: T('c.perms'), num: true },
-        { key: 'monthlyCost', label: T('c.costMo'), num: true, render: r => U.fmtMoney(r.monthlyCost) },
-        { key: 'maxRisk', label: T('pp.maxRisk'), num: true, value: r => Math.max(0, ...r.accounts.map(a => a.riskScore)), render: r => scoreBar(Math.max(0, ...r.accounts.map(a => a.riskScore))) }
-      ],
+        HR.dashboard && HR.dashboard.hides('money') ? null : { key: 'monthlyCost', label: T('c.costMo'), num: true, render: r => U.fmtMoney(r.monthlyCost) },
+        HR.dashboard && HR.dashboard.hides('risk') ? null : { key: 'maxRisk', label: T('pp.maxRisk'), num: true, value: r => Math.max(0, ...r.accounts.map(a => a.riskScore)), render: r => scoreBar(Math.max(0, ...r.accounts.map(a => a.riskScore))) }
+      ].filter(Boolean),
       rows: m.personList, pageSize: 40, exportName: 'people',
       initialSort: { key: 'permCount', dir: -1 },
       search: (r, q) => r.name.toLowerCase().includes(q),
@@ -2085,30 +2085,61 @@
     f.appendChild(el('p', { style: 'margin-bottom:12px', text: T('df.baselineIs', { name: baseSnap.name, date: dOf(baseSnap), now: curSnap ? curSnap.name + ' \u00b7 ' + dOf(curSnap) : '\u2014', headline: d.headline }) }));
     if (st.vault && !d.persons) f.appendChild(el('p', { class: 'note', text: T('df.noPersonDiff') }));
 
+    const noMoney = !!(HR.dashboard && HR.dashboard.hides('money')), noRisk = !!(HR.dashboard && HR.dashboard.hides('risk'));
     const k = el('div', { class: 'grid g4' });
     const dt = (label, key, fmt, inverse) => {
       const x = d.summary[key];
       return tile(label, fmt ? fmt(x.now) : U.fmtInt(x.now), T('df.wasVal', { v: fmt ? fmt(x.was) : U.fmtInt(x.was) }),
         { small: true, delta: x, deltaFormat: fmt, inverse });
     };
-    k.append(
-      dt(T('gs.title'), 'governanceScore', null, true),
-      dt(T('gs.risk'), 'riskScore'),
+    k.append(...[
+      noRisk ? null : dt(T('gs.title'), 'governanceScore', null, true),
+      noRisk ? null : dt(T('gs.risk'), 'riskScore'),
       dt(T('ov.unownedAccounts'), 'orphanAccounts'),
       dt(T('ov.unmanagedEnt'), 'unmanagedPermissionRows'),
-      dt(T('df.licenceSpendMo'), 'monthlyCost', U.fmtMoney)
-    );
+      noMoney ? null : dt(T('df.licenceSpendMo'), 'monthlyCost', U.fmtMoney)
+    ].filter(Boolean));
     f.appendChild(k);
     const k2 = el('div', { class: 'grid g4', style: 'margin-top:14px' });
-    k2.append(
+    k2.append(...[
       dt(T('ov.accounts'), 'accounts'),
       dt(T('df.enabledAccounts'), 'enabledAccounts'),
       dt(T('pp.persons'), 'persons'),
-      dt(T('df.recoverableMo'), 'wasteMonthly', U.fmtMoney)
-    );
+      noMoney ? null : dt(T('df.recoverableMo'), 'wasteMonthly', U.fmtMoney)
+    ].filter(Boolean));
     f.appendChild(k2);
 
-    if (d.controls) {
+    /* People first: who joined and left is the sentence a reader takes away. */
+    if (d.persons) {
+      const P = d.persons;
+      const personCols = [
+        { key: 'name', label: T('c.person'), value: r => r.person.displayName },
+        { key: 'ext', label: T('c.employeeId'), value: r => r.person.externalId, render: r => el('span', { class: 'mono', text: r.person.externalId }) },
+        { key: 'dept', label: T('pp.department'), value: r => { const c = r.person.primaryContract || r.person.contracts[0]; return c && c.department ? c.department.name : ''; } },
+        { key: 'title', label: T('pp.jobTitle'), value: r => { const c = r.person.primaryContract || r.person.contracts[0]; return c && c.title ? c.title.name : ''; } },
+        { key: 'life', label: T('df.lifecycle'), value: r => r.lifecycle, render: r => el('span', { class: 'pill', text: T('pp.state' + r.lifecycle.charAt(0).toUpperCase() + r.lifecycle.slice(1)) }) }
+      ];
+      const openPerson = r => HR.app.go('people', { id: r.person.externalId || r.person.personId });
+      f.appendChild(el('div', { class: 'grid g2', style: 'margin-top:14px' }, [
+        card(T('df.peopleJoined'), T('df.peopleJoinedNote', { n: P.joined.length }), HR.table.make({
+          columns: personCols, rows: P.joined, pageSize: 15, exportName: 'people-joined', onRowClick: openPerson })),
+        card(T('df.peopleLeft'), T('df.peopleLeftNote', { n: P.left.length }), HR.table.make({
+          columns: personCols, rows: P.left, pageSize: 15, exportName: 'people-left' }))
+      ]));
+      f.appendChild(el('div', { style: 'margin-top:14px' }, card(T('df.peopleChanged'), T('df.peopleChangedNote', { n: P.changed.length, moves: P.lifecycleMoves }), HR.table.make({
+        columns: [
+          personCols[0], personCols[1],
+          { key: 'what', label: T('df.whatChanged'), value: r => r.changes.map(c => T('df.pf.' + c.field)).join(', '),
+            render: r => el('span', { class: 'trunc', title: r.changes.map(c => T('df.pf.' + c.field) + ': ' + c.from + ' \u2192 ' + c.to).join(' | '),
+              text: r.changes.map(c => T('df.pf.' + c.field) + ': ' + c.from + ' \u2192 ' + c.to).join(' \u00b7 ') }) },
+          personCols[4]
+        ], rows: P.changed, pageSize: 25, exportName: 'people-changed',
+        search: (r, q) => (r.person.displayName + ' ' + r.person.externalId).toLowerCase().includes(q),
+        onRowClick: openPerson
+      }))));
+    }
+
+    if (d.controls && !noRisk) {
       const C2 = d.controls;
       const fmtV = (def, v) => v == null ? '\u2014' : (def.unit === 'pct' ? U.fmtNum(v, 1) + '%' : U.fmtInt(v));
       const MOVE_CLASS = { newlyMet: 'ok', improved: 'ok', same: '', worse: 'removed', newlyBroken: 'removed', new: 'muted', gone: 'muted' };
@@ -2156,41 +2187,12 @@
         { key: 'what', label: T('df.whatChanged'), value: r => r.changes.map(c => c.field).join(', '), render: r => el('span', { class: 'trunc', title: r.changes.map(c => c.field + ': ' + c.from + ' → ' + c.to).join(' | '), text: r.changes.map(c => c.field).join(', ') }) },
         { key: 'granted', label: T('c.granted'), num: true, value: r => r.permsAdded.length },
         { key: 'revoked', label: T('c.revoked'), num: true, value: r => r.permsRemoved.length },
-        { key: 'riskDelta', label: T('df.dRisk'), num: true, render: r => deltaBadge(r.riskDelta) },
-        { key: 'costDelta', label: T('df.dCost'), num: true, render: r => deltaBadge(r.costDelta, U.fmtMoney) }
-      ], rows: d.accounts.changed, pageSize: 25, exportName: 'account-changes',
+        noRisk ? null : { key: 'riskDelta', label: T('df.dRisk'), num: true, render: r => deltaBadge(r.riskDelta) },
+        noMoney ? null : { key: 'costDelta', label: T('df.dCost'), num: true, render: r => deltaBadge(r.costDelta, U.fmtMoney) }
+      ].filter(Boolean), rows: d.accounts.changed, pageSize: 25, exportName: 'account-changes',
       search: (r, q) => r.account.userName.toLowerCase().includes(q),
       onRowClick: r => drawerAccount(r.account, r)
     }))));
-
-    if (d.persons) {
-      const P = d.persons;
-      const personCols = [
-        { key: 'name', label: T('c.person'), value: r => r.person.displayName },
-        { key: 'ext', label: T('c.employeeId'), value: r => r.person.externalId, render: r => el('span', { class: 'mono', text: r.person.externalId }) },
-        { key: 'dept', label: T('pp.department'), value: r => { const c = r.person.primaryContract || r.person.contracts[0]; return c && c.department ? c.department.name : ''; } },
-        { key: 'title', label: T('pp.jobTitle'), value: r => { const c = r.person.primaryContract || r.person.contracts[0]; return c && c.title ? c.title.name : ''; } },
-        { key: 'life', label: T('df.lifecycle'), value: r => r.lifecycle, render: r => el('span', { class: 'pill', text: T('pp.state' + r.lifecycle.charAt(0).toUpperCase() + r.lifecycle.slice(1)) }) }
-      ];
-      const openPerson = r => HR.app.go('people', { id: r.person.externalId || r.person.personId });
-      f.appendChild(el('div', { class: 'grid g2', style: 'margin-top:14px' }, [
-        card(T('df.peopleJoined'), T('df.peopleJoinedNote', { n: P.joined.length }), HR.table.make({
-          columns: personCols, rows: P.joined, pageSize: 15, exportName: 'people-joined', onRowClick: openPerson })),
-        card(T('df.peopleLeft'), T('df.peopleLeftNote', { n: P.left.length }), HR.table.make({
-          columns: personCols, rows: P.left, pageSize: 15, exportName: 'people-left' }))
-      ]));
-      f.appendChild(el('div', { style: 'margin-top:14px' }, card(T('df.peopleChanged'), T('df.peopleChangedNote', { n: P.changed.length, moves: P.lifecycleMoves }), HR.table.make({
-        columns: [
-          personCols[0], personCols[1],
-          { key: 'what', label: T('df.whatChanged'), value: r => r.changes.map(c => T('df.pf.' + c.field)).join(', '),
-            render: r => el('span', { class: 'trunc', title: r.changes.map(c => T('df.pf.' + c.field) + ': ' + c.from + ' \u2192 ' + c.to).join(' | '),
-              text: r.changes.map(c => T('df.pf.' + c.field) + ': ' + c.from + ' \u2192 ' + c.to).join(' \u00b7 ') }) },
-          personCols[4]
-        ], rows: P.changed, pageSize: 25, exportName: 'people-changed',
-        search: (r, q) => (r.person.displayName + ' ' + r.person.externalId).toLowerCase().includes(q),
-        onRowClick: openPerson
-      }))));
-    }
 
     const g2 = el('div', { class: 'grid g2', style: 'margin-top:14px' });
     g2.appendChild(card(T('df.newAccounts'), T('df.added', { n: d.accounts.added.length }), HR.table.make({
@@ -2198,8 +2200,8 @@
         { key: 'userName', label: T('c.account'), value: r => r.account.userName },
         { key: 'cls', label: T('c.class'), value: r => r.account.clsLabel },
         { key: 'perms', label: T('c.perms'), num: true, value: r => r.account.permCount },
-        { key: 'risk', label: T('c.risk'), num: true, value: r => r.account.riskScore, render: r => scoreBar(r.account.riskScore) }
-      ], rows: d.accounts.added, pageSize: 15, exportName: 'accounts-added',
+        noRisk ? null : { key: 'risk', label: T('c.risk'), num: true, value: r => r.account.riskScore, render: r => scoreBar(r.account.riskScore) }
+      ].filter(Boolean), rows: d.accounts.added, pageSize: 15, exportName: 'accounts-added',
       onRowClick: r => drawerAccount(r.account)
     })));
     g2.appendChild(card(T('df.goneAccounts'), T('df.removed', { n: d.accounts.removed.length }), HR.table.make({
@@ -2207,8 +2209,8 @@
         { key: 'userName', label: T('c.account'), value: r => r.account.userName },
         { key: 'cls', label: T('c.class'), value: r => r.account.clsLabel },
         { key: 'perms', label: T('c.perms'), num: true, value: r => r.account.permCount },
-        { key: 'risk', label: T('c.risk'), num: true, value: r => r.account.riskScore, render: r => scoreBar(r.account.riskScore) }
-      ], rows: d.accounts.removed, pageSize: 15, exportName: 'accounts-removed'
+        noRisk ? null : { key: 'risk', label: T('c.risk'), num: true, value: r => r.account.riskScore, render: r => scoreBar(r.account.riskScore) }
+      ].filter(Boolean), rows: d.accounts.removed, pageSize: 15, exportName: 'accounts-removed'
     })));
     f.appendChild(g2);
     return f;
@@ -2394,6 +2396,23 @@
         ]));
       }
       f.appendChild(g);
+    }
+
+    /* Handing the data to a dashboard: one file with every data point and the companions. */
+    if ((st.snapshots || []).length && !(HR.dashboard && HR.dashboard.active())) {
+      const wsName = HR.workspace ? HR.workspace.active().name : '';
+      const slug = String(wsName || 'tenant').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'tenant';
+      f.appendChild(el('div', { style: 'margin-top:14px' }, card(T('db.publishTitle'), T('db.publishNote'), [
+        el('p', { text: T('db.publishLead') }),
+        el('pre', { class: 'mono', style: 'white-space:pre-wrap' }, [document.createTextNode(
+          'published/dashboards.json:\n{ "hr": { "name": "HR \u2014 ' + wsName + '", "source": "published/' + slug + '.json" } }\n\n' +
+          T('db.publishOpen') + ':  <host>/?dashboard=hr')]),
+        el('div', { class: 'slot-actions' }, el('button', { class: 'btn primary', text: T('db.publish'), onclick: async () => {
+          const json = await HR.store.exportBundle(wsName);
+          U.download(slug + '.json', json, 'application/json');
+          HR.usage.exported('dashboard-bundle');
+        } }))
+      ])));
     }
 
     /* The date is the one thing an export cannot say about itself reliably: editable. */

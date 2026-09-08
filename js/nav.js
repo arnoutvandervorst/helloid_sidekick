@@ -136,7 +136,7 @@
       onclick: e => { e.stopPropagation(); toggleFavourite(view); }
     }, icon('star'));
 
-    return el('div', { class: 'nav-row' }, [button, star]);
+    return el('div', { class: 'nav-row' }, [button, HR.dashboard && HR.dashboard.active() ? null : star]);
   }
 
   function render() {
@@ -147,7 +147,8 @@
     nav.classList.toggle('collapsed', state.collapsed);
 
     /* Favourites first, because that is the point of them. */
-    const favourites = state.favourites.filter(v => HR.views[v]);
+    const dash = HR.dashboard && HR.dashboard.active();
+    const favourites = dash ? [] : state.favourites.filter(v => HR.views[v]);
     if (favourites.length) {
       nav.appendChild(el('div', { class: 'nav-group-label', text: T('nav.g.favourites') }));
       favourites.forEach(view => nav.appendChild(item(view, current)));
@@ -155,7 +156,7 @@
     }
 
     /* The edition decides which groups exist; the constant above is the full map. */
-    const groups = HR.edition ? HR.edition.groups() : GROUPS;
+    const groups = dash ? [{ key: 'dashboard', views: HR.dashboard.views() }] : (HR.edition ? HR.edition.groups() : GROUPS);
     groups.forEach(group => {
       const views = group.views.filter(v => HR.views[v]);
       if (!views.length) return;

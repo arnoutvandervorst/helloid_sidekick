@@ -39,3 +39,5 @@ DEPLOY-NUC.md
 # Python bytecode.
 __pycache__/
 *.pyc
+# dashboard bundles the partner publishes: customer data
+published/

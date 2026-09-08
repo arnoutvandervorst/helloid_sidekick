@@ -1,0 +1,10 @@
+{
+  "_": "Copy to published/dashboards.json next to the app on the host. Each key is a dashboard id, opened with ?dashboard=<id> (remembered) or an <id>. / helloid-<id>. hostname. Built-in: hr (people, org, diff; hides money and risk). source is the bundle exported from Data points > Publish, placed in the same published/ folder; later this may be a HelloID API URL that answers the same shape.",
+  "hr": {
+    "name": "HR \u2014 Avondrood Zorggroep",
+    "source": "published/avondrood-zorggroep.json",
+    "views": ["people", "org", "diff"],
+    "landing": "people",
+    "hide": ["money", "risk"]
+  }
+}

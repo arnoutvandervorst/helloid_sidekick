@@ -65,16 +65,20 @@
     ]);
   }
 
+  /* A dashboard may hide the money and the risk scores: HR sees identity and access facts. */
+  const hides = kind => !!(HR.dashboard && HR.dashboard.hides(kind));
+
   function tiles(m, d) {
     const s = d.summary;
-    return el('div', { class: 'grid g6' }, [
+    const cells = [
       tile(T('p3.kAccounts'), U.fmtInt(s.accounts), T('p3.kAccountsFoot', { n: U.fmtInt(s.enabled) }), { small: true, severity: s.accounts && !s.enabled && d.life.state !== 'past' ? 'medium' : undefined }),
       tile(T('p3.kEnts'), U.fmtInt(s.entitlements), T('p3.kEntsFoot', { nobody: U.fmtInt(d.access.counts.nobody) }), { small: true, severity: d.access.counts.nobody ? 'medium' : 'good' }),
-      tile(T('c.risk'), String(s.maxRisk), T('p3.kRiskFoot'), { small: true, severity: s.maxRisk >= 70 ? 'critical' : s.maxRisk >= 45 ? 'high' : s.maxRisk >= 20 ? 'medium' : 'good' }),
-      tile(T('p3.kCost'), U.fmtMoney(s.monthly), T('p3.kCostFoot'), { small: true }),
-      tile(T('ol.score'), s.outlier == null ? '—' : String(s.outlier), T('p3.kOutlierFoot'), { small: true, severity: s.outlier == null ? undefined : s.outlier >= HR.outlier.HIGH ? 'high' : 'good' }),
+      hides('risk') ? null : tile(T('c.risk'), String(s.maxRisk), T('p3.kRiskFoot'), { small: true, severity: s.maxRisk >= 70 ? 'critical' : s.maxRisk >= 45 ? 'high' : s.maxRisk >= 20 ? 'medium' : 'good' }),
+      hides('money') ? null : tile(T('p3.kCost'), U.fmtMoney(s.monthly), T('p3.kCostFoot'), { small: true }),
+      hides('risk') ? null : tile(T('ol.score'), s.outlier == null ? '—' : String(s.outlier), T('p3.kOutlierFoot'), { small: true, severity: s.outlier == null ? undefined : s.outlier >= HR.outlier.HIGH ? 'high' : 'good' }),
       tile(T('p3.kFindings'), U.fmtInt(s.findings), T('p3.kFindingsFoot', { sod: U.fmtInt(s.sod) }), { small: true, severity: s.findings ? (d.findings.some(f => f.severity === 'critical') ? 'critical' : 'medium') : 'good' })
-    ]);
+    ].filter(Boolean);
+    return el('div', { class: 'grid g' + cells.length }, cells);
   }
 
   /* ---------------------------------------------------------------- overview */
@@ -180,9 +184,9 @@
         { key: 'permCount', label: T('c.perms'), num: true },
         { key: 'sod', label: T('sod.tab'), num: true, value: a => d.sod.filter(v => v.account === a).length, render: a => { const n = d.sod.filter(v => v.account === a).length; return n ? el('span', { class: 'sev high', text: String(n) }) : el('span', { class: 'note', text: '0' }); } },
         { key: 'excl', label: T('dr.excludedIn'), num: true, value: a => d.exclusions.filter(x => x.account === a).length },
-        { key: 'monthlyCost', label: T('c.costMo'), num: true, render: a => U.fmtMoney(a.monthlyCost || 0) },
-        { key: 'riskScore', label: T('c.risk'), num: true, render: a => scoreBar(a.riskScore) }
-      ], rows: d.accounts, pageSize: 10, exportName: 'accounts-' + d.person.externalId, onRowClick: a => drawerAccount(a)
+        hides('money') ? null : { key: 'monthlyCost', label: T('c.costMo'), num: true, render: a => U.fmtMoney(a.monthlyCost || 0) },
+        hides('risk') ? null : { key: 'riskScore', label: T('c.risk'), num: true, render: a => scoreBar(a.riskScore) }
+      ].filter(Boolean), rows: d.accounts, pageSize: 10, exportName: 'accounts-' + d.person.externalId, onRowClick: a => drawerAccount(a)
     })));
     return wrap;
   }
@@ -312,12 +316,12 @@
           { key: 'at', label: T('au.cWhen'), value: x => x.decision.at || '' }
         ], rows: decided, pageSize: 10, exportName: 'attest-' + d.person.externalId })
       : el('p', { class: 'note', text: T('p3.noAttest') })));
-    d.accounts.forEach(a => {
+    if (!hides('risk')) d.accounts.forEach(a => {
       wrap.appendChild(card(T('dr.whyScore') + ' — ' + a.userName, T('dr.componentsSum', { n: a.riskScore }),
         a.riskParts && a.riskParts.length ? C.barList(a.riskParts.map(p => ({ label: p.label, value: Math.round(p.value), color: C.STATUS[a.riskBand], note: p.detail })), { valueLabel: T('c.points') })
           : el('p', { class: 'note', text: T('dr.clean') })));
     });
-    if (d.outlier) {
+    if (d.outlier && !hides('risk')) {
       const ol = d.outlier;
       const list = ents => ents.slice(0, 5).map(k => permName(m, k)).join(', ') + (ents.length > 5 ? ' +' + (ents.length - 5) : '');
       wrap.appendChild(card(T('ol.title'), T('ol.note'), dl([
@@ -371,8 +375,8 @@
       { id: 'rules', label: T('p3.tab.rules'), count: d.access.matchedRules.length + d.products.length, build: () => rulesTab(m, d) },
       { id: 'timeline', label: T('p3.tab.timeline'), count: d.timeline.length, build: p => timelineTab(m, d, p) },
       { id: 'governance', label: T('p3.tab.governance'), count: d.findings.length + d.sod.length, build: () => governanceTab(m, d) },
-      { id: 'cost', label: T('p3.tab.cost'), build: () => costTab(m, d) }
-    ], Object.assign({}, params))));
+      hides('money') ? null : { id: 'cost', label: T('p3.tab.cost'), build: () => costTab(m, d) }
+    ].filter(Boolean), Object.assign({}, params))));
     return f;
   }
 

@@ -27,7 +27,18 @@
     try { localStorage.setItem(KEY, JSON.stringify(reg)); } catch (e) { /* in-memory only */ }
   }
 
-  const active = () => load().list.find(w => w.id === load().active) || load().list[0];
+  /* A dashboard lives in a workspace of its own, chosen by the dashboard, not by the
+     picker, and never remembered as "the active one": leaving it lands back where the
+     partner was. */
+  function dashWorkspace() {
+    const id = HR.dashboard && HR.dashboard.workspaceId();
+    if (!id) return null;
+    load();
+    let w = reg.list.find(x => x.id === id);
+    if (!w) { w = { id, name: (HR.dashboard.name() || id) + ' dashboard', createdAt: Date.now(), dashboard: true }; reg.list.push(w); persist(); }
+    return w;
+  }
+  const active = () => dashWorkspace() || load().list.find(w => w.id === load().active) || load().list[0];
   const list = () => load().list.slice();
   const suffix = id => (id || active().id) === DEFAULT.id ? '' : '@' + (id || active().id);
   /** The storage key for a base name in the active workspace. */

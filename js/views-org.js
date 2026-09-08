@@ -185,6 +185,8 @@
       })));
     quality.appendChild(vaultQualityCard(m));
 
+    /* In a dashboard that hides the money, the tabs that are about it stay out. */
+    const noMoneyTabs = !!(HR.dashboard && HR.dashboard.hides('money'));
     f.appendChild(HR.viewkit.tabbed('org', [
       { id: 'walk', label: T('org.tab.walk'), build: () => walk },
       { id: 'scorecards', label: T('org.tab.scorecards'), build: () => {
@@ -196,12 +198,12 @@
         if (bf) f.appendChild(bf);
         return f;
       } },
-      { id: 'workforce', label: T('org.tab.workforce'), build: () => workforceCard(m) },
-      { id: 'attest', label: T('org.tab.attest'), build: () => attestCard(m) },
+      noMoneyTabs ? null : { id: 'workforce', label: T('org.tab.workforce'), build: () => workforceCard(m) },
+      noMoneyTabs ? null : { id: 'attest', label: T('org.tab.attest'), build: () => attestCard(m) },
       { id: 'leavers', label: T('org.tab.leavers'), build: () => leaversCard(m) },
       { id: 'quality', label: T('org.tab.quality'), count: q.summary.anomalies + q.summary.deadTitles,
         build: () => quality }
-    ], params));
+    ].filter(Boolean), params));
     return f;
   }
 
@@ -627,15 +629,15 @@
     }
 
     const k = el('div', { class: 'grid g4' });
-    k.append(
+    k.append(...[
       tile(T('lv.kLeavers'), U.fmtInt(res.summary.leavers), T('lv.kLeaversFoot'), { small: true }),
       tile(T('lv.kEnabled'), U.fmtInt(res.summary.withEnabled), T('lv.kEnabledFoot'),
         { small: true, severity: res.summary.withEnabled ? 'critical' : 'good' }),
       tile(T('lv.kAccess'), U.fmtInt(res.summary.withAccess), T('lv.kAccessFoot'),
         { small: true, severity: res.summary.withAccess ? 'high' : 'good' }),
-      tile(T('lv.kSpend'), U.fmtMoney(res.summary.monthly), T('lv.kSpendFoot'),
+      HR.dashboard && HR.dashboard.hides('money') ? null : tile(T('lv.kSpend'), U.fmtMoney(res.summary.monthly), T('lv.kSpendFoot'),
         { small: true, severity: res.summary.monthly ? 'medium' : 'good' })
-    );
+    ].filter(Boolean));
     wrap.appendChild(k);
     wrap.appendChild(slaLine(res.rows.filter(r => r.enabledAccounts).map(r => r.life.days || 0), HR.config.get().sla.leaverDays));
 
@@ -655,9 +657,9 @@
               text: String(r.enabledAccounts) }) },
           { key: 'ents', label: T('c.perms'), value: r => r.entCount, align: 'right',
             render: r => el('span', { class: r.entCount ? 'sev high' : 'note', text: String(r.entCount) }) },
-          { key: 'cost', label: T('c.costMo'), value: r => r.monthlyCost, align: 'right',
+          HR.dashboard && HR.dashboard.hides('money') ? null : { key: 'cost', label: T('c.costMo'), value: r => r.monthlyCost, align: 'right',
             render: r => U.fmtMoney(r.monthlyCost) }
-        ],
+        ].filter(Boolean),
         rows: res.rows, pageSize: 15, exportName: 'leavers',
         search: (r, q) => (r.person.displayName + ' ' + r.department).toLowerCase().includes(q),
         onRowClick: r => drawerVaultPerson(personRow(m, r.person), m)
@@ -728,20 +730,22 @@
 
     const wrap = el('div', {});
     const s = sc.summary;
+    /* A dashboard may hide the money and the risk scores. */
+    const noMoney = !!(HR.dashboard && HR.dashboard.hides('money')), noRisk = !!(HR.dashboard && HR.dashboard.hides('risk'));
 
     wrap.appendChild(el('div', { class: 'grid g4' }, [
       tile(T('sc.kDepartments'), U.fmtInt(s.departments), T('sc.kDepartmentsFoot', { n: U.fmtInt(s.people) })),
-      tile(T('sc.kSpend'), U.fmtMoney(s.monthlyCost) + '/mo',
+      noMoney ? null : tile(T('sc.kSpend'), U.fmtMoney(s.monthlyCost) + '/mo',
         sc.medianCostPerHead != null
           ? T('sc.kSpendFoot', { median: U.fmtMoney(sc.medianCostPerHead) }) : ''),
       tile(T('sc.kDrift'), U.fmtInt(s.driftRows), T('sc.kDriftFoot')),
       tile(T('sc.kLeavers'), U.fmtInt(s.leaversWithAccess),
-        T('sc.kLeaversFoot', { cost: U.fmtMoney(s.leaverCost) }),
+        noMoney ? T('sc.kLeaversFootPlain') : T('sc.kLeaversFoot', { cost: U.fmtMoney(s.leaverCost) }),
         { severity: s.leaversWithAccess ? 'critical' : 'good' })
-    ]));
+    ].filter(Boolean)));
 
     /* What to look at first, said in words before the table asks for reading. */
-    if (sc.outliers.length) {
+    if (sc.outliers.length && !noMoney) {
       wrap.appendChild(card(T('sc.outliersTitle'), null,
         el('ul', { class: 'clean' }, sc.outliers.slice(0, 5).map(o => el('li', { class: 'note' }, [
           el('span', { class: 'sev ' + (o.why === 'leavers' ? 'critical' : 'medium') }),
@@ -776,9 +780,9 @@
                 onclick: e => { e.preventDefault(); goWalk(r); } }) },
         { key: 'people', label: T('sc.cPeople'), value: r => r.people, align: 'right' },
         { key: 'accounts', label: T('sc.cAccounts'), value: r => r.accounts, align: 'right' },
-        { key: 'cost', label: T('sc.cSpend'), value: r => r.monthlyCost, align: 'right',
+        noMoney ? null : { key: 'cost', label: T('sc.cSpend'), value: r => r.monthlyCost, align: 'right',
           render: r => el('span', { text: U.fmtMoney(r.monthlyCost) }) },
-        { key: 'head', label: T('sc.cPerHead'), value: r => r.costPerHead || 0, align: 'right',
+        noMoney ? null : { key: 'head', label: T('sc.cPerHead'), value: r => r.costPerHead || 0, align: 'right',
           hint: T('sc.cPerHeadHint'),
           render: r => {
             if (r.costPerHead == null) return el('span', { class: 'note', text: '\u2014' });
@@ -796,11 +800,11 @@
           render: r => r.leaversWithAccess
             ? el('span', { class: 'sev critical', text: String(r.leaversWithAccess) })
             : el('span', { class: 'note', text: '0' }) },
-        { key: 'risk', label: T('sc.cRisk'), value: r => Math.round(r.avgRisk), align: 'right',
+        noRisk ? null : { key: 'risk', label: T('sc.cRisk'), value: r => Math.round(r.avgRisk), align: 'right',
           render: r => scoreBar(Math.round(r.avgRisk)) }
-      ],
+      ].filter(Boolean),
       rows: sc.rows, pageSize: 20, exportName: 'department-scorecards',
-      initialSort: { key: 'cost', dir: -1 }
+      initialSort: { key: noMoney ? 'people' : 'cost', dir: -1 }
     })));
 
     wrap.appendChild(el('p', { class: 'note', text: T('sc.foot') }));

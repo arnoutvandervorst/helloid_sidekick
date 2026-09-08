@@ -9,6 +9,9 @@ services:
     volumes:
       # Usage statistics outlive a rebuild; nothing in here identifies anyone.
       - ./logs:/var/log/nginx
+      # Dashboard data the partner publishes (bundles + dashboards.json). Customer data:
+      # never in the image, never in git; the folder is created empty if it is missing.
+      - ./published:/usr/share/nginx/html/published:ro
     healthcheck:
       # localhost resolves to ::1 first inside the container and nginx listens on
       # IPv4 only, which fails as "connection refused" while the service is fine.
