@@ -61,8 +61,7 @@ and never touches a customer's.
 
 A dashboard is what one audience gets and nothing more. The built-in **HR** dashboard
 (`?dashboard=hr`, remembered; `?dashboard=off` leaves it; an `hr.` or `helloid-hr.`
-hostname presets it) shows People with Person 360, Organisation and the joiners / leavers /
-changes diff — no imports, no settings, no workspace picker, no money, no risk scores.
+hostname presets it) shows People with Person 360 and Organisation — no imports, no settings, no workspace picker, no money, no risk scores.
 It cannot authenticate anyone: it is a preset, and who may open the hostname is the
 proxy's business (Cloudflare Access, for instance).
 

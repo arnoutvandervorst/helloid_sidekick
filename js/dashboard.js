@@ -18,7 +18,7 @@
   const KEY = 'hr.dashboard';
   const FILE = 'published/dashboards.json';
   const BUILTIN = {
-    hr: { id: 'hr', name: 'HR', views: ['people', 'org', 'diff'], landing: 'people', hide: ['money', 'risk'], readOnly: true, source: null }
+    hr: { id: 'hr', name: 'HR', views: ['people', 'org'], landing: 'people', hide: ['money', 'risk'], readOnly: true, source: null }
   };
 
   let defs = Object.assign({}, BUILTIN);

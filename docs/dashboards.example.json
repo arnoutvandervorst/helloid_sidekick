@@ -3,7 +3,7 @@
   "hr": {
     "name": "HR \u2014 Avondrood Zorggroep",
     "source": "published/avondrood-zorggroep.json",
-    "views": ["people", "org", "diff"],
+    "views": ["people", "org"],
     "landing": "people",
     "hide": ["money", "risk"]
   }

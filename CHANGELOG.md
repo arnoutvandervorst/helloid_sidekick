@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.9.54] — 2026-09-08
+
+- The HR dashboard shows People and Organisation; the Diff is not part of it.
+
 ## [2026.9.53] — 2026-09-08
 
 - Sub-dashboards. HR gets Person 360 and nothing else: the built-in HR dashboard (?dashboard=hr, remembered; ?dashboard=off leaves it; an hr. hostname presets it) shows People with Person 360, Organisation and the joiners / leavers / changes diff — no import button, no drop zone, no settings, no workspace picker, no money and no risk scores, and any other page says it is not part of the dashboard. HR imports nothing: the dashboard reads a bundle the partner publishes on the host — Data points › Publish for a dashboard exports one file with every data point (vaults included) and the companions; published/dashboards.json names it — and takes a newer bundle on its next open or on “Reload data”. It runs in a workspace of its own. The app cannot authenticate anyone: a dashboard is a preset; who may open the hostname is the proxy’s business. dashboards.json can define other dashboards (views, landing, what to hide, source); later the source may be a HelloID API.
