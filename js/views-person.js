@@ -70,13 +70,16 @@
 
   function tiles(m, d) {
     const s = d.summary;
+    /* Every tile opens the tab that explains it. */
+    const id = HR.app.state.params && HR.app.state.params.id;
+    const open = (tab, extra) => () => HR.app.go('people', Object.assign({ id, tab }, extra || {}));
     const cells = [
-      tile(T('p3.kAccounts'), U.fmtInt(s.accounts), T('p3.kAccountsFoot', { n: U.fmtInt(s.enabled) }), { small: true, severity: s.accounts && !s.enabled && d.life.state !== 'past' ? 'medium' : undefined }),
-      tile(T('p3.kEnts'), U.fmtInt(s.entitlements), T('p3.kEntsFoot', { nobody: U.fmtInt(d.access.counts.nobody) }), { small: true, severity: d.access.counts.nobody ? 'medium' : 'good' }),
-      hides('risk') ? null : tile(T('c.risk'), String(s.maxRisk), T('p3.kRiskFoot'), { small: true, severity: s.maxRisk >= 70 ? 'critical' : s.maxRisk >= 45 ? 'high' : s.maxRisk >= 20 ? 'medium' : 'good' }),
-      hides('money') ? null : tile(T('p3.kCost'), U.fmtMoney(s.monthly), T('p3.kCostFoot'), { small: true }),
-      hides('risk') ? null : tile(T('ol.score'), s.outlier == null ? '—' : String(s.outlier), T('p3.kOutlierFoot'), { small: true, severity: s.outlier == null ? undefined : s.outlier >= HR.outlier.HIGH ? 'high' : 'good' }),
-      tile(T('p3.kFindings'), U.fmtInt(s.findings), T('p3.kFindingsFoot', { sod: U.fmtInt(s.sod) }), { small: true, severity: s.findings ? (d.findings.some(f => f.severity === 'critical') ? 'critical' : 'medium') : 'good' })
+      tile(T('p3.kAccounts'), U.fmtInt(s.accounts), T('p3.kAccountsFoot', { n: U.fmtInt(s.enabled) }), { small: true, severity: s.accounts && !s.enabled && d.life.state !== 'past' ? 'medium' : undefined, onClick: open('access') }),
+      tile(T('p3.kEnts'), U.fmtInt(s.entitlements), T('p3.kEntsFoot', { nobody: U.fmtInt(d.access.counts.nobody) }), { small: true, severity: d.access.counts.nobody ? 'medium' : 'good', onClick: open('access', d.access.counts.nobody ? { prov: 'nobody' } : {}) }),
+      hides('risk') ? null : tile(T('c.risk'), String(s.maxRisk), T('p3.kRiskFoot'), { small: true, severity: s.maxRisk >= 70 ? 'critical' : s.maxRisk >= 45 ? 'high' : s.maxRisk >= 20 ? 'medium' : 'good', onClick: open('governance') }),
+      hides('money') ? null : tile(T('p3.kCost'), U.fmtMoney(s.monthly), T('p3.kCostFoot'), { small: true, onClick: open('cost') }),
+      hides('risk') ? null : tile(T('ol.score'), s.outlier == null ? '—' : String(s.outlier), T('p3.kOutlierFoot'), { small: true, severity: s.outlier == null ? undefined : s.outlier >= HR.outlier.HIGH ? 'high' : 'good', onClick: open('governance') }),
+      tile(T('p3.kFindings'), U.fmtInt(s.findings), T('p3.kFindingsFoot', { sod: U.fmtInt(s.sod) }), { small: true, severity: s.findings ? (d.findings.some(f => f.severity === 'critical') ? 'critical' : 'medium') : 'good', onClick: open('governance') })
     ].filter(Boolean);
     return el('div', { class: 'grid g' + cells.length }, cells);
   }
@@ -85,7 +88,7 @@
   function overviewTab(m, d) {
     const p = d.person, pc = d.primary;
     const wrap = el('div', { class: 'grid g2' });
-    wrap.appendChild(card(T('p3.details'), null, dl([
+    const details = card(T('p3.details'), null, dl([
       [T('c.employeeId'), p.externalId || '—'],
       [T('p3.name'), [p.name && p.name.givenName, p.name && p.name.familyName].filter(Boolean).join(' ') || p.displayName],
       [T('p3.userName'), p.userName || '—'],
@@ -97,10 +100,12 @@
       [T('pp.cType'), pc ? (pc.type.name || pc.type.code || '—') : '—'],
       [T('p3.manager'), d.managers[0] ? d.managers[0].displayName : (pc && pc.manager && pc.manager.displayName) || '—'],
       [T('p3.status'), (p.blocked ? T('p3.blocked') : '') + (p.excluded ? ' ' + T('p3.excluded') : '') || T('p3.statusOk')]
-    ])));
+    ]));
+    wrap.appendChild(details);
     const du = d.directoryUser;
-    /* A dashboard reader cannot run a collector: without a directory the card stays out. */
-    if (du || !(HR.dashboard && HR.dashboard.readOnly())) wrap.appendChild(card(T('p3.directory'), du ? T('p3.directoryNote', { file: m.directory.meta.fileName }) : T('p3.directoryNone'), du ? dl([
+    /* No directory collected: no card telling so, and the details take the width. */
+    if (!m.directory) details.style.gridColumn = '1 / -1';
+    if (m.directory) wrap.appendChild(card(T('p3.directory'), du ? T('p3.directoryNote', { file: m.directory.meta.fileName }) : T('p3.directoryNone'), du ? dl([
       [T('c.account'), du.userName + (du.upn ? ' · ' + du.upn : '')],
       [T('c.state'), T(du.enabled ? 'c.enabled' : 'c.disabled')],
       [T('p3.ou'), du.ou || '—'],
@@ -143,39 +148,24 @@
   }
 
   /* ------------------------------------------------------------------ access */
-  function accessTab(m, d) {
+  function accessTab(m, d, params) {
     const wrap = el('div', {});
     const cnt = d.access.counts;
-    wrap.appendChild(el('div', { class: 'grid g4', style: 'margin-bottom:14px' }, [
-      tile(T('p3.viaRule'), U.fmtInt(cnt.rule), T('p3.viaRuleFoot'), { small: true, severity: 'good' }),
-      tile(T('p3.viaProduct'), U.fmtInt(cnt.product), T('p3.viaProductFoot'), { small: true }),
+    /* A tapped tile narrows the table to what it counted; tap again, or the pill, to widen.
+       The baseline is a fact about everybody, not a list worth opening. */
+    const prov = (params && params.prov) || '';
+    const id = HR.app.state.params && HR.app.state.params.id;
+    const pick = v => HR.app.go('people', { id, tab: 'access', prov: prov === v ? '' : v });
+    const tiles = [
+      tile(T('p3.viaRule'), U.fmtInt(cnt.rule), T('p3.viaRuleFoot'), { small: true, severity: 'good', onClick: () => pick('rule') }),
+      m.assignments ? tile(T('p3.viaProduct'), U.fmtInt(cnt.product), T('p3.viaProductFoot'), { small: true, onClick: () => pick('product') }) : null,
       tile(T('p3.viaBaseline'), U.fmtInt(cnt.baseline), T('p3.viaBaselineFoot'), { small: true }),
-      tile(T('p3.viaNobody'), U.fmtInt(cnt.nobody), T('p3.viaNobodyFoot'), { small: true, severity: cnt.nobody ? 'medium' : 'good' })
-    ]));
+      tile(T('p3.viaNobody'), U.fmtInt(cnt.nobody), T('p3.viaNobodyFoot'), { small: true, severity: cnt.nobody ? 'medium' : 'good', onClick: () => pick('nobody') })
+    ].filter(Boolean);
+    wrap.appendChild(el('div', { class: 'grid g' + tiles.length, style: 'margin-bottom:14px' }, tiles));
     if (!m.hasRecon) wrap.appendChild(partialNotice(['recon']));
-    const provPill = h => el('span', { class: 'pill ' + (h.provenance === 'rule' ? 'ok' : h.provenance === 'nobody' ? 'warn' : ''), text: T('p3.prov.' + h.provenance)
-      + (h.provenance === 'rule' ? ': ' + h.rules.map(r => r.name).join(', ') : h.provenance === 'product' ? ': ' + h.product.product : '') });
-    wrap.appendChild(card(T('p3.heldTitle'), T('p3.heldNote', { n: U.fmtInt(d.access.held.length) }), HR.table.make({
-      columns: [
-        { key: 'name', label: T('c.permission'), value: h => h.perm.name, render: h => el('a', { href: '#', text: h.perm.name, onclick: e => { e.preventDefault(); drawerPermission(h.perm, m); } }) },
-        { key: 'system', label: T('c.system'), value: h => h.perm.system },
-        { key: 'category', label: T('c.category'), value: h => h.perm.categoryLabel || h.perm.category || '' },
-        { key: 'prov', label: T('p3.provenance'), value: h => h.provenance, render: provPill },
-        { key: 'sens', label: T('c.sensitivity'), num: true, value: h => h.perm.sensitivity || 0, render: h => U.fmtNum(h.perm.sensitivity || 0, 1) },
-        { key: 'price', label: T('c.costMo'), num: true, value: h => h.perm.monthlyPrice || 0, render: h => h.perm.monthlyPrice ? U.fmtMoney(h.perm.monthlyPrice) : el('span', { class: 'note', text: '—' }) },
-        { key: 'holders', label: T('c.holders'), num: true, value: h => h.perm.holderCount || 0 },
-        { key: 'via', label: T('c.account'), value: h => h.accounts.map(a => a.userName).join(', ') }
-      ],
-      rows: d.access.held, pageSize: 25, exportName: 'held-' + d.person.externalId, initialSort: { key: 'prov', dir: -1 },
-      search: (h, q) => (h.perm.name + ' ' + h.perm.system + ' ' + h.provenance).toLowerCase().includes(q),
-      filters: [{ key: 'prov', label: T('p3.provenance'), options: ['rule', 'product', 'baseline', 'nobody'].map(v => ({ value: v, label: T('p3.prov.' + v) })), match: (h, v) => h.provenance === v }]
-    })));
-    if (d.access.missing.length) wrap.appendChild(card(T('pp.missingHere'), T('p3.missingNote', { n: U.fmtInt(d.access.missing.length) }),
-      HR.table.make({ columns: [
-        { key: 'name', label: T('c.permission'), value: x => x.perm.name, render: x => el('a', { href: '#', text: x.perm.name, onclick: e => { e.preventDefault(); drawerPermission(x.perm, m); } }) },
-        { key: 'system', label: T('c.system'), value: x => x.perm.system },
-        { key: 'rules', label: T('au.cRule'), value: x => x.rules.map(r => r.name).join(', ') }
-      ], rows: d.access.missing, pageSize: 15, exportName: 'missing-' + d.person.externalId })));
+    const heldRows = prov ? d.access.held.filter(h => h.provenance === prov) : d.access.held;
+
     if (d.accounts.length) wrap.appendChild(card(T('pp.accounts'), T('p3.accountsNote'), HR.table.make({
       columns: [
         { key: 'userName', label: T('c.account') },
@@ -189,6 +179,34 @@
         hides('risk') ? null : { key: 'riskScore', label: T('c.risk'), num: true, render: a => scoreBar(a.riskScore) }
       ].filter(Boolean), rows: d.accounts, pageSize: 10, exportName: 'accounts-' + d.person.externalId, onRowClick: a => drawerAccount(a)
     })));
+    const provPill = h => el('span', { class: 'pill ' + (h.provenance === 'rule' ? 'ok' : h.provenance === 'nobody' ? 'warn' : ''), text: T('p3.prov.' + h.provenance)
+      + (h.provenance === 'rule' ? ': ' + h.rules.map(r => r.name).join(', ') : h.provenance === 'product' ? ': ' + h.product.product : '') });
+    const heldCard = card(T('p3.heldTitle'), T('p3.heldNote', { n: U.fmtInt(d.access.held.length) }), HR.table.make({
+      columns: [
+        { key: 'name', label: T('c.permission'), value: h => h.perm.name, render: h => el('a', { href: '#', text: h.perm.name, onclick: e => { e.preventDefault(); drawerPermission(h.perm, m); } }) },
+        { key: 'system', label: T('c.system'), value: h => h.perm.system },
+        { key: 'category', label: T('c.category'), value: h => h.perm.categoryLabel || h.perm.category || '' },
+        { key: 'prov', label: T('p3.provenance'), value: h => h.provenance, render: provPill },
+        { key: 'sens', label: T('c.sensitivity'), num: true, value: h => h.perm.sensitivity || 0, render: h => U.fmtNum(h.perm.sensitivity || 0, 1) },
+        { key: 'price', label: T('c.costMo'), num: true, value: h => h.perm.monthlyPrice || 0, render: h => h.perm.monthlyPrice ? U.fmtMoney(h.perm.monthlyPrice) : el('span', { class: 'note', text: '—' }) },
+        { key: 'holders', label: T('c.holders'), num: true, value: h => h.perm.holderCount || 0 },
+        { key: 'via', label: T('c.account'), value: h => h.accounts.map(a => a.userName).join(', ') }
+      ],
+      rows: heldRows, pageSize: 25, exportName: 'held-' + d.person.externalId, initialSort: { key: 'prov', dir: -1 },
+      search: (h, q) => (h.perm.name + ' ' + h.perm.system + ' ' + h.provenance).toLowerCase().includes(q),
+      filters: prov ? [] : [{ key: 'prov', label: T('p3.provenance'), options: ['rule', 'product', 'baseline', 'nobody'].map(v => ({ value: v, label: T('p3.prov.' + v) })), match: (h, v) => h.provenance === v }]
+    }));
+    if (prov) heldCard.insertBefore(el('div', { class: 'slot-actions', style: 'margin:4px 0 8px' }, [
+      el('span', { class: 'pill solid', text: T('c.filtered', { what: T('p3.prov.' + prov) }) + ' \u00b7 ' + U.fmtInt(heldRows.length) }),
+      el('button', { class: 'btn sm ghost', text: T('c.showAll'), onclick: () => pick(prov) })
+    ]), heldCard.children[1] || null);
+    wrap.appendChild(heldCard);
+    if (d.access.missing.length) wrap.appendChild(card(T('pp.missingHere'), T('p3.missingNote', { n: U.fmtInt(d.access.missing.length) }),
+      HR.table.make({ columns: [
+        { key: 'name', label: T('c.permission'), value: x => x.perm.name, render: x => el('a', { href: '#', text: x.perm.name, onclick: e => { e.preventDefault(); drawerPermission(x.perm, m); } }) },
+        { key: 'system', label: T('c.system'), value: x => x.perm.system },
+        { key: 'rules', label: T('au.cRule'), value: x => x.rules.map(r => r.name).join(', ') }
+      ], rows: d.access.missing, pageSize: 15, exportName: 'missing-' + d.person.externalId })));
     return wrap;
   }
 
@@ -372,7 +390,7 @@
     f.appendChild(tiles(m, d));
     f.appendChild(el('div', { style: 'margin-top:14px' }, tabbed('people', [
       { id: 'overview', label: T('p3.tab.overview'), build: () => overviewTab(m, d) },
-      { id: 'access', label: T('p3.tab.access'), count: d.access.held.length, build: () => accessTab(m, d) },
+      { id: 'access', label: T('p3.tab.access'), count: d.access.held.length, build: p => accessTab(m, d, p) },
       { id: 'rules', label: T('p3.tab.rules'), count: d.access.matchedRules.length + d.products.length, build: () => rulesTab(m, d) },
       { id: 'timeline', label: T('p3.tab.timeline'), count: d.timeline.length, build: p => timelineTab(m, d, p) },
       { id: 'governance', label: T('p3.tab.governance'), count: d.findings.length + d.sod.length, build: () => governanceTab(m, d) },

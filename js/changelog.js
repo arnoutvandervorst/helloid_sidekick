@@ -18,6 +18,10 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.56', date: '2026-09-08',
+      changes: ['Person 360: the Access tab lists the accounts above what they hold; the “via a rule”, “via a product” and “nothing grants it” tiles narrow the list to what they count (the baseline tile is a fact about everybody and does not), the product tile only shows with a Service Automation export loaded, and the six header tiles open the tab that explains them — Entitlements lands on what nothing grants. Without a directory collection the Directory card stays out and the person details take the width.']
+    },
+    {
       version: '2026.9.55', date: '2026-09-08',
       changes: ['A dashboard has a URL of its own: /d/hr opens the HR dashboard on the same host (the server rewrites the app’s assets back to the root); ?dashboard=hr keeps working where no such rule exists. The Publish card prints the URL to hand out.']
     },
