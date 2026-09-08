@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.9.57] — 2026-09-08
+
+- Organisation › Data quality answers “who?”: a job-title row opens the people who carry it (active and ended), an attribute row opens the people who lack it, each row opening the person.
+
 ## [2026.9.56] — 2026-09-08
 
 - Person 360: the Access tab lists the accounts above what they hold; the “via a rule”, “via a product” and “nothing grants it” tiles narrow the list to what they count (the baseline tile is a fact about everybody and does not), the product tile only shows with a Service Automation export loaded, and the six header tiles open the tab that explains them — Entitlements lands on what nothing grants. Without a directory collection the Directory card stays out and the person details take the width.

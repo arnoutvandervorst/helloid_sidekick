@@ -181,7 +181,12 @@
               : el('span', { class: 'sev medium', text: T('org.titleDead', {
                   date: t.lastEnd ? U.fmtDate(t.lastEnd).split(',')[0] : '—' }) }) }
         ],
-        rows: q.titles, pageSize: 15, exportName: 'job-titles'
+        rows: q.titles, pageSize: 15, exportName: 'job-titles',
+        onRowClick: t => {
+          const byId = new Map(m.vault.persons.map(p => [p.personId, p]));
+          const persons = Array.from(t.persons).map(id => byId.get(id)).filter(Boolean);
+          drawerQualityPeople(m, t.name, T('org.titleWho', { n: U.fmtInt(persons.length), active: U.fmtInt(t.active), ended: U.fmtInt(t.ended) }), persons);
+        }
       })));
     quality.appendChild(vaultQualityCard(m));
 
@@ -812,6 +817,27 @@
   }
 
   /** What is missing from the vault, measured against what it usually contains. */
+  /** The people behind a quality row — who lacks the attribute, who holds the title — each
+      opening their 360. */
+  function drawerQualityPeople(m, title, note, persons) {
+    const idx = peopleIndex(m);
+    const rows = persons.map(p => personRow(m, p, idx));
+    openDrawer(el('div', {}, [el('h2', { text: title }), el('p', { class: 'note', text: note })]),
+      el('div', { class: 'stack' }, card(null, null, HR.table.make({
+        columns: [
+          { key: 'name', label: T('c.person'), value: r => r.person.displayName },
+          { key: 'ext', label: T('c.employeeId'), value: r => r.person.externalId, render: r => el('span', { class: 'mono', text: r.person.externalId }) },
+          { key: 'department', label: T('pp.department'), value: r => r.department },
+          { key: 'title', label: T('pp.jobTitle'), value: r => r.title },
+          { key: 'state', label: T('c.state'), value: r => r.life.state, render: r => el('span', { class: 'sev ' + STATE_SEV[r.life.state], text: stateLabel(r.life.state) }) },
+          { key: 'accounts', label: T('pp.accounts'), num: true, value: r => r.accounts.length }
+        ],
+        rows, pageSize: 20, exportName: 'quality-people',
+        search: (r, x) => (r.person.displayName + ' ' + r.person.externalId + ' ' + r.department).toLowerCase().includes(x),
+        onRowClick: r => HR.app.go('people', { id: r.person.externalId || r.person.personId })
+      }))));
+  }
+
   function vaultQualityCard(m) {
     const q = m.orgQuality;
     const rows = q.facets.slice().sort((a, b) => b.fill - a.fill);
@@ -830,7 +856,8 @@
                   : (r.fill === 1 ? el('span', { class: 'sev good', text: T('org.complete') })
                     : el('span', { class: 'note', text: T('org.partial') }))) }
         ],
-        rows, pageSize: 10, exportName: 'vault-attributes'
+        rows, pageSize: 10, exportName: 'vault-attributes',
+        onRowClick: r => { if (r.missing.length) drawerQualityPeople(m, r.label, T('org.missingWho', { n: U.fmtInt(r.missing.length), of: U.fmtInt(r.total) }), r.missing); }
       }),
       el('p', { class: 'note', style: 'margin-top:8px', text: T('org.qualityFoot', {
         persons: U.fmtInt(q.summary.persons), contracts: U.fmtInt(q.summary.contracts),
