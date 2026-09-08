@@ -59,9 +59,11 @@ and never touches a customer's.
 
 ## Sub-dashboards
 
-A dashboard is what one audience gets and nothing more. The built-in **HR** dashboard
-(`?dashboard=hr`, remembered; `?dashboard=off` leaves it; an `hr.` or `helloid-hr.`
-hostname presets it) shows People with Person 360 and Organisation — no imports, no settings, no workspace picker, no money, no risk scores.
+A dashboard is what one audience gets and nothing more, on a URL of its own: the
+built-in **HR** dashboard lives at **`/d/hr`** (nginx rewrites the app's relative assets
+back to the root; `?dashboard=hr` does the same where no such rule exists and is
+remembered — `?dashboard=off` leaves it; an `hr.` / `helloid-hr.` hostname presets it too).
+It shows People with Person 360 and Organisation — no imports, no settings, no workspace picker, no money, no risk scores.
 It cannot authenticate anyone: it is a preset, and who may open the hostname is the
 proxy's business (Cloudflare Access, for instance).
 

@@ -18,6 +18,10 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.55', date: '2026-09-08',
+      changes: ['A dashboard has a URL of its own: /d/hr opens the HR dashboard on the same host (the server rewrites the app’s assets back to the root); ?dashboard=hr keeps working where no such rule exists. The Publish card prints the URL to hand out.']
+    },
+    {
       version: '2026.9.54', date: '2026-09-08',
       changes: ['The HR dashboard shows People and Organisation; the Diff is not part of it.']
     },

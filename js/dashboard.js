@@ -28,8 +28,14 @@
   const currentId = resolveId();
   if (currentId && BUILTIN[currentId]) current = BUILTIN[currentId];
 
-  /** ?dashboard= wins (off clears), then the remembered one, then the hostname's first label. */
+  /** The sub-URL /d/<id> wins and is not remembered (the URL is the choice); then
+      ?dashboard= (off clears, otherwise remembered), the remembered one, the hostname's
+      first label. */
   function resolveId() {
+    try {
+      const m = /^\/d\/([a-z0-9-]+)\/?$/i.exec(String(location.pathname || ''));
+      if (m) return m[1].toLowerCase();
+    } catch (e) { /* no location */ }
     try {
       const q = new URLSearchParams(location.search).get('dashboard');
       if (q === 'off' || q === 'none') { try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ } return null; }
@@ -71,6 +77,8 @@
   const workspaceId = () => currentId ? 'dash-' + currentId : null;
   const id = () => currentId;
   const all = () => Object.assign({}, defs);
+  /** A dashboard's own URL on this host — served by the /d/ rule in nginx.conf. */
+  const url = dashId => '/d/' + (dashId || currentId || 'hr');
 
-  HR.dashboard = { KEY, FILE, ready, active, id, is, views, landing, hides, readOnly, source, name, workspaceId, all };
+  HR.dashboard = { KEY, FILE, ready, active, id, is, views, landing, hides, readOnly, source, name, workspaceId, all, url };
 })(window.HR);

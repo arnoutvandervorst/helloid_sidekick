@@ -2406,7 +2406,7 @@
         el('p', { text: T('db.publishLead') }),
         el('pre', { class: 'mono', style: 'white-space:pre-wrap' }, [document.createTextNode(
           'published/dashboards.json:\n{ "hr": { "name": "HR \u2014 ' + wsName + '", "source": "published/' + slug + '.json" } }\n\n' +
-          T('db.publishOpen') + ':  <host>/?dashboard=hr')]),
+          T('db.publishOpen') + ':  ' + location.origin + HR.dashboard.url('hr') + '   (' + T('db.publishAlt') + ': ' + location.origin + '/?dashboard=hr)')]),
         el('div', { class: 'slot-actions' }, el('button', { class: 'btn primary', text: T('db.publish'), onclick: async () => {
           const json = await HR.store.exportBundle(wsName);
           U.download(slug + '.json', json, 'application/json');

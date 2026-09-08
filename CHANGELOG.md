@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.9.55] — 2026-09-08
+
+- A dashboard has a URL of its own: /d/hr opens the HR dashboard on the same host (the server rewrites the app’s assets back to the root); ?dashboard=hr keeps working where no such rule exists. The Publish card prints the URL to hand out.
+
 ## [2026.9.54] — 2026-09-08
 
 - The HR dashboard shows People and Organisation; the Diff is not part of it.
