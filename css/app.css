@@ -502,18 +502,36 @@ table.board-tbl td.mono { font-family: var(--mono, ui-monospace, monospace); fon
   .bignums, .bignums.three { grid-template-columns: repeat(2, 1fr); }
 }
 
-@page { size: A4 portrait; margin: 0; }
+/* The page owns the margins when printing; the sheet owns them on screen. A sheet that
+   also measured a full A4 with its own padding overflowed the page by rounding and
+   printed a blank page after every section; a sheet told never to break inside pushed
+   itself whole onto the next page and left the previous one empty. */
+@page { size: A4 portrait; margin: 14mm 15mm; }
 @media print {
-  body { background: #fff; }
-  .topbar, .sidenav, .board-controls, #drawer, #drawer-scrim, #tooltip, #toast, #drop-veil { display: none !important; }
-  .shell { grid-template-columns: 1fr; }
+  :root, html, body { color-scheme: light !important; background: #fff !important; height: auto; overflow: visible; }
+  .topbar, .sidenav, .board-controls, #demo-host, #drawer, #drawer-scrim, #tooltip, #toast, #drop-veil, #busy-veil { display: none !important; }
+  .shell { display: block; }
   main { padding: 0; }
   .paper { gap: 0; display: block; }
+  html, body, .shell, main, #view-root { background: #fff !important; }
+  /* Sections flow: a short one shares a page with the next, a long one starts fresh and
+     runs on. Only the cover claims a page of its own. */
   .sheet {
-    width: 210mm; min-height: 297mm; box-shadow: none; border-radius: 0;
-    break-after: page; page-break-after: always; break-inside: avoid;
+    width: auto; min-height: 0; height: auto; padding: 0; margin: 0 0 18mm;
+    box-shadow: none; border-radius: 0; display: block;
+    break-after: auto; page-break-after: auto; break-inside: auto;
   }
-  .sheet:last-child { break-after: auto; page-break-after: auto; }
+  /* A section may run across pages; what must not split is a tile, a card, a table row
+     and a heading from what it heads — those rules follow below. */
+  .sheet.cover { break-after: page; page-break-after: always; }
+  .sheet > * + * { margin-top: 12px; }
+  .sheet:last-child { margin-bottom: 0; }
+  .sheet .footnote, .sheet.cover .brand-foot { margin-top: 12px; }
+  .sheet h2, .sheet h3, .sheet .sheet-h, .sheet .sheet-h3 { break-after: avoid; page-break-after: avoid; }
+  .sheet .card, .sheet .tile, .sheet svg, .sheet .verdict-parts, .sheet figure, .sheet .grid, .sheet .demo-strip, .sheet ul, .sheet .lead { break-inside: avoid; page-break-inside: avoid; }
+  .sheet .demo-strip { break-after: avoid; page-break-after: avoid; }
+  table.board-tbl { break-inside: auto; }
+  table.board-tbl thead { display: table-header-group; }
   table.board-tbl tr { break-inside: avoid; page-break-inside: avoid; }
 }
 

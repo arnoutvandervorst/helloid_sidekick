@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.9.59] — 2026-09-08
+
+- Board report › Export to PDF: no more empty pages and half-empty pages. A sheet measured a full A4 with its own padding and overflowed the page by rounding, printing a blank page after every section, and a sheet told never to break inside pushed itself whole to the next page. The page now owns the margins, only the cover claims a page of its own, sections run on after each other and across pages, tiles, cards, table rows and headings stay whole, table headers repeat, and the page canvas prints white in the dark theme too. The demo set prints in 13 pages instead of 20-odd, with nothing blank.
+
 ## [2026.9.58] — 2026-09-08
 
 - Roles and facets. The HR dashboard hid money and risk where a view had been told to, and the drawers behind a row still showed risk scores, why-score components, governance and cost. What an audience may see is now decided in one place: every sensitive thing belongs to a facet — money, risk, governance, audit, admin — and a role says which facets it has (full, hr, manager, auditor; a dashboard names its role in dashboards.json). Tiles, table columns, tabs and cards carry a facet and are not drawn without it; the account and permission drawers show only the facts to a role without risk or governance and no longer open the system drawer; the money and score formatters print a dash for a role without the facet, whoever calls them; a sweep after every render and drawer removes anything marked for a hidden facet; a person’s timeline keeps decisions for governance roles only; the JSON export of a person needs them too. A leak test walks every view, tab and drawer of the HR dashboard and passes clean.
