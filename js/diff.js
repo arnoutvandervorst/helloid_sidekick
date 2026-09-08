@@ -10,6 +10,7 @@
     const acc = diffAccounts(current, baseline);
     const perm = diffPermissions(current, baseline);
     const findings = diffFindings(current, baseline);
+    const persons = (current.vault && baseline.vault) ? diffPersons(current.vault, baseline.vault) : null;
     const summary = diffSummary(current.summary, baseline.summary);
     const cost = {
       totalMonthly: delta(current.cost.totalMonthly, baseline.cost.totalMonthly),
@@ -18,10 +19,49 @@
       remediationCost: delta(current.cost.remediationCost, baseline.cost.remediationCost)
     };
     return {
-      summary, accounts: acc, permissions: perm, findings, cost,
+      summary, accounts: acc, permissions: perm, findings, persons, cost,
       risk: delta(current.risk.overall, baseline.risk.overall),
-      headline: headline(acc, perm, summary)
+      headline: headline(acc, perm, summary, persons)
     };
+  }
+
+  /* Two vaults, one question: who joined, who left, who moved. Keyed by the HR
+     external id (the person id when HR has none). "Left" is absence from the later
+     vault; a contract that ended shows as a lifecycle change, not as a leaver. */
+  function diffPersons(cur, base) {
+    const key = p => p.externalId || p.personId;
+    const byKey = list => new Map(list.map(p => [key(p), p]));
+    const baseMap = byKey(base.persons), curMap = byKey(cur.persons);
+    const joined = [], left = [], changed = [];
+    const pc = p => p.primaryContract || p.contracts[0] || null;
+    const name = r => (r && r.name) || '';
+    const life = p => HR.vault.lifecycle(p).state;
+    const fields = (a, b) => {
+      const ca = pc(a), cb = pc(b), out = [];
+      const push = (field, from, to) => { if ((from || '') !== (to || '')) out.push({ field, from: from || '—', to: to || '—' }); };
+      push('lifecycle', life(b), life(a));
+      push('department', cb && name(cb.department), ca && name(ca.department));
+      push('title', cb && name(cb.title), ca && name(ca.title));
+      push('employer', cb && name(cb.employer), ca && name(ca.employer));
+      push('manager', cb && cb.manager.displayName, ca && ca.manager.displayName);
+      push('contractEnd', cb && cb.endDate ? U.fmtDate(cb.endDate).split(',')[0] : '', ca && ca.endDate ? U.fmtDate(ca.endDate).split(',')[0] : '');
+      push('contracts', String(b.contracts.length), String(a.contracts.length));
+      push('accounts', String(b.accounts.length), String(a.accounts.length));
+      if (a.blocked !== b.blocked) out.push({ field: 'blocked', from: String(b.blocked), to: String(a.blocked) });
+      return out;
+    };
+    for (const p of cur.persons) {
+      const b = baseMap.get(key(p));
+      if (!b) { joined.push({ person: p, lifecycle: life(p) }); continue; }
+      const changes = fields(p, b);
+      if (changes.length) changed.push({ person: p, previous: b, changes, lifecycle: life(p) });
+    }
+    for (const b of base.persons) if (!curMap.has(key(b))) left.push({ person: b, lifecycle: life(b) });
+    const byName = (x, y) => x.person.displayName.localeCompare(y.person.displayName);
+    joined.sort(byName); left.sort(byName);
+    changed.sort((x, y) => y.changes.length - x.changes.length || byName(x, y));
+    return { joined, left, changed,
+      lifecycleMoves: changed.filter(c => c.changes.some(x => x.field === 'lifecycle')).length };
   }
 
   const delta = (a, b) => ({ now: a, was: b, change: (a || 0) - (b || 0),
@@ -95,8 +135,13 @@
     return rows.sort((a, b) => U.severityRank(a.severity) - U.severityRank(b.severity) || Math.abs(b.change) - Math.abs(a.change));
   }
 
-  function headline(acc, perm, summary) {
+  function headline(acc, perm, summary, persons) {
     const bits = [];
+    if (persons) {
+      if (persons.joined.length) bits.push(T('df.hlJoined', { n: persons.joined.length }));
+      if (persons.left.length) bits.push(T('df.hlLeft', { n: persons.left.length }));
+      if (persons.changed.length) bits.push(T('df.hlMoved', { n: persons.changed.length }));
+    }
     if (acc.added.length) bits.push(T('df.hlNewAccounts', { n: acc.added.length }));
     if (acc.removed.length) bits.push(T('df.hlGone', { n: acc.removed.length }));
     if (acc.changed.length) bits.push(T('df.hlChanged', { n: acc.changed.length }));
@@ -108,5 +153,5 @@
     return bits.length ? bits.join(' · ') : T('df.hlNothing');
   }
 
-  HR.diff = { compare };
+  HR.diff = { compare, diffPersons };
 })(window.HR);

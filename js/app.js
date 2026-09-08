@@ -276,24 +276,37 @@
     HR.store.saveContext({ noAutoRecon: false });
     state.model = HR.model.build(parsed.records, buildOpts());
 
-    const snap = HR.store.makeSnapshot(parsed, state.model);
+    /* The data point takes the vault loaded now when that vault is not already some
+       other data point's: a vault imported just before its reconciliation belongs to it,
+       last month's vault does not. A vault-only data point made moments ago for that
+       vault is absorbed — its rows arrived. */
+    const vaultOnly = state.snapshots.find(s => s.kind === 'vault' && s.id === state.currentSnapshotId);
+    const vfp = state.raw.vault ? U.hash(state.raw.vault.length + '|' + state.raw.vault) : null;
+    const owned = vfp && state.snapshots.some(s => s.vaultFingerprint === vfp && s.id !== (vaultOnly && vaultOnly.id));
+    const snap = HR.store.makeSnapshot(parsed, state.model, {
+      vault: owned ? null : (state.raw.vault || null), vaultFileName: owned ? null : (state.fileNames.vault || null)
+    });
     const dup = state.snapshots.find(s => s.fingerprint === parsed.meta.fingerprint);
     if (dup) {
       state.currentSnapshotId = dup.id;
       U.toast(T('toast.duplicate', { name: dup.name }));
     } else {
+      if (vaultOnly) { snap.dataDate = vaultOnly.dataDate; await HR.store.remove(vaultOnly.id); }
       const res = await HR.store.put(snap);
       state.currentSnapshotId = snap.id;
       if (!res.persisted) U.toast(T('toast.noStorage'), 5000);
     }
     await refreshSnapshots();
 
-    // Auto-baseline against the previous distinct import, if there is one.
-    if (!state.baselineId) {
-      const prev = state.snapshots.filter(s => s.id !== state.currentSnapshotId)[0];
-      if (prev) await setBaseline(prev.id, true);
+    /* Compare with the data point before this one — by data date, not import order —
+       every time, so month three is read against month two, not month one. */
+    const prev = previousDataPoint(state.currentSnapshotId);
+    if (prev) {
+      await setBaseline(prev.id, true);
+      if (!dup) U.toast(T('toast.dataPointVs', { name: snap.name, date: U.fmtDate(snap.dataDate).split(',')[0], prev: prev.name, prevDate: U.fmtDate(prev.dataDate).split(',')[0] }), 8000);
     } else {
       await recomputeDiff();
+      if (!dup) U.toast(T('toast.dataPoint', { name: snap.name, date: U.fmtDate(snap.dataDate).split(',')[0] }), 6000);
     }
 
     updateTopbar();
@@ -750,10 +763,48 @@
     HR.store.saveContext({ vault: text, importedAt: state.importedAt, fileNames: state.fileNames });
     HR.usage.imported('vault', vault.persons.length);
     rebuild();
+    await keepVaultWithDataPoint(text, fileName);
     U.toast(T('toast.vaultLoaded', {
       n: vault.persons.length, c: vault.meta.contractCount
     }), 5000);
     go(state.ruleSet ? 'rules' : 'people');
+  }
+
+  /**
+   * A vault belongs to a data point. Loaded after its reconciliation, it joins the
+   * current one; loaded on its own, it becomes a vault-only data point so a Consult
+   * session — no reconciliation ever — still gets a history and a person diff.
+   */
+  async function keepVaultWithDataPoint(text, fileName) {
+    const cur = state.currentSnapshotId ? await HR.store.get(state.currentSnapshotId) : null;
+    if (cur) {
+      cur.vault = text; cur.vaultFileName = fileName;
+      cur.vaultFingerprint = U.hash(text.length + '|' + text);
+      if (!cur.records.length) { cur.summary = state.model ? state.model.summary : cur.summary; }
+      await HR.store.put(cur);
+    } else if (state.model) {
+      const parsed = { records: [], meta: { fileName, fingerprint: 'vault:' + U.hash(text.length + '|' + text) } };
+      const dup = state.snapshots.find(s => s.fingerprint === parsed.meta.fingerprint);
+      if (dup) { state.currentSnapshotId = dup.id; }
+      else {
+        const snap = HR.store.makeSnapshot(parsed, state.model, { kind: 'vault', vault: text, vaultFileName: fileName });
+        await HR.store.put(snap);
+        state.currentSnapshotId = snap.id;
+      }
+    }
+    await refreshSnapshots();
+    const prev = previousDataPoint(state.currentSnapshotId);
+    if (prev) await setBaseline(prev.id, true); else await recomputeDiff();
+    updateTopbar();
+  }
+
+  /** The data point dated just before this one; import order breaks the tie. */
+  function previousDataPoint(id) {
+    const cur = state.snapshots.find(s => s.id === id);
+    if (!cur) return null;
+    const byDate = (a, b) => (a.dataDate - b.dataDate) || (a.importedAt - b.importedAt);
+    const before = state.snapshots.filter(s => s.id !== id && byDate(s, cur) < 0).sort(byDate);
+    return before.length ? before[before.length - 1] : null;
   }
 
   /** Business rules attach to whatever reconciliation export is loaded. */
@@ -849,7 +900,7 @@
         if (!snap) { U.toast(T('toast.snapNotFound')); return; }
         state.baselineId = id;
         state.baselineSnapshot = snap;
-        state.baselineModel = HR.model.build(snap.records, buildOpts());
+        state.baselineModel = HR.model.build(snap.records, buildOpts(snapshotVault(snap)));
         await recomputeDiff();
         if (!quiet) U.toast(T('toast.baselineSet', { name: snap.name }));
       });
@@ -890,13 +941,34 @@
     state.currentSnapshotId = id;
     state.noAutoRecon = false;
     HR.store.saveContext({ noAutoRecon: false });
-    state.parsed = { records: snap.records, meta: { fileName: snap.fileName, fingerprint: snap.fingerprint } };
-    state.model = HR.model.build(snap.records, buildOpts());
-    if (state.baselineId === id) await setBaseline(null);
+    /* The data point's own vault comes back with it; without one the loaded vault stays. */
+    if (snap.vault) {
+      try {
+        state.vault = HR.vault.parse(snap.vault, snap.vaultFileName || 'vault.json');
+        state.raw.vault = snap.vault;
+        state.fileNames.vault = snap.vaultFileName || state.fileNames.vault;
+        HR.store.saveContext({ vault: snap.vault, fileNames: state.fileNames });
+      } catch (e) { console.error(e); }
+    }
+    state.parsed = snap.records.length
+      ? { records: snap.records, meta: { fileName: snap.fileName, fingerprint: snap.fingerprint } }
+      : null;
+    state.model = HR.model.build(effRecords(), buildOpts());
+    /* Compared with the data point before it, unless the user pinned another one. */
+    if (state.baselineId === id || !state.baselineId) {
+      const prev = previousDataPoint(id);
+      await setBaseline(prev ? prev.id : null, true);
+    }
     await recomputeDiff();
     updateTopbar();
-    U.toast(T('toast.snapLoaded', { name: snap.name }));
+    U.toast(T(snap.vault ? 'toast.snapLoaded' : 'toast.snapLoadedNoVault', { name: snap.name }), snap.vault ? 3000 : 6000);
     render();
+  }
+
+  /** A snapshot's vault, parsed, for building it as it was; null falls back to the loaded one. */
+  function snapshotVault(snap) {
+    if (!snap || !snap.vault) return null;
+    try { return HR.vault.parse(snap.vault, snap.vaultFileName || 'vault.json'); } catch (e) { return null; }
   }
 
   /** Re-run the whole pipeline after a settings change. */
@@ -931,10 +1003,10 @@
     if (state.directory) return state.directory.records;
     return [];
   }
-  function buildOpts() {
+  function buildOpts(vaultOverride) {
     /* The audit log's provisioning actions stand in for the historic-actions export;
        the export wins when both are loaded — it carries the origins, the audit log does not. */
-    return { ruleSet: state.ruleSet, vault: effVault(),
+    return { ruleSet: state.ruleSet, vault: vaultOverride || effVault(),
       granted: state.granted, history: state.history || (state.audit ? HR.audit.asHistory(state.audit) : null),
       audit: state.audit,
       products: state.products, assignments: state.assignments,
@@ -949,7 +1021,7 @@
     const anySource = state.parsed || state.vault || state.directory || state.ruleSet ||
       state.granted || state.history || state.products || state.assignments || state.audit;
     state.model = anySource ? HR.model.build(effRecords(), opts) : null;
-    if (state.baselineSnapshot) state.baselineModel = HR.model.build(state.baselineSnapshot.records, opts);
+    if (state.baselineSnapshot) state.baselineModel = HR.model.build(state.baselineSnapshot.records, buildOpts(snapshotVault(state.baselineSnapshot)));
     recomputeDiff();
     updateTopbar();
     render();
@@ -980,7 +1052,10 @@
     if (state.model.hasRecon) parts.push(U.fmtInt(s.accounts) + ' ' + T('app.accounts'));
     if (state.vault) parts.push(U.fmtInt(state.vault.persons.length) + ' ' + T('app.persons'));
     if (state.model.hasRecon) parts.push(T('gs.short') + ' ' + s.governanceScore + ' \u00b7 ' + T('app.riskShort') + ' ' + s.riskScore);
-    if (state.baselineSnapshot) parts.push(T('app.vs') + ' ' + state.baselineSnapshot.name);
+    /* Which moment this is, and against which: the two dates a monthly reader needs. */
+    const day = t => U.fmtDate(t).split(',')[0];
+    if (cur && state.snapshots.length > 1) parts.push(day(cur.dataDate));
+    if (state.baselineSnapshot) parts.push(T('app.vs') + ' ' + state.baselineSnapshot.name + ' \u00b7 ' + day(state.baselineSnapshot.dataDate || state.baselineSnapshot.importedAt));
 
     sub.textContent = parts.join(' · ');
     sub.title = sources.join('\n');
@@ -1132,8 +1207,11 @@
       if (h.view && HR.views[h.view]) { state.view = h.view; state.params = h.params; }
       else if (HR.edition && HR.edition.chosen()) state.view = HR.edition.landing();
       if (state.snapshots.length && !state.noAutoRecon) {
-        await loadSnapshot(state.snapshots[0].id);
-        if (state.snapshots.length > 1) await setBaseline(state.snapshots[1].id, true);
+        const byDate = (a, b) => (b.dataDate - a.dataDate) || (b.importedAt - a.importedAt);
+        const newest = state.snapshots.slice().sort(byDate)[0];
+        await loadSnapshot(newest.id);
+        const prev = previousDataPoint(newest.id);
+        if (prev) await setBaseline(prev.id, true);
       } else {
         /* A vault-only start builds the model here, with nothing else to hide it. */
         await withBusy(T('busy.restore'), () => rebuild());

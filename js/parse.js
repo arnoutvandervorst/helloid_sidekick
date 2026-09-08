@@ -232,7 +232,9 @@
         headers: header,
         rowCount: records.length,
         health,
-        fingerprint: HR.util.hash(text.length + '|' + records.length + '|' + text.slice(0, 4096))
+        /* The whole text: two monthly exports of the same length that differ past the
+           first rows must not read as one. */
+        fingerprint: HR.util.hash(text.length + '|' + records.length + '|' + text)
       }
     };
   }

@@ -1,14 +1,19 @@
 /* Snapshot storage. IndexedDB when the page is served over http(s); an in-memory
    fallback (plus JSON export) when opened straight from the filesystem, where
-   browsers give the page an opaque origin and refuse persistent storage. */
+   browsers give the page an opaque origin and refuse persistent storage.
+
+   A snapshot is a data point: one dated moment of a tenant. It holds the
+   reconciliation rows and the vault that goes with them, because a person diff
+   (who joined, who left) needs two vaults and a historic model needs its own. */
 (function (HR) {
   'use strict';
 
   const DB_NAME = HR.workspace ? HR.workspace.dbName('helloid-recon') : 'helloid-recon';
   const DB_VERSION = 2;
   const STORE = 'snapshots';
-  /* The vault, the rules and the activity exports describe the tenant rather than a
-     single reconciliation run, so they outlive any one snapshot and are kept apart. */
+  /* The rules and the activity exports describe the tenant rather than a single
+     reconciliation run, so they outlive any one snapshot and are kept apart. The
+     vault is kept here too as "the one loaded now"; each snapshot carries its own. */
   const CONTEXT = 'context';
 
   let dbPromise = null;
@@ -113,20 +118,42 @@
   }
 
   function stripHeavy(s) {
-    const { records, ...rest } = s;
-    return { ...rest, rowCount: rest.rowCount ?? (records ? records.length : 0) };
+    const { records, vault, ...rest } = s;
+    return { ...rest, rowCount: rest.rowCount ?? (records ? records.length : 0),
+      hasVault: !!vault, dataDate: rest.dataDate || rest.importedAt };
   }
 
-  function makeSnapshot(parsed, model, name) {
+  /** The date an export is about, read off its file name: 2026-08-01, 20260801,
+      01-08-2026 (day first, as HelloID's Dutch customers write it). Null when none. */
+  function dateFromName(fileName) {
+    const s = String(fileName || '');
+    let m = /(20\d{2})[-_.]?(0[1-9]|1[0-2])[-_.]?(0[1-9]|[12]\d|3[01])(?!\d)/.exec(s);
+    if (m) { const t = Date.UTC(+m[1], +m[2] - 1, +m[3]); return isNaN(t) ? null : t; }
+    m = /(?<!\d)(0[1-9]|[12]\d|3[01])[-_.](0[1-9]|1[0-2])[-_.](20\d{2})(?!\d)/.exec(s);
+    if (m) { const t = Date.UTC(+m[3], +m[2] - 1, +m[1]); return isNaN(t) ? null : t; }
+    return null;
+  }
+
+  /**
+   * @param {Object} [opts] { name, vault: raw text, vaultFileName, kind: 'recon'|'vault' }
+   */
+  function makeSnapshot(parsed, model, opts) {
+    opts = typeof opts === 'string' ? { name: opts } : (opts || {});
+    const now = Date.now();
     return {
-      id: 'snap_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7),
-      name: name || parsed.meta.fileName.replace(/\.csv$/i, ''),
+      id: 'snap_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 7),
+      name: opts.name || String(parsed.meta.fileName || '').replace(/\.(csv|json)$/i, ''),
       fileName: parsed.meta.fileName,
-      importedAt: Date.now(),
+      importedAt: now,
+      dataDate: dateFromName(parsed.meta.fileName) || dateFromName(opts.vaultFileName) || now,
+      kind: opts.kind || 'recon',
       fingerprint: parsed.meta.fingerprint,
       rowCount: parsed.records.length,
       summary: model.summary,
-      records: parsed.records
+      records: parsed.records,
+      vault: opts.vault || null,
+      vaultFileName: opts.vault ? (opts.vaultFileName || null) : null,
+      vaultFingerprint: opts.vault ? HR.util.hash(opts.vault.length + '|' + opts.vault) : null
     };
   }
 
@@ -142,7 +169,7 @@
     const snaps = Array.isArray(data) ? data : (data.snapshots || []);
     if (!snaps.length) throw new Error('No snapshots found in that file.');
     for (const s of snaps) {
-      if (!s.id || !s.records) throw new Error('Snapshot file is malformed.');
+      if (!s.id || !s.records || !s.summary) throw new Error('Snapshot file is malformed.');
       await put(s);
     }
     return snaps.length;
@@ -164,6 +191,6 @@
     });
   }
 
-  HR.store = { list, get, put, remove, clear, makeSnapshot, exportAll, importJSON, isMemory,
+  HR.store = { list, get, put, remove, clear, makeSnapshot, dateFromName, exportAll, importJSON, isMemory,
     saveContext, loadContext, clearContext, wipeDb };
 })(window.HR);

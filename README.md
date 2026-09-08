@@ -632,18 +632,31 @@ Fifteen rules over the graph, ordered by severity then by money at stake. Each c
 it is, why it matters, the remediation, and the affected entities (exportable to CSV).
 The whole analysis exports as a Markdown report from the Risk view.
 
-## Diff
+## Data points and the diff
 
-Every reconciliation import is stored as a snapshot in IndexedDB. The baseline is picked
-on the Diff view (each new import auto-baselines against the previous one); companions are
-not versioned, so a historic diff uses the currently loaded vault and rules on both sides.
-Selecting a baseline rebuilds that snapshot's full graph and compares entities, not rows: accounts added/removed/changed,
-entitlements granted and revoked per account, membership movement per group, findings that
-grew, shrank, appeared or resolved, and the cost delta. Importing a file that is
-byte-identical to an existing snapshot reuses it instead of duplicating.
+Every reconciliation import is kept in IndexedDB as a **data point**: the rows, the
+summary, and the vault that came with it — a vault imported just before or after its
+reconciliation belongs to that data point; last month's vault does not carry over. A
+vault imported on its own (the Consult edition never has a reconciliation) makes a
+vault-only data point. Each data point has a **data date**, read from the file name
+when it carries one (`ReconciliationReport_2026-08-01.csv`, `20260801`, `01-08-2026`)
+and otherwise the import date; it is editable on the Data points page, and the trend,
+the comparison order and the topbar follow it — so six months of exports loaded in one
+sitting spread out once dated.
 
-Snapshots export to JSON (Snapshots view) so they can be moved between machines or kept
-under version control.
+Import next month's file and it becomes the next data point; nothing is replaced. The
+newest is loaded and compared with the one dated just before it, every time (a returning
+session does the same on start). Loading an older data point brings its own vault back,
+and the comparison is rebuilt with each side's own vault, so a historic diff is honest.
+The Diff view compares entities, not rows: accounts added/removed/changed, entitlements
+granted and revoked per account, membership movement per group, findings that grew,
+shrank, appeared or resolved, the cost delta — and, with a vault on both sides, **people**:
+who joined, who left, and whose department, title, manager, employer, contract end,
+lifecycle, contract count or account count changed. When the loaded data point is older
+than the one it is compared with, the view says the comparison runs backwards.
+
+Importing a file identical to an existing data point (full-text fingerprint) reuses it.
+Data points export to JSON — vaults included — so they can be moved between machines.
 
 ## Layout
 

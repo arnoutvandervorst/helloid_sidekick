@@ -587,14 +587,20 @@
           COLLECTORS[slot.kind] ? collectorDownloads(slot.kind) : null
         ].filter(Boolean));
 
+    /* The two exports that make a data point: the next month's file adds one, nothing
+       is replaced, and the history lives on the Data points page. */
+    const pointed = slot.kind === 'recon' || slot.kind === 'vault';
+    const nPoints = HR.app.state.snapshots.length;
+    if (pointed) body.appendChild(el('div', { class: 'note', text: nPoints > 1 ? T('src.keptAsPointN', { n: nPoints }) : T('src.keptAsPoint') }));
+
     const actions = el('div', { class: 'slot-actions' }, [
-      pickButton(st ? T('src.replace') : T('src.choose'), slot.accept, st ? '' : 'primary',
+      pickButton(st ? (pointed ? T('src.addNext') : T('src.replace')) : T('src.choose'), slot.accept, st ? '' : 'primary',
         f => HR.app.importFileAs(f, slot.kind)),
       st
         ? el('button', { class: 'btn ghost', text: T('src.remove'),
             onclick: () => slot.kind === 'recon' ? HR.app.clearRecon() : HR.app.clearSource(slot.kind) })
         : null,
-      st && slot.kind === 'recon'
+      pointed && nPoints
         ? el('button', { class: 'btn ghost', text: T('src.manageSnaps'),
             onclick: () => HR.app.go('snapshots') })
         : null
@@ -2050,8 +2056,9 @@
     if (st.snapshots.length > 1 || st.baselineId) {
       const sel = el('select', { onchange: e => HR.app.setBaseline(e.target.value) });
       sel.appendChild(el('option', { value: '', text: T('app.baselineNone') }));
-      st.snapshots.forEach(s => sel.appendChild(el('option', {
-        value: s.id, text: s.name + ' \u00b7 ' + U.fmtDate(s.importedAt), selected: s.id === st.baselineId
+      st.snapshots.slice().sort((a, b) => b.dataDate - a.dataDate).forEach(s => sel.appendChild(el('option', {
+        value: s.id, text: s.name + ' \u00b7 ' + U.fmtDate(s.dataDate).split(',')[0] + (s.id === st.currentSnapshotId ? ' \u00b7 ' + T('sn.loaded') : ''),
+        disabled: s.id === st.currentSnapshotId, selected: s.id === st.baselineId
       })));
       f.appendChild(el('div', { class: 'row', style: 'margin-bottom:14px' },
         el('label', { class: 'inline' }, [document.createTextNode(T('app.baseline')), sel])));
@@ -2065,7 +2072,15 @@
     }
 
     const d = st.diff;
-    f.appendChild(el('p', { class: 'note', text: T('df.baselineIs', { name: st.baselineSnapshot.name, date: U.fmtDate(st.baselineSnapshot.importedAt), headline: d.headline }) }));
+    const curSnap = st.snapshots.find(s => s.id === st.currentSnapshotId);
+    /* The list entry, not the loaded record: a date edited on Data points lands there first. */
+    const baseSnap = st.snapshots.find(s => s.id === st.baselineId) || st.baselineSnapshot;
+    const dOf = s => s ? U.fmtDate(s.dataDate || s.importedAt).split(',')[0] : '\u2014';
+    if (curSnap && baseSnap && (baseSnap.dataDate || baseSnap.importedAt) > curSnap.dataDate) {
+      f.appendChild(el('p', { class: 'note', text: T('df.reversed') }));
+    }
+    f.appendChild(el('p', { style: 'margin-bottom:12px', text: T('df.baselineIs', { name: baseSnap.name, date: dOf(baseSnap), now: curSnap ? curSnap.name + ' \u00b7 ' + dOf(curSnap) : '\u2014', headline: d.headline }) }));
+    if (st.vault && !d.persons) f.appendChild(el('p', { class: 'note', text: T('df.noPersonDiff') }));
 
     const k = el('div', { class: 'grid g4' });
     const dt = (label, key, fmt, inverse) => {
@@ -2126,6 +2141,35 @@
       onRowClick: r => drawerAccount(r.account, r)
     }))));
 
+    if (d.persons) {
+      const P = d.persons;
+      const personCols = [
+        { key: 'name', label: T('c.person'), value: r => r.person.displayName },
+        { key: 'ext', label: T('c.employeeId'), value: r => r.person.externalId, render: r => el('span', { class: 'mono', text: r.person.externalId }) },
+        { key: 'dept', label: T('pp.department'), value: r => { const c = r.person.primaryContract || r.person.contracts[0]; return c && c.department ? c.department.name : ''; } },
+        { key: 'title', label: T('pp.jobTitle'), value: r => { const c = r.person.primaryContract || r.person.contracts[0]; return c && c.title ? c.title.name : ''; } },
+        { key: 'life', label: T('df.lifecycle'), value: r => r.lifecycle, render: r => el('span', { class: 'pill', text: T('pp.state' + r.lifecycle.charAt(0).toUpperCase() + r.lifecycle.slice(1)) }) }
+      ];
+      const openPerson = r => HR.app.go('people', { id: r.person.externalId || r.person.personId });
+      f.appendChild(el('div', { class: 'grid g2', style: 'margin-top:14px' }, [
+        card(T('df.peopleJoined'), T('df.peopleJoinedNote', { n: P.joined.length }), HR.table.make({
+          columns: personCols, rows: P.joined, pageSize: 15, exportName: 'people-joined', onRowClick: openPerson })),
+        card(T('df.peopleLeft'), T('df.peopleLeftNote', { n: P.left.length }), HR.table.make({
+          columns: personCols, rows: P.left, pageSize: 15, exportName: 'people-left' }))
+      ]));
+      f.appendChild(el('div', { style: 'margin-top:14px' }, card(T('df.peopleChanged'), T('df.peopleChangedNote', { n: P.changed.length, moves: P.lifecycleMoves }), HR.table.make({
+        columns: [
+          personCols[0], personCols[1],
+          { key: 'what', label: T('df.whatChanged'), value: r => r.changes.map(c => T('df.pf.' + c.field)).join(', '),
+            render: r => el('span', { class: 'trunc', title: r.changes.map(c => T('df.pf.' + c.field) + ': ' + c.from + ' \u2192 ' + c.to).join(' | '),
+              text: r.changes.map(c => T('df.pf.' + c.field) + ': ' + c.from + ' \u2192 ' + c.to).join(' \u00b7 ') }) },
+          personCols[4]
+        ], rows: P.changed, pageSize: 25, exportName: 'people-changed',
+        search: (r, q) => (r.person.displayName + ' ' + r.person.externalId).toLowerCase().includes(q),
+        onRowClick: openPerson
+      }))));
+    }
+
     const g2 = el('div', { class: 'grid g2', style: 'margin-top:14px' });
     g2.appendChild(card(T('df.newAccounts'), T('df.added', { n: d.accounts.added.length }), HR.table.make({
       columns: [
@@ -2181,9 +2225,20 @@
 
     const snaps = st.snapshots || [];
     if (snaps.length > 1) {
-      const ordered = snaps.slice().sort((a, b) => a.importedAt - b.importedAt);
-      const labels = ordered.map(s => new Date(s.importedAt).toLocaleDateString(HR.i18n.locale, { day: '2-digit', month: 'short' }));
+      /* Data date, not import date: six months loaded in one sitting must spread out. */
+      const ordered = snaps.slice().sort((a, b) => (a.dataDate - b.dataDate) || (a.importedAt - b.importedAt));
+      const span = ordered[ordered.length - 1].dataDate - ordered[0].dataDate;
+      const fmt = span > 120 * 86400000 ? { month: 'short', year: '2-digit' } : { day: '2-digit', month: 'short' };
+      const labels = ordered.map(s => new Date(s.dataDate).toLocaleDateString(HR.i18n.locale, fmt));
+      const sameDay = new Set(ordered.map(s => new Date(s.dataDate).toDateString())).size < ordered.length;
       const g = el('div', { class: 'grid g2' });
+      if (sameDay) f.appendChild(el('p', { class: 'note', text: T('sn.sameDayNote') }));
+      if (ordered.some(s => s.summary.persons)) {
+        g.appendChild(card(T('sn.peopleOverTime'), T('sn.perPoint'), C.line(
+          [{ label: T('pp.persons'), color: C.slot(2), points: ordered.map((s, i) => ({ x: i, y: s.summary.persons || 0 })) },
+           { label: T('ov.accounts'), color: C.slot(3), points: ordered.map((s, i) => ({ x: i, y: s.summary.accounts || 0 })) }],
+          labels)));
+      }
       if (ordered.some(s => s.summary.governanceScore != null)) {
         g.appendChild(card(T('sn.governanceOverTime'), T('sn.perImport'), C.line(
           [{ label: T('gs.title'), color: C.STATUS.good, points: ordered.map((s, i) => ({ x: i, y: s.summary.governanceScore })).filter(p => p.y != null) }],
@@ -2240,22 +2295,42 @@
       f.appendChild(g);
     }
 
-    f.appendChild(el('div', { style: 'margin-top:14px' }, card(null, null, HR.table.make({
+    /* The date is the one thing an export cannot say about itself reliably: editable. */
+    const dateInput = r => {
+      const d = new Date(r.dataDate);
+      const inp = el('input', { type: 'date', value: d.toISOString().slice(0, 10), title: T('sn.dataDateTip') });
+      inp.onclick = e => e.stopPropagation();
+      inp.onchange = async e => {
+        e.stopPropagation();
+        const t = Date.parse(inp.value + 'T00:00:00Z');
+        if (!isFinite(t)) return;
+        const full = await HR.store.get(r.id); if (!full) return;
+        full.dataDate = t; await HR.store.put(full);
+        await HR.app.refreshSnapshots();
+        HR.app.updateTopbar();
+        HR.app.go('snapshots');
+      };
+      return inp;
+    };
+    f.appendChild(el('div', { style: 'margin-top:14px' }, card(T('sn.tableTitle'), T('sn.tableNote'), HR.table.make({
       columns: [
         { key: 'name', label: T('sn.snapshot'), render: r => el('span', {}, [
           document.createTextNode(r.name),
+          r.kind === 'vault' ? el('span', { class: 'pill', text: ' ' + T('sn.vaultOnly') }) : null,
           st.currentSnapshotId === r.id ? el('span', { class: 'pill solid', text: ' ' + T('sn.loaded') }) : null,
           st.baselineId === r.id ? el('span', { class: 'pill', text: ' ' + T('sn.baseline') }) : null
         ]) },
+        { key: 'dataDate', label: T('sn.dataDate'), value: r => r.dataDate, render: dateInput },
         { key: 'importedAt', label: T('sn.imported'), render: r => U.fmtDate(r.importedAt) },
+        { key: 'vault', label: T('sn.vaultCol'), value: r => r.hasVault ? 1 : 0, render: r => el('span', { class: 'note', text: r.hasVault ? '\u2713 ' + U.fmtInt(r.summary.persons || 0) : '\u2014' }) },
         { key: 'rowCount', label: T('c.rowsCol'), num: true },
         { key: 'accounts', label: T('ov.accounts'), num: true, value: r => r.summary.accounts },
         { key: 'orphan', label: T('c.unowned'), num: true, value: r => r.summary.orphanAccounts },
         { key: 'risk', label: T('c.risk'), num: true, value: r => r.summary.riskScore, render: r => scoreBar(r.summary.riskScore) },
         { key: 'cost', label: T('sn.spendMo'), num: true, value: r => r.summary.monthlyCost || 0, render: r => U.fmtMoney(r.summary.monthlyCost || 0) },
         { key: 'actions', label: '', sortable: false, render: r => el('div', { class: 'row' }, [
-          el('button', { class: 'btn sm', text: T('sn.load'), onclick: e => { e.stopPropagation(); HR.app.loadSnapshot(r.id); } }),
-          el('button', { class: 'btn sm', text: T('sn.setBaseline'), onclick: e => { e.stopPropagation(); HR.app.setBaseline(r.id); } }),
+          st.currentSnapshotId === r.id ? null : el('button', { class: 'btn sm', text: T('sn.load'), onclick: e => { e.stopPropagation(); HR.app.loadSnapshot(r.id); } }),
+          st.currentSnapshotId === r.id ? null : el('button', { class: 'btn sm', text: T('sn.setBaseline'), onclick: e => { e.stopPropagation(); HR.app.setBaseline(r.id); HR.app.go('diff'); } }),
           el('button', { class: 'btn sm', text: T('sn.rename'), onclick: async e => {
             e.stopPropagation();
             const name = prompt(T('sn.renamePrompt'), r.name); if (!name) return;
@@ -2269,7 +2344,7 @@
         ]) }
       ],
       rows: snaps, pageSize: 20, exportName: 'snapshots',
-      initialSort: { key: 'importedAt', dir: -1 }
+      initialSort: { key: 'dataDate', dir: -1 }
     }))));
     return f;
   }

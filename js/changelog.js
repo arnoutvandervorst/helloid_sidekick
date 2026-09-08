@@ -18,6 +18,12 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.51', date: '2026-09-08',
+      changes: [
+        'Data points. Every reconciliation import was already kept and diffed against the previous one, but nothing said so, every export was dated by the moment it was imported, and only the reconciliation was kept — the vault was one “current” file, so a historic view was rebuilt against today’s people and a person diff was impossible. A data point now holds the reconciliation and the vault that came with it, and has a data date read from the file name (2026-08-01, 20260801, 01-08-2026) or set by hand on the Data points page; the trend charts, the comparison order and the topbar follow that date. Import next month’s file and it becomes the next data point — the Imports page says so and offers “Add next export”; the newest is loaded and compared with the one dated just before it, every time, also on start. Loading an older data point brings its vault back and the diff is built with each side’s own vault. The Diff gained people: who joined, who left, and whose department, title, manager, employer, contract, lifecycle or accounts changed, each row opening the person. A vault imported on its own becomes a vault-only data point, so the Consult edition gets a history too. The duplicate check now reads the whole file, not its first rows.'
+      ]
+    },
+    {
       version: '2026.9.50', date: '2026-09-07',
       changes: [
         'Rollback pack. When HelloID goes live it rewrites the attributes the field mapping targets, and until now nothing kept what was there. Every simulation run now offers a rollback pack: per account and per field the run would change, the value the directory held when it was collected and the value the mapping produces. Two new scripts, restore-ad.ps1 and restore-entra.ps1, read the pack and put the collected values back — dry-run by default (before, predicted and live per attribute, with same / restore / restore? when something else changed it), writing only with -Apply, filtered by -Account and -Attribute, -SkipUnexpected to leave the unpredicted alone. AD moves the container back and renames the cn; Entra skips users synced from AD and the Graph read-only properties. A run narrowed to one person makes a one-account pack.'
