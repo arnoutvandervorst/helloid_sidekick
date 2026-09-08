@@ -97,6 +97,8 @@
         el('p', { class: 'note', text: String(err && err.stack || err) })
       ]));
     }
+    /* The net under every view: anything marked with a facet the role lacks goes. */
+    if (HR.access) HR.access.sweep(root);
     /* Long explanations fold behind an ⓘ, whichever view wrote them. */
     if (HR.viewkit && HR.viewkit.collapseNotes) HR.viewkit.collapseNotes(root);
     if (HR.nav) HR.nav.render();
@@ -1282,7 +1284,7 @@
 
     /* A reload used to lose the vault and the rules, which quietly downgraded views that
        depend on them — the People overview being the visible one. */
-    const dashboardData = HR.dashboard ? HR.dashboard.ready.then(() => syncDashboardData(false)).catch(e => { console.error(e); }) : Promise.resolve();
+    const dashboardData = HR.dashboard ? HR.dashboard.ready.then(() => { applyChrome(); return syncDashboardData(false); }).catch(e => { console.error(e); }) : Promise.resolve();
     const restoreContext = dashboardData.then(() => HR.store.loadContext()).then(ctx => withBusy(T('busy.restore'), () => {
       if (!ctx) return;
       state.raw = { rules: ctx.rules, vault: ctx.vault, granted: ctx.granted, history: ctx.history,

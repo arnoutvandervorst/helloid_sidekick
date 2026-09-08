@@ -53,8 +53,13 @@
     });
   }
 
-  function card(title, note, children, cls) {
+  /** What the role may see; a facet-less thing always. */
+  const can = facet => !HR.access || HR.access.can(facet);
+
+  function card(title, note, children, cls, opts) {
+    if (opts && opts.facet && !can(opts.facet)) return null;
     const c = el('div', { class: 'card ' + (cls || '') });
+    if (opts && opts.facet) c.dataset.facet = opts.facet;
     if (title) c.appendChild(el('h2', {}, [document.createTextNode(title), note ? explainInto(el('span', { class: 'card-note' }), note) : null]));
     (Array.isArray(children) ? children : [children]).forEach(ch => ch && c.appendChild(ch));
     return c;
@@ -62,7 +67,9 @@
 
   function tile(label, value, foot, opts) {
     opts = opts || {};
+    if (opts.facet && !can(opts.facet)) return null;
     const t = el('div', { class: 'tile' + (opts.onClick ? ' click' : '') });
+    if (opts.facet) t.dataset.facet = opts.facet;
     t.appendChild(el('div', { class: 'label' }, [
       opts.severity ? el('span', { class: 'sev ' + opts.severity }) : null,
       document.createTextNode(label)
@@ -226,6 +233,8 @@
   function bandPill(band) { return el('span', { class: 'sev ' + band, text: T('c.' + band) }); }
 
   function scoreBar(score) {
+    /* The net under every score: a role without the risk facet sees a dash. */
+    if (!can('risk')) return el('span', { class: 'note', text: '\u2014' });
     const wrap = el('span');
     const bar = el('span', { class: 'scorebar' });
     const i = el('i');
@@ -247,7 +256,7 @@
    * The chosen tab lives in the route, so a link points at a section rather than a view.
    */
   function tabbed(view, sections, params) {
-    const usable = sections.filter(Boolean);
+    const usable = sections.filter(Boolean).filter(s => !s.facet || can(s.facet));
     const wanted = (params && params.tab) || usable[0].id;
     const active = usable.find(s => s.id === wanted) || usable[0];
 
@@ -1791,13 +1800,13 @@
         { key: 'name', label: T('ru.cGroup'), value: r => r.perm.name },
         { key: 'category', label: T('c.category'), value: r => r.perm.categoryLabel },
         { key: 'holders', label: T('c.holders'), num: true, value: r => r.perm.holderCount },
-        { key: 'cost', label: T('c.unitMo'), num: true, value: r => r.perm.monthlyPrice || 0,
+        { key: 'cost', label: T('c.unitMo'), num: true, facet: 'money', value: r => r.perm.monthlyPrice || 0,
           render: r => r.perm.monthlyPrice ? U.fmtMoney(r.perm.monthlyPrice) : '—' },
-        { key: 'risk', label: T('c.risk'), num: true, value: r => r.perm.riskScore },
+        { key: 'risk', label: T('c.risk'), num: true, facet: 'risk', value: r => r.perm.riskScore },
         { key: 'via', label: T('pp.accounts'), value: r => r.via }
       ],
       rows, pageSize: 15, exportName: exportName || 'entitlements',
-      initialSort: { key: 'risk', dir: -1 },
+      initialSort: can('risk') ? { key: 'risk', dir: -1 } : { key: 'name', dir: 1 },
       search: (r, q) => (r.perm.name + ' ' + r.perm.categoryLabel).toLowerCase().includes(q),
       onRowClick: r => drawerPermission(r.perm, m)
     });
@@ -1943,11 +1952,11 @@
       [T('c.employeeId'), p.externalId || '—'],
       [T('pp.department'), row.department || '—'],
       [T('pp.jobTitle'), row.title || '—'],
-      [T('dr.monthlyCost'), U.fmtMoney(row.monthlyCost)]
-    ]));
+      can('money') ? [T('dr.monthlyCost'), U.fmtMoney(row.monthlyCost)] : null
+    ].filter(Boolean)));
     /* How far this person's access is from anyone else's, and what drives it. */
     let ol = null;
-    try { ol = m && m.hasRecon && HR.outlier ? HR.outlier.build(m).byPerson.get(p.personId) : null; } catch (e) { ol = null; }
+    try { ol = m && m.hasRecon && HR.outlier && can('risk') ? HR.outlier.build(m).byPerson.get(p.personId) : null; } catch (e) { ol = null; }
     if (ol) {
       const permName = k => { const perm = m.permissions.get(k); return perm ? perm.name : String(k); };
       const list = ents => ents.slice(0, 5).map(permName).join(', ') + (ents.length > 5 ? ' +' + (ents.length - 5) : '');
@@ -1979,8 +1988,8 @@
           { key: 'userName', label: T('c.account') },
           { key: 'enabled', label: T('c.state'), value: a => T(a.enabled === false ? 'c.disabled' : 'c.enabled') },
           { key: 'permCount', label: T('c.perms'), num: true },
-          { key: 'monthlyCost', label: T('c.costMo'), num: true, render: a => U.fmtMoney(a.monthlyCost) },
-          { key: 'riskScore', label: T('c.risk'), num: true, render: a => scoreBar(a.riskScore) }
+          { key: 'monthlyCost', label: T('c.costMo'), num: true, facet: 'money', render: a => U.fmtMoney(a.monthlyCost) },
+          { key: 'riskScore', label: T('c.risk'), num: true, facet: 'risk', render: a => scoreBar(a.riskScore) }
         ], rows: row.accounts, pageSize: 10, exportName: 'accounts-' + p.externalId,
         onRowClick: a => drawerAccount(a)
       })));
@@ -3929,6 +3938,8 @@
     document.getElementById('drawer-title').append(title);
     const b = document.getElementById('drawer-body');
     b.innerHTML = ''; b.appendChild(body); b.scrollTop = 0;
+    /* The net under every drawer: anything marked with a facet the role lacks goes. */
+    if (HR.access) { HR.access.sweep(document.getElementById('drawer-title')); HR.access.sweep(b); }
     collapseNotes(b);
     d.hidden = false; document.getElementById('drawer-scrim').hidden = false;
   }
@@ -3982,7 +3993,7 @@
     const head = el('div', {}, [
       el('h2', { text: a.userName }),
       el('div', { class: 'row' }, [
-        el('span', { class: 'sev ' + a.riskBand, text: T('app.riskShort') + ' ' + a.riskScore }),
+        el('span', { class: 'sev ' + a.riskBand, 'data-facet': 'risk', text: T('app.riskShort') + ' ' + a.riskScore }),
         el('span', { class: 'pill', title: T('dr.ecatSource.' + (a.clsSource || 'default')), text: a.clsLabel }),
         a.ecatLabel ? el('span', { class: 'pill', title: T('dr.ecatSource.' + (a.ecatSource || 'default')),
           text: a.ecatLabel + (a.ecatMult !== 1 ? ' ×' + a.ecatMult : '') }) : null,
@@ -3994,7 +4005,8 @@
     const body = el('div', { class: 'stack' });
     const peerAcc = a.peerKey ? m.accounts.get(a.peerKey) : null;
     body.appendChild(dl([
-      [T('c.system'), el('a', { href: '#', text: a.system, onclick: e => { e.preventDefault(); const sys = m.systemList.find(x => x.name === a.system); if (sys) drawerSystem(sys, m); } })],
+      /* The system drawer is a governance and money view: a role without those gets the name. */
+      [T('c.system'), can('governance') ? el('a', { href: '#', text: a.system, onclick: e => { e.preventDefault(); const sys = m.systemList.find(x => x.name === a.system); if (sys) drawerSystem(sys, m); } }) : a.system],
       [T('c.displayName'), a.displayName],
       [T('c.person'), (() => {
         /* The person's own page, when the vault knows them. */
@@ -4002,30 +4014,30 @@
         return vp ? el('a', { href: '#', text: a.personRaw, onclick: e => { e.preventDefault(); closeDrawer(); HR.app.go('people', { id: vp.externalId || vp.personId }); } })
           : (a.personRaw || T('dr.notLinked'));
       })()],
-      [T('c.empCategory'), ecatControl(a)],
+      can('admin') ? [T('c.empCategory'), ecatControl(a)] : [T('c.empCategory'), a.ecatLabel || '\u2014'],
       [T('dr.permsHeld'), String(a.permCount)],
-      [T('dr.unmanagedAssign'), String(a.unmanagedPermCount)],
-      [T('dr.missingEnt'), String(a.missingCount)],
-      [T('dr.monthlyCost'), U.fmtMoney(a.monthlyCost)],
-      [T('dr.closestPeer'), peerAcc
+      can('governance') ? [T('dr.unmanagedAssign'), String(a.unmanagedPermCount)] : null,
+      can('governance') ? [T('dr.missingEnt'), String(a.missingCount)] : null,
+      can('money') ? [T('dr.monthlyCost'), U.fmtMoney(a.monthlyCost)] : null,
+      can('risk') ? [T('dr.closestPeer'), peerAcc
         ? el('a', { href: '#', text: peerAcc.userName + ' · ' + T('dr.overlap', { p: U.fmtPct(a.peerBest || 0, 0) }),
             onclick: e => { e.preventDefault(); drawerAccount(peerAcc); } })
-        : (a.peerKey ? a.peerKey + ' · ' + T('dr.overlap', { p: U.fmtPct(a.peerBest || 0, 0) }) : T('dr.noPeer'))]
-    ]));
+        : (a.peerKey ? a.peerKey + ' · ' + T('dr.overlap', { p: U.fmtPct(a.peerBest || 0, 0) }) : T('dr.noPeer'))] : null
+    ].filter(Boolean)));
 
     /* The person link, decidable in place: the matching workbench's card. */
-    if (HR.matching && m.vault) body.appendChild(HR.matching.personLinkCard(m, a));
+    if (HR.matching && m.vault && can('admin')) body.appendChild(HR.matching.personLinkCard(m, a));
 
-    body.appendChild(card(T('dr.whyScore'), T('dr.componentsSum', { n: a.riskScore }) + (a.riskRaw > a.riskScore ? ' · ' + T('dr.cappedFrom', { n: Math.round(a.riskRaw) }) : '')
+    if (can('risk')) body.appendChild(card(T('dr.whyScore'), T('dr.componentsSum', { n: a.riskScore }) + (a.riskRaw > a.riskScore ? ' · ' + T('dr.cappedFrom', { n: Math.round(a.riskRaw) }) : '')
       + (a.ecatMult && a.ecatMult !== 1 ? ' · ' + T('dr.ecatApplied', { m: a.ecatMult, cat: a.ecatLabel }) : ''),
       a.riskParts.length ? C.barList(a.riskParts.map(p => ({
         label: p.label, value: Math.round(p.value), color: C.STATUS[a.riskBand], note: p.detail,
         tip: '<div class="t-title">' + U.esc(p.label) + '</div><div class="t-row"><span>points</span><b>' +
           U.fmtNum(p.value, 1) + '</b></div>' + (p.detail ? '<div class="t-row"><span>' + U.esc(p.detail) + '</span></div>' : '')
-      })), { valueLabel: T('c.points') }) : el('p', { class: 'note', text: T('dr.clean') })));
+      })), { valueLabel: T('c.points') }) : el('p', { class: 'note', text: T('dr.clean') }), '', { facet: 'risk' }));
 
     /* What an administrator decided about this account in HelloID: the exclusion, who, why, until when. */
-    const evidence = HR.audit && m.audit ? HR.audit.evidenceFor(m.audit, a) : [];
+    const evidence = HR.audit && m.audit && can('governance') ? HR.audit.evidenceFor(m.audit, a) : [];
     if (evidence.length) {
       body.appendChild(card(T('dr.excludedIn'), T('dr.excludedInNote'), el('ul', { class: 'clean' }, evidence.map(x => el('li', {}, [
         el('strong', { text: (x.accountLevel ? T('au.wholeAccount') : x.permission) + ' — ' + (x.issue || '') }),
@@ -4035,7 +4047,7 @@
     }
 
     /* The pairs this account breaks, each with what collided and why that matters. */
-    const toxic = HR.sod ? (HR.sod.evaluate(m).perAccount.get(a.key) || []) : [];
+    const toxic = HR.sod && can('governance') ? (HR.sod.evaluate(m).perAccount.get(a.key) || []) : [];
     if (toxic.length) {
       const name = (v, side) => v[side] ? v[side].name : T('sod.accountType', { cls: T('cls.' + v.account.cls) || v.account.cls });
       body.appendChild(card(T('sod.tab'), T('dr.toxicNote'), el('ul', { class: 'clean' }, toxic.map(v => el('li', {}, [
@@ -4058,26 +4070,26 @@
         columns: [
           { key: 'name', label: T('ct.group') },
           { key: 'categoryLabel', label: T('c.category') },
-          { key: 'sensitivity', label: T('c.sensitivity'), num: true, render: r => U.fmtNum(r.sensitivity, 1) },
+          { key: 'sensitivity', label: T('c.sensitivity'), num: true, facet: 'risk', render: r => U.fmtNum(r.sensitivity, 1) },
           { key: 'holderCount', label: T('c.holders'), num: true },
-          { key: 'monthlyPrice', label: T('c.unitMo'), num: true, render: r => r.monthlyPrice ? U.fmtMoney(r.monthlyPrice) : '—' },
-          { key: 'riskScore', label: T('c.risk'), num: true },
-          uniqueKeys.size ? { key: 'unique', label: T('dr.uniqueCol'),
+          { key: 'monthlyPrice', label: T('c.unitMo'), num: true, facet: 'money', render: r => r.monthlyPrice ? U.fmtMoney(r.monthlyPrice) : '—' },
+          { key: 'riskScore', label: T('c.risk'), num: true, facet: 'risk' },
+          uniqueKeys.size && can('risk') ? { key: 'unique', label: T('dr.uniqueCol'),
             value: r => uniqueKeys.has(r.key) ? 1 : 0,
             render: r => uniqueKeys.has(r.key)
               ? el('span', { class: 'pill', text: '✓' }) : document.createTextNode('') } : null
         ].filter(Boolean), rows: a.perms, pageSize: 15, exportName: 'account-' + a.userName + '-permissions',
-        initialSort: { key: 'riskScore', dir: -1 },
+        initialSort: can('risk') ? { key: 'riskScore', dir: -1 } : { key: 'name', dir: 1 },
         search: (r, q) => r.name.toLowerCase().includes(q),
         onRowClick: p => drawerPermission(p, m)
       })));
     }
-    if (a.missingPerms.length) {
+    if (a.missingPerms.length && can('governance')) {
       body.appendChild(card(T('dr.missingEnt'), T('dr.missingList'),
         el('ul', { class: 'clean' }, a.missingPerms.map(p => el('li', { text: p.name })))));
     }
 
-    body.appendChild(card(T('dr.sourceRows'), T('dr.csvLines', { n: a.records.length }), HR.table.make({
+    if (can('governance')) body.appendChild(card(T('dr.sourceRows'), T('dr.csvLines', { n: a.records.length }), HR.table.make({
       columns: [
         { key: 'issue', label: T('dr.issue') },
         { key: 'permission', label: T('c.permission') },
@@ -4190,10 +4202,10 @@
     const head = el('div', {}, [
       el('h2', { text: p.name }),
       el('div', { class: 'row' }, [
-        el('span', { class: 'sev ' + p.riskBand, text: T('app.riskShort') + ' ' + p.riskScore }),
+        el('span', { class: 'sev ' + p.riskBand, 'data-facet': 'risk', text: T('app.riskShort') + ' ' + p.riskScore }),
         el('span', { class: 'pill', text: p.categoryLabel }),
-        p.rare ? el('span', { class: 'pill removed', text: T('c.rare') }) : null,
-        p.monthlyPrice ? el('span', { class: 'pill', text: U.fmtMoney(p.monthlyPrice) + '/holder/mo' }) : null,
+        p.rare ? el('span', { class: 'pill removed', 'data-facet': 'risk', text: T('c.rare') }) : null,
+        p.monthlyPrice ? el('span', { class: 'pill', 'data-facet': 'money', text: U.fmtMoney(p.monthlyPrice) + '/holder/mo' }) : null,
         dirMeta && dirMeta.dynamic ? el('span', { class: 'pill warn', title: dirMeta.membershipRule,
           text: T('pm.badgeDynamic') }) : null,
         dirMeta && dirMeta.kind === 'resource' ? el('span', { class: 'pill ok',
@@ -4207,18 +4219,18 @@
     const note = HR.config.getPermNote(p.name);
     if (note) body.appendChild(el('p', { class: 'note', text: note }));
     body.appendChild(dl([
-      [T('c.system'), el('a', { href: '#', text: p.system, onclick: e => { e.preventDefault(); const sys = m.systemList.find(x => x.name === p.system); if (sys) drawerSystem(sys, m); } })],
+      [T('c.system'), can('governance') ? el('a', { href: '#', text: p.system, onclick: e => { e.preventDefault(); const sys = m.systemList.find(x => x.name === p.system); if (sys) drawerSystem(sys, m); } }) : p.system],
       [T('dr.dn'), el('span', { class: 'mono', text: p.path || '—' })],
       [T('dr.holders'), T('dr.holdersDetail', { n: p.holderCount, e: p.holdersEnabled, d: p.holdersDisabled })],
-      [T('dr.heldByUnowned'), p.holdersOrphan + ' (' + U.fmtPct(p.orphanShare, 0) + ')'],
-      [T('dr.monthlyTotal'), U.fmtMoney(p.monthlyTotal)],
-      [T('dr.annualTotal'), U.fmtMoney(p.monthlyTotal * 12)],
-      [T('dr.pSensitivity'), U.fmtNum(p.sensitivity, 1)],
-      [T('dr.missingFor'), p.missingFor.size ? Array.from(p.missingFor).map(k => (m.accounts.get(k) || {}).userName).join(', ') : '—']
-    ]));
+      can('governance') ? [T('dr.heldByUnowned'), p.holdersOrphan + ' (' + U.fmtPct(p.orphanShare, 0) + ')'] : null,
+      can('money') ? [T('dr.monthlyTotal'), U.fmtMoney(p.monthlyTotal)] : null,
+      can('money') ? [T('dr.annualTotal'), U.fmtMoney(p.monthlyTotal * 12)] : null,
+      can('risk') ? [T('dr.pSensitivity'), U.fmtNum(p.sensitivity, 1)] : null,
+      can('governance') ? [T('dr.missingFor'), p.missingFor.size ? Array.from(p.missingFor).map(k => (m.accounts.get(k) || {}).userName).join(', ') : '—'] : null
+    ].filter(Boolean)));
     body.appendChild(card(T('dr.whyScore'), null, C.barList(p.riskParts.map(x => ({
       label: x.label, value: Math.round(x.value), color: C.STATUS[p.riskBand]
-    })), { valueLabel: T('c.points') })));
+    })), { valueLabel: T('c.points') }), '', { facet: 'risk' }));
     body.appendChild(card(T('dr.holders'), T('dr.holdersN', { n: holders.length }), HR.table.make({
       columns: [
         { key: 'userName', label: T('c.account') },
@@ -4236,25 +4248,27 @@
                   text: T('pm.howVia') + ' ' + hm.via.join(' > ') });
           } } : null,
         { key: 'permCount', label: T('c.perms'), num: true },
-        { key: 'riskScore', label: T('c.risk'), num: true, render: r => scoreBar(r.riskScore) }
+        { key: 'riskScore', label: T('c.risk'), num: true, facet: 'risk', render: r => scoreBar(r.riskScore) }
       ].filter(Boolean), rows: holders, pageSize: 20, exportName: 'permission-' + p.name + '-holders',
-      initialSort: { key: 'riskScore', dir: -1 },
+      initialSort: can('risk') ? { key: 'riskScore', dir: -1 } : { key: 'userName', dir: 1 },
       search: (r, q) => (r.userName + ' ' + r.personRaw).toLowerCase().includes(q),
       onRowClick: a => drawerAccount(a)
     })));
-    const clCard = classicRolesCard(p, m);
+    const clCard = can('governance') ? classicRolesCard(p, m) : null;
     if (clCard) body.appendChild(clCard);
 
     /* The description the import never carried: free text per entitlement,
        kept in the settings, shown here and as the name's tooltip in tables. */
-    const ta = el('textarea', { rows: 2, placeholder: T('pm.notePh') });
-    ta.style.width = '100%';
-    ta.value = note;
-    ta.onchange = () => {
-      HR.config.setPermNote(p.name, ta.value);
-      U.toast(T('pm.noteSaved'), 2500);
-    };
-    body.appendChild(card(T('pm.noteTitle'), T('pm.noteNote'), ta));
+    if (can('admin')) {
+      const ta = el('textarea', { rows: 2, placeholder: T('pm.notePh') });
+      ta.style.width = '100%';
+      ta.value = note;
+      ta.onchange = () => {
+        HR.config.setPermNote(p.name, ta.value);
+        U.toast(T('pm.noteSaved'), 2500);
+      };
+      body.appendChild(card(T('pm.noteTitle'), T('pm.noteNote'), ta));
+    }
     openDrawer(head, body);
   }
 

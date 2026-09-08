@@ -76,7 +76,23 @@ data" fetches again. `published/` is mounted read-only into the container and is
 git or the image. A dashboard runs in a workspace of its own, so the partner's data in the
 same browser is untouched. Later the source may be a HelloID API that answers the same
 shape; the loader will not need to change. `dashboards.json` can also define other
-dashboards: `views`, `landing`, `hide` (`money`, `risk`), `source`.
+dashboards: `views`, `landing`, `role`, `source` (and a legacy `hide` list that narrows
+the role further).
+
+**Roles and facets.** What an audience may see is decided in one place (`js/access.js`),
+not view by view. Every sensitive thing belongs to a facet — `money` (prices, spend,
+€/head, cost tabs), `risk` (scores, bands, bars, outliers, why-score), `governance`
+(findings, controls, SoD, attestation, exclusions, evidence), `audit` (who did what,
+engine health), `admin` (imports, settings, data points, collectors) — and a role says
+which facets it has: `full` (everything), `hr` (none: identity, contracts, accounts and
+access facts only), `manager` (governance), `auditor` (risk, governance, audit). The
+shared building blocks enforce it: tiles, table columns, tabs and cards carry a facet and
+are not drawn without it; the account and permission drawers show only the facts; the
+money and score formatters print a dash for a role without the facet, whoever calls them;
+and after every render and drawer a sweep removes anything marked `data-facet` for a
+hidden facet. A browser leak test walks every view, tab and drawer of the HR dashboard
+and fails on any €, score bar or governance label. The app still authenticates nobody: a
+role is what a dashboard shows, and who may open the dashboard is the host's business.
 
 ## Demo data
 

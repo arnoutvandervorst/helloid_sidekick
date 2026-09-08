@@ -686,6 +686,8 @@
    * entitlements almost nobody else holds anywhere.
    */
   function busFactorCard(m) {
+    /* Key-person risk is a risk view: a role without the facet does not get the card. */
+    if (HR.access && !HR.access.can('risk')) return null;
     const bf = HR.scorecard.busFactor(m);
     if (!bf) return null;
     const body = [el('p', { text: T('bf.lead', { n: U.fmtInt(bf.summary.rows),

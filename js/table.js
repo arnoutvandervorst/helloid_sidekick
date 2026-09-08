@@ -16,8 +16,12 @@
    *     bulk bar in the toolbar while anything is selected.
    */
   function make(o) {
+    /* Columns carry a facet; a role without it never sees them, on screen or in the export. */
+    if (HR.access) o = Object.assign({}, o, { columns: o.columns.filter(c => c && (!c.facet || HR.access.can(c.facet))) });
+    /* A sort on a column the role does not get falls back to the first one. */
+    const initialSort = o.initialSort && o.columns.some(c => c.key === o.initialSort.key) ? o.initialSort : null;
     const state = {
-      sort: o.initialSort || { key: o.columns[0].key, dir: 1 },
+      sort: initialSort || { key: o.columns[0].key, dir: 1 },
       q: '', page: 0, pageSize: o.pageSize || 50,
       filters: {},
       selected: new Set()

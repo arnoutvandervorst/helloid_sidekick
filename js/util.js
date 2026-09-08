@@ -32,6 +32,8 @@ window.HR = window.HR || {};
   const fmtPct = (n, d) => (n == null || isNaN(n)) ? '—' : fmtNum(n * 100, d ?? 1) + '%';
 
   function fmtMoney(n, opts) {
+    /* The net under every money figure: a role without the facet sees none, wherever it is drawn. */
+    if (HR.access && !HR.access.can('money')) return '\u2014';
     if (n == null || isNaN(n)) return '—';
     const cur = (HR.config && HR.config.get) ? HR.config.get().currency : 'EUR';
     const compact = opts && opts.compact && Math.abs(n) >= 10000;

@@ -18,6 +18,12 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.58', date: '2026-09-08',
+      changes: [
+        'Roles and facets. The HR dashboard hid money and risk where a view had been told to, and the drawers behind a row still showed risk scores, why-score components, governance and cost. What an audience may see is now decided in one place: every sensitive thing belongs to a facet — money, risk, governance, audit, admin — and a role says which facets it has (full, hr, manager, auditor; a dashboard names its role in dashboards.json). Tiles, table columns, tabs and cards carry a facet and are not drawn without it; the account and permission drawers show only the facts to a role without risk or governance and no longer open the system drawer; the money and score formatters print a dash for a role without the facet, whoever calls them; a sweep after every render and drawer removes anything marked for a hidden facet; a person’s timeline keeps decisions for governance roles only; the JSON export of a person needs them too. A leak test walks every view, tab and drawer of the HR dashboard and passes clean.'
+      ]
+    },
+    {
       version: '2026.9.57', date: '2026-09-08',
       changes: ['Organisation › Data quality answers “who?”: a job-title row opens the people who carry it (active and ended), an attribute row opens the people who lack it, each row opening the person.']
     },

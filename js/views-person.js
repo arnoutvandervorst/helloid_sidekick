@@ -50,7 +50,7 @@
     const actions = el('div', { class: 'slot-actions' }, [
       el('button', { class: 'btn sm', text: '← ' + T('nav.people'), onclick: () => HR.app.go('people') }),
       el('button', { class: 'btn sm', text: T('p3.drawer'), onclick: () => drawerVaultPerson(personRow(m, p), m) }),
-      el('button', { class: 'btn sm', text: T('p3.exportJson'), onclick: () => {
+      hides('risk') || hides('governance') ? null : el('button', { class: 'btn sm', text: T('p3.exportJson'), onclick: () => {
         U.download('person-' + (p.externalId || p.personId) + '.json', JSON.stringify(HR.person360.toJson(d), null, 2), 'application/json');
         HR.usage.exported('person-360');
       } })
@@ -76,10 +76,10 @@
     const cells = [
       tile(T('p3.kAccounts'), U.fmtInt(s.accounts), T('p3.kAccountsFoot', { n: U.fmtInt(s.enabled) }), { small: true, severity: s.accounts && !s.enabled && d.life.state !== 'past' ? 'medium' : undefined, onClick: open('access') }),
       tile(T('p3.kEnts'), U.fmtInt(s.entitlements), T('p3.kEntsFoot', { nobody: U.fmtInt(d.access.counts.nobody) }), { small: true, severity: d.access.counts.nobody ? 'medium' : 'good', onClick: open('access', d.access.counts.nobody ? { prov: 'nobody' } : {}) }),
-      hides('risk') ? null : tile(T('c.risk'), String(s.maxRisk), T('p3.kRiskFoot'), { small: true, severity: s.maxRisk >= 70 ? 'critical' : s.maxRisk >= 45 ? 'high' : s.maxRisk >= 20 ? 'medium' : 'good', onClick: open('governance') }),
-      hides('money') ? null : tile(T('p3.kCost'), U.fmtMoney(s.monthly), T('p3.kCostFoot'), { small: true, onClick: open('cost') }),
-      hides('risk') ? null : tile(T('ol.score'), s.outlier == null ? '—' : String(s.outlier), T('p3.kOutlierFoot'), { small: true, severity: s.outlier == null ? undefined : s.outlier >= HR.outlier.HIGH ? 'high' : 'good', onClick: open('governance') }),
-      tile(T('p3.kFindings'), U.fmtInt(s.findings), T('p3.kFindingsFoot', { sod: U.fmtInt(s.sod) }), { small: true, severity: s.findings ? (d.findings.some(f => f.severity === 'critical') ? 'critical' : 'medium') : 'good', onClick: open('governance') })
+      tile(T('c.risk'), String(s.maxRisk), T('p3.kRiskFoot'), { small: true, facet: 'risk', severity: s.maxRisk >= 70 ? 'critical' : s.maxRisk >= 45 ? 'high' : s.maxRisk >= 20 ? 'medium' : 'good', onClick: open('governance') }),
+      tile(T('p3.kCost'), U.fmtMoney(s.monthly), T('p3.kCostFoot'), { small: true, facet: 'money', onClick: open('cost') }),
+      tile(T('ol.score'), s.outlier == null ? '—' : String(s.outlier), T('p3.kOutlierFoot'), { small: true, facet: 'risk', severity: s.outlier == null ? undefined : s.outlier >= HR.outlier.HIGH ? 'high' : 'good', onClick: open('governance') }),
+      tile(T('p3.kFindings'), U.fmtInt(s.findings), T('p3.kFindingsFoot', { sod: U.fmtInt(s.sod) }), { small: true, facet: 'governance', severity: s.findings ? (d.findings.some(f => f.severity === 'critical') ? 'critical' : 'medium') : 'good', onClick: open('governance') })
     ].filter(Boolean);
     return el('div', { class: 'grid g' + cells.length }, cells);
   }
@@ -173,10 +173,10 @@
         { key: 'cls', label: T('c.class'), value: a => a.clsLabel || '' },
         { key: 'enabled', label: T('c.state'), value: a => T(a.enabled === false ? 'c.disabled' : 'c.enabled') },
         { key: 'permCount', label: T('c.perms'), num: true },
-        { key: 'sod', label: T('sod.tab'), num: true, value: a => d.sod.filter(v => v.account === a).length, render: a => { const n = d.sod.filter(v => v.account === a).length; return n ? el('span', { class: 'sev high', text: String(n) }) : el('span', { class: 'note', text: '0' }); } },
-        { key: 'excl', label: T('dr.excludedIn'), num: true, value: a => d.exclusions.filter(x => x.account === a).length },
-        hides('money') ? null : { key: 'monthlyCost', label: T('c.costMo'), num: true, render: a => U.fmtMoney(a.monthlyCost || 0) },
-        hides('risk') ? null : { key: 'riskScore', label: T('c.risk'), num: true, render: a => scoreBar(a.riskScore) }
+        { key: 'sod', label: T('sod.tab'), num: true, facet: 'governance', value: a => d.sod.filter(v => v.account === a).length, render: a => { const n = d.sod.filter(v => v.account === a).length; return n ? el('span', { class: 'sev high', text: String(n) }) : el('span', { class: 'note', text: '0' }); } },
+        { key: 'excl', label: T('dr.excludedIn'), num: true, facet: 'governance', value: a => d.exclusions.filter(x => x.account === a).length },
+        { key: 'monthlyCost', label: T('c.costMo'), num: true, facet: 'money', render: a => U.fmtMoney(a.monthlyCost || 0) },
+        { key: 'riskScore', label: T('c.risk'), num: true, facet: 'risk', render: a => scoreBar(a.riskScore) }
       ].filter(Boolean), rows: d.accounts, pageSize: 10, exportName: 'accounts-' + d.person.externalId, onRowClick: a => drawerAccount(a)
     })));
     const provPill = h => el('span', { class: 'pill ' + (h.provenance === 'rule' ? 'ok' : h.provenance === 'nobody' ? 'warn' : ''), text: T('p3.prov.' + h.provenance)
@@ -187,8 +187,8 @@
         { key: 'system', label: T('c.system'), value: h => h.perm.system },
         { key: 'category', label: T('c.category'), value: h => h.perm.categoryLabel || h.perm.category || '' },
         { key: 'prov', label: T('p3.provenance'), value: h => h.provenance, render: provPill },
-        { key: 'sens', label: T('c.sensitivity'), num: true, value: h => h.perm.sensitivity || 0, render: h => U.fmtNum(h.perm.sensitivity || 0, 1) },
-        { key: 'price', label: T('c.costMo'), num: true, value: h => h.perm.monthlyPrice || 0, render: h => h.perm.monthlyPrice ? U.fmtMoney(h.perm.monthlyPrice) : el('span', { class: 'note', text: '—' }) },
+        { key: 'sens', label: T('c.sensitivity'), num: true, facet: 'risk', value: h => h.perm.sensitivity || 0, render: h => U.fmtNum(h.perm.sensitivity || 0, 1) },
+        { key: 'price', label: T('c.costMo'), num: true, facet: 'money', value: h => h.perm.monthlyPrice || 0, render: h => h.perm.monthlyPrice ? U.fmtMoney(h.perm.monthlyPrice) : el('span', { class: 'note', text: '—' }) },
         { key: 'holders', label: T('c.holders'), num: true, value: h => h.perm.holderCount || 0 },
         { key: 'via', label: T('c.account'), value: h => h.accounts.map(a => a.userName).join(', ') }
       ],
@@ -239,9 +239,12 @@
   }
 
   /* ---------------------------------------------------------------- timeline */
-  const KINDS = ['employment', 'account', 'access', 'decision', 'product'];
+  const ALL_KINDS = ['employment', 'account', 'access', 'decision', 'product'];
+  /* Decisions are governance evidence: a role without that facet does not see them. */
+  const KIND_FACET = { decision: 'governance' };
   function timelineTab(m, d, params) {
     const wrap = el('div', {});
+    const KINDS = ALL_KINDS.filter(k => !KIND_FACET[k] || !hides(KIND_FACET[k]));
     let on = new Set(KINDS);
     const search = el('input', { type: 'search', placeholder: T('c.search') });
     search.style.minWidth = '220px';
@@ -268,7 +271,7 @@
     chips.appendChild(el('span', { class: 'spacer' }));
     chips.appendChild(search);
     chips.appendChild(el('button', { class: 'btn sm', text: T('c.exportCsv'), onclick: () => {
-      U.download('timeline-' + d.person.externalId + '.csv', U.toCSV(d.timeline.map(e => ({ at: e.at.toISOString(), kind: e.kind, title: e.title, detail: e.detail }))), 'text/csv;charset=utf-8');
+      U.download('timeline-' + d.person.externalId + '.csv', U.toCSV(d.timeline.filter(e => on.has(e.kind)).map(e => ({ at: e.at.toISOString(), kind: e.kind, title: e.title, detail: e.detail }))), 'text/csv;charset=utf-8');
     } }));
     search.addEventListener('input', draw);
     draw();
@@ -393,9 +396,9 @@
       { id: 'access', label: T('p3.tab.access'), count: d.access.held.length, build: p => accessTab(m, d, p) },
       { id: 'rules', label: T('p3.tab.rules'), count: d.access.matchedRules.length + d.products.length, build: () => rulesTab(m, d) },
       { id: 'timeline', label: T('p3.tab.timeline'), count: d.timeline.length, build: p => timelineTab(m, d, p) },
-      { id: 'governance', label: T('p3.tab.governance'), count: d.findings.length + d.sod.length, build: () => governanceTab(m, d) },
-      hides('money') ? null : { id: 'cost', label: T('p3.tab.cost'), build: () => costTab(m, d) }
-    ].filter(Boolean), Object.assign({}, params))));
+      { id: 'governance', label: T('p3.tab.governance'), count: d.findings.length + d.sod.length, facet: 'governance', build: () => governanceTab(m, d) },
+      { id: 'cost', label: T('p3.tab.cost'), facet: 'money', build: () => costTab(m, d) }
+    ], Object.assign({}, params))));
     return f;
   }
 

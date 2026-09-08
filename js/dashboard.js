@@ -18,7 +18,7 @@
   const KEY = 'hr.dashboard';
   const FILE = 'published/dashboards.json';
   const BUILTIN = {
-    hr: { id: 'hr', name: 'HR', views: ['people', 'org'], landing: 'people', hide: ['money', 'risk'], readOnly: true, source: null }
+    hr: { id: 'hr', name: 'HR', views: ['people', 'org'], landing: 'people', role: 'hr', readOnly: true, source: null }
   };
 
   let defs = Object.assign({}, BUILTIN);
@@ -27,6 +27,20 @@
      workspace, and every module that scopes a storage key reads it synchronously. */
   const currentId = resolveId();
   if (currentId && BUILTIN[currentId]) current = BUILTIN[currentId];
+
+  /* The role decides the facets (js/access.js). A dashboard without one is HR — the safe
+     side; a legacy `hide` list narrows the role further. */
+  function applyRole() {
+    if (!HR.access) return;
+    if (!currentId) { HR.access.set('full'); return; }
+    HR.access.set((current && current.role) || 'hr');
+    if (current && Array.isArray(current.hide) && current.hide.length) {
+      const facets = HR.access.ROLES[HR.access.role()].facets.filter(f => !current.hide.includes(f));
+      HR.access.ROLES['dash-' + currentId] = { facets };
+      HR.access.set('dash-' + currentId);
+    }
+  }
+  applyRole();
 
   /** The sub-URL /d/<id> wins and is not remembered (the URL is the choice); then
       ?dashboard= (off clears, otherwise remembered), the remembered one, the hostname's
@@ -62,6 +76,7 @@
       }
     } catch (e) { /* not served: built-ins only */ }
     current = currentId && defs[currentId] ? defs[currentId] : null;
+    applyRole();
     return current;
   })();
 
@@ -69,7 +84,8 @@
   const is = id => !!current && (!id || current.id === id);
   const views = () => current ? current.views.slice() : [];
   const landing = () => current ? current.landing : null;
-  const hides = kind => !!current && (current.hide || []).includes(kind);
+  /** Kept for the views that ask the old way: a facet the role does not have. */
+  const hides = kind => !!current && HR.access && !HR.access.can(kind);
   const readOnly = () => !!current && current.readOnly !== false;
   const source = () => current ? current.source || null : null;
   const name = () => current ? current.name || current.id : '';

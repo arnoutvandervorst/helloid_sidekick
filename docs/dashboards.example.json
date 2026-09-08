@@ -5,6 +5,6 @@
     "source": "published/avondrood-zorggroep.json",
     "views": ["people", "org"],
     "landing": "people",
-    "hide": ["money", "risk"]
+    "role": "hr"
   }
 }
