@@ -391,15 +391,44 @@
           ]));
         });
         t2.appendChild(tb2);
+        /* The KPIs that moved the score, by name: what a board asks after the number. */
+        let t3 = null;
+        if (d.controls) {
+          const moved = d.controls.rows.filter(r => r.on && r.was && r.now && r.movement !== 'same').slice(0, 10);
+          if (moved.length) {
+            const fmtV = (def, v) => def.unit === 'pct' ? U.fmtNum(v, 1) + '%' : U.fmtInt(v);
+            t3 = el('table', { class: 'board-tbl' });
+            t3.appendChild(el('thead', {}, el('tr', {}, [
+              el('th', { text: T('tr.cKpi') }),
+              el('th', { class: 'num', text: T('bd.prevReview') }),
+              el('th', { class: 'num', text: T('bd.nowCol') }),
+              el('th', { text: T('tr.cMovement') })
+            ])));
+            const tb3 = el('tbody');
+            moved.forEach(r => {
+              const good = r.movement === 'newlyMet' || r.movement === 'improved';
+              tb3.appendChild(el('tr', {}, [
+                el('td', { text: T('po.p.' + r.id) }),
+                el('td', { class: 'num', text: fmtV(r.def, r.was.value) }),
+                el('td', { class: 'num', text: fmtV(r.def, r.now.value) }),
+                el('td', { class: good ? 'tone-good' : 'tone-bad', text: T('tr.mv.' + r.movement) })
+              ]));
+            });
+            t3.appendChild(tb3);
+          }
+        }
+        const baseDate = (st.snapshots.find(x => x.id === st.baselineId) || st.baselineSnapshot);
         changeChildren.push(
-          el('p', { class: 'lead', text: T('bd.changeLead', { name: st.baselineSnapshot.name, date: U.fmtDate(st.baselineSnapshot.importedAt) }) }),
+          el('p', { class: 'lead', text: T('bd.changeLead', { name: st.baselineSnapshot.name, date: U.fmtDate(baseDate.dataDate || baseDate.importedAt).split(',')[0] }) }),
           t2,
+          t3 ? el('p', { class: 'lead', style: 'margin-top:12px', text: T('tr.kpiMovementNote', { met: d.controls.newlyMet, broken: d.controls.newlyBroken, up: d.controls.improved, down: d.controls.worse }) }) : null,
+          t3,
           el('p', { class: 'footnote', text: T('bd.changeFoot') })
         );
 
         /* With more than two imports there is a direction, not just a difference, and
            the direction is the sentence a board actually remembers. */
-        const history = st.snapshots.slice().sort((a, b) => a.importedAt - b.importedAt);
+        const history = st.snapshots.slice().sort((a, b) => ((a.dataDate || a.importedAt) - (b.dataDate || b.importedAt)) || (a.importedAt - b.importedAt));
         if (history.length >= 3) {
           const first = history[0], latest = history[history.length - 1];
           const driftThen = first.summary.unmanagedPermissionRows || 0;
@@ -407,7 +436,7 @@
           const pct = driftThen ? Math.round((driftNow - driftThen) / driftThen * 100) : 0;
           changeChildren.push(el('p', { class: 'lead', text: T('bd.trendLine', {
             n: history.length,
-            since: U.fmtDate(first.importedAt).split(',')[0],
+            since: U.fmtDate(first.dataDate || first.importedAt).split(',')[0],
             drift: (pct > 0 ? '+' : '') + pct + '%',
             risk: (first.summary.governanceScore != null ? first.summary.governanceScore : first.summary.riskScore) + ' \u2192 ' + (latest.summary.governanceScore != null ? latest.summary.governanceScore : latest.summary.riskScore),
             spend: U.fmtMoney(first.summary.monthlyCost || 0) + ' \u2192 ' + U.fmtMoney(latest.summary.monthlyCost || 0)

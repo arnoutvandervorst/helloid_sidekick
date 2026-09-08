@@ -371,6 +371,8 @@
        read off the snapshots that carried it), the biggest departments, the JML breaches. */
     try {
       model.summary.findingIds = U.uniq(model.findings.map(f => f.id));
+      model.summary.findingCounts = {};
+      model.findings.forEach(f => { model.summary.findingCounts[f.id] = (model.summary.findingCounts[f.id] || 0) + (f.count || 0); });
       if (model.vault && HR.scorecard) {
         const sc = HR.scorecard.build(model);
         model.summary.departments = sc.rows.filter(r => r.people > 0).sort((a, b) => b.people - a.people).slice(0, 20)

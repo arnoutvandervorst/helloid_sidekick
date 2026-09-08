@@ -11,6 +11,21 @@
     personRow, partialNotice } = HR.viewkit;
 
   const fmtVal = r => r.def.unit === 'pct' ? U.fmtNum(r.value, 1) + '%' : U.fmtInt(r.value);
+  const fmtV = (def, v) => v == null ? '\u2014' : (def.unit === 'pct' ? U.fmtNum(v, 1) + '%' : U.fmtInt(v));
+  const MOVE_CLASS = { newlyMet: 'ok', improved: 'ok', same: '', worse: 'removed', newlyBroken: 'removed', new: 'muted', gone: 'muted' };
+
+  /** This control's movement against the compared data point, if there is one. */
+  function movementOf(id) {
+    const d = HR.app.state.diff;
+    return d && d.controls ? d.controls.rows.find(r => r.id === id) || null : null;
+  }
+
+  /** The control's value on every data point, oldest first — null where a point never stored it. */
+  function historyOf(id) {
+    const snaps = (HR.app.state.snapshots || []).slice().sort((a, b) => (a.dataDate - b.dataDate) || (a.importedAt - b.importedAt));
+    if (snaps.length < 2) return null;
+    return snaps.map(s => { const c = s.summary && s.summary.controls && s.summary.controls[id]; return c ? c.value : null; });
+  }
   const fmtLimit = r => (r.def.dir === 'max' ? '≤ ' : '≥ ') +
     (r.def.unit === 'pct' ? U.fmtNum(r.threshold, 1) + '%' : U.fmtInt(r.threshold));
 
@@ -146,6 +161,20 @@
       if (row.affected.length) {
         stand.appendChild(el('a', { href: '#', class: 'ctl-affected', text: T('po.affectedN', { n: U.fmtInt(row.affected.length) }),
           onclick: e => { e.preventDefault(); openAffected(m, row); } }));
+      }
+      /* --- the trend: against the compared data point, and over all of them --- */
+      const mv = movementOf(id);
+      const hist = historyOf(id);
+      if (mv && mv.was) {
+        stand.appendChild(el('div', { class: 'ctl-trend' }, [
+          el('span', { class: 'pill ' + MOVE_CLASS[mv.movement], text: T('tr.mv.' + mv.movement) }),
+          el('span', { class: 'note', text: T('tr.wasNow', { was: fmtV(row.def, mv.was.value), now: fmtV(row.def, mv.now ? mv.now.value : null) }) })
+        ]));
+      }
+      if (hist && hist.some(v => v != null)) {
+        const sp = HR.charts.spark(hist, { limit: row.threshold, color: row.met ? 'var(--good)' : 'var(--critical)' });
+        sp.setAttribute('title', T('tr.sparkTip', { n: hist.filter(v => v != null).length, total: hist.length }));
+        stand.appendChild(el('div', { class: 'ctl-spark' }, sp));
       }
     }
 
@@ -296,8 +325,20 @@
       HR.usage.exported('compliance-scorecard-json');
     } }));
 
+    /* Since the compared data point: which way the KPIs went. Chips narrow the list. */
+    const d = HR.app.state.diff, mvFilter = (HR.app.state.params && HR.app.state.params.move) || '';
+    if (d && d.controls) {
+      const base = HR.app.state.snapshots.find(s => s.id === HR.app.state.baselineId);
+      const strip = el('div', { class: 'slot-actions', style: 'margin-bottom:8px;align-items:center' }, [
+        el('span', { class: 'note', text: T('tr.since', { date: base ? U.fmtDate(base.dataDate || base.importedAt).split(',')[0] : '\u2014' }) })
+      ].concat(['newlyMet', 'improved', 'worse', 'newlyBroken'].map(mvk => el('button', {
+        class: 'btn sm' + (mvFilter === mvk ? ' primary' : ''), text: U.fmtInt(d.controls[mvk]) + ' ' + T('tr.mv.' + mvk),
+        onclick: () => HR.app.go('policies', { fw, move: mvFilter === mvk ? '' : mvk }) }))));
+      f.appendChild(card(null, null, strip));
+    }
     /* Critical first, then the rest; inside a group, failing before passing. */
-    const shown = ev.rows.filter(r => !fw || (r.def.refs && r.def.refs[fw]));
+    const shown = ev.rows.filter(r => !fw || (r.def.refs && r.def.refs[fw]))
+      .filter(r => !mvFilter || (movementOf(r.def.id) || {}).movement === mvFilter);
     const groups = HR.policy.SEVERITIES.map(sev => ({ sev, rows: shown.filter(r => (r.def.severity || 'medium') === sev)
       .sort((a, b) => (a.status === 'notMet' ? 0 : 1) - (b.status === 'notMet' ? 0 : 1)) })).filter(g => g.rows.length);
     f.appendChild(card(T('po.cardTitle'), T('po.cardNote'), [chips].concat(groups.map(g => el('div', {}, [

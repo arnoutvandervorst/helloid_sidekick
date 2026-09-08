@@ -965,6 +965,38 @@
     render();
   }
 
+  /**
+   * Every data point's summary, recomputed under today's settings, thresholds and
+   * companions. A stored summary is frozen at import time: change a limit and the
+   * trend compares numbers that were scored differently. This makes the line honest
+   * again, and gives older data points the per-KPI history they never stored.
+   */
+  async function rescoreDataPoints() {
+    const ids = state.snapshots.map(s => s.id);
+    let done = 0;
+    await withBusy(T('busy.rescore', { n: ids.length }), async () => {
+      for (const id of ids) {
+        const snap = await HR.store.get(id);
+        if (!snap) continue;
+        try {
+          const m = HR.model.build(snap.records, buildOpts(snapshotVault(snap)));
+          snap.summary = m.summary;
+          snap.rescoredAt = Date.now();
+          await HR.store.put(snap);
+          done++;
+        } catch (e) { console.error(e); }
+        /* Let the veil repaint between builds; a 6000-account model takes a second. */
+        await new Promise(r => setTimeout(r, 0));
+      }
+      await refreshSnapshots();
+      if (state.baselineSnapshot) state.baselineSnapshot = await HR.store.get(state.baselineSnapshot.id) || state.baselineSnapshot;
+      await recomputeDiff();
+    });
+    U.toast(T('toast.rescored', { n: done }), 5000);
+    render();
+    return done;
+  }
+
   /** A snapshot's vault, parsed, for building it as it was; null falls back to the loaded one. */
   function snapshotVault(snap) {
     if (!snap || !snap.vault) return null;
@@ -1221,7 +1253,7 @@
 
   const REPO_URL = 'https://github.com/arnoutvandervorst/helloid_sidekick';
 
-  HR.app = { REPO_URL, state, go, rebuild, rebuildBusy, batch, loadSnapshot, setBaseline, refreshSnapshots, importText, render, applyChrome, updateTopbar,
+  HR.app = { REPO_URL, state, go, rebuild, rebuildBusy, batch, loadSnapshot, setBaseline, refreshSnapshots, rescoreDataPoints, importText, render, applyChrome, updateTopbar,
     importFileAs, clearSource, clearRecon, detectKind, loadSample, findSample, sampleName: () => sampleFile || null,
     demoAvailable: () => demoManifest };
   document.addEventListener('DOMContentLoaded', init);

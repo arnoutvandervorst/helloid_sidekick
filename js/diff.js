@@ -11,6 +11,7 @@
     const perm = diffPermissions(current, baseline);
     const findings = diffFindings(current, baseline);
     const persons = (current.vault && baseline.vault) ? diffPersons(current.vault, baseline.vault) : null;
+    const controls = (HR.policy && current.hasRecon && baseline.hasRecon) ? diffControls(current, baseline) : null;
     const summary = diffSummary(current.summary, baseline.summary);
     const cost = {
       totalMonthly: delta(current.cost.totalMonthly, baseline.cost.totalMonthly),
@@ -19,10 +20,39 @@
       remediationCost: delta(current.cost.remediationCost, baseline.cost.remediationCost)
     };
     return {
-      summary, accounts: acc, permissions: perm, findings, persons, cost,
+      summary, accounts: acc, permissions: perm, findings, persons, controls, cost,
       risk: delta(current.risk.overall, baseline.risk.overall),
-      headline: headline(acc, perm, summary, persons)
+      headline: headline(acc, perm, summary, persons, controls)
     };
+  }
+
+  /* Every KPI on both sides, and which way it went. "Improved" is the value moving
+     toward the limit's good side; met/broken is the status flipping. */
+  function diffControls(cur, base) {
+    const now = HR.policy.evaluate(cur).rows, was = HR.policy.evaluate(base).rows;
+    const wasById = new Map(was.map(r => [r.def.id, r]));
+    const rows = [];
+    for (const r of now) {
+      const b = wasById.get(r.def.id);
+      if (!r.applicable && !(b && b.applicable)) continue;
+      const good = r.def.dir === 'max' ? -1 : 1;
+      let movement;
+      if (!b || !b.applicable) movement = 'new';
+      else if (!r.applicable) movement = 'gone';
+      else if (b.status !== 'met' && r.status === 'met') movement = 'newlyMet';
+      else if (b.status === 'met' && r.status !== 'met') movement = 'newlyBroken';
+      else if (Math.abs(r.value - b.value) < 1e-9) movement = 'same';
+      else movement = (r.value - b.value) * good > 0 ? 'improved' : 'worse';
+      rows.push({ id: r.def.id, def: r.def, severity: r.def.severity || 'medium', on: r.on,
+        was: b && b.applicable ? { value: b.value, status: b.status } : null,
+        now: r.applicable ? { value: r.value, status: r.status } : null,
+        change: b && b.applicable && r.applicable ? r.value - b.value : null,
+        movement, row: r });
+    }
+    const rank = { newlyBroken: 0, worse: 1, newlyMet: 2, improved: 3, new: 4, gone: 5, same: 6 };
+    rows.sort((a, b) => rank[a.movement] - rank[b.movement] || U.severityRank(a.severity) - U.severityRank(b.severity) || Math.abs(b.change || 0) - Math.abs(a.change || 0));
+    const count = mv => rows.filter(r => r.movement === mv && r.on).length;
+    return { rows, newlyMet: count('newlyMet'), newlyBroken: count('newlyBroken'), improved: count('improved'), worse: count('worse'), same: count('same') };
   }
 
   /* Two vaults, one question: who joined, who left, who moved. Keyed by the HR
@@ -135,8 +165,12 @@
     return rows.sort((a, b) => U.severityRank(a.severity) - U.severityRank(b.severity) || Math.abs(b.change) - Math.abs(a.change));
   }
 
-  function headline(acc, perm, summary, persons) {
+  function headline(acc, perm, summary, persons, controls) {
     const bits = [];
+    if (controls) {
+      if (controls.newlyMet) bits.push(T('df.hlKpiMet', { n: controls.newlyMet }));
+      if (controls.newlyBroken) bits.push(T('df.hlKpiBroken', { n: controls.newlyBroken }));
+    }
     if (persons) {
       if (persons.joined.length) bits.push(T('df.hlJoined', { n: persons.joined.length }));
       if (persons.left.length) bits.push(T('df.hlLeft', { n: persons.left.length }));
@@ -153,5 +187,5 @@
     return bits.length ? bits.join(' · ') : T('df.hlNothing');
   }
 
-  HR.diff = { compare, diffPersons };
+  HR.diff = { compare, diffPersons, diffControls };
 })(window.HR);

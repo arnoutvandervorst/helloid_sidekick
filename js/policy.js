@@ -413,8 +413,12 @@
   /** The rows that carry into the model summary and so into every snapshot. */
   function summaryOf(m) {
     const ev = evaluate(m);
+    /* Every measured control's value and status, so a data point can say which KPI
+       moved the score, not only that it moved. */
+    const controls = {};
+    ev.rows.forEach(r => { if (r.applicable) controls[r.def.id] = { value: r.value, status: r.status, on: r.on, threshold: r.threshold }; });
     return { policyScore: ev.summary.score, policyPassed: ev.summary.passed, policyEvaluated: ev.summary.evaluated,
-      policyCritical: ev.summary.criticalOpen, policyAccepted: ev.summary.accepted };
+      policyCritical: ev.summary.criticalOpen, policyAccepted: ev.summary.accepted, controls };
   }
 
   HR.policy = { CATALOG, SEVERITIES, SEVERITY_WEIGHT, FRAMEWORKS, evaluate, summaryOf, set, settingsFor };

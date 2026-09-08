@@ -658,6 +658,19 @@ than the one it is compared with, the view says the comparison runs backwards.
 Importing a file identical to an existing data point (full-text fingerprint) reuses it.
 Data points export to JSON — vaults included — so they can be moved between machines.
 
+**Trends.** Every data point stores each KPI's value and status and each finding's count,
+so the history is per KPI, not only per score: the Overview leads with a Trend card
+(the governance score over every data point, and what moved since the compared one —
+KPIs newly met or broken, improved or worse, findings resolved or new, people joined or
+left); Compliance shows each KPI's movement against the compared data point and a
+sparkline over all of them, with chips to keep only the KPIs that improved or got worse;
+the Diff has a KPI-movement table; the Data points page draws any one KPI (with its
+limit) or any one finding over time; the board's change page names the KPIs that moved.
+A stored summary is frozen at import time, so **Recalculate trends with current
+settings** rebuilds every data point with its own reconciliation and vault under today's
+limits and weights — which also gives data points from before this feature their KPI
+history.
+
 ## Layout
 
 ```

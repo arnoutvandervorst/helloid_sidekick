@@ -720,6 +720,9 @@
     );
     f.appendChild(kpis2);
 
+    const trend = trendCard(m);
+    if (trend) f.appendChild(el('div', { style: 'margin-top:14px' }, trend));
+
     const g = el('div', { class: 'grid g2' }); g.style.marginTop = '14px';
 
     /* issue mix */
@@ -2105,6 +2108,25 @@
     );
     f.appendChild(k2);
 
+    if (d.controls) {
+      const C2 = d.controls;
+      const fmtV = (def, v) => v == null ? '\u2014' : (def.unit === 'pct' ? U.fmtNum(v, 1) + '%' : U.fmtInt(v));
+      const MOVE_CLASS = { newlyMet: 'ok', improved: 'ok', same: '', worse: 'removed', newlyBroken: 'removed', new: 'muted', gone: 'muted' };
+      f.appendChild(el('div', { style: 'margin-top:14px' }, card(T('tr.kpiMovement'),
+        T('tr.kpiMovementNote', { met: C2.newlyMet, broken: C2.newlyBroken, up: C2.improved, down: C2.worse }), HR.table.make({
+          columns: [
+            { key: 'severity', label: T('c.sev'), value: r => U.severityRank(r.severity), render: r => el('span', { class: 'sev ' + r.severity, text: T('c.' + r.severity) }) },
+            { key: 'control', label: T('tr.cKpi'), value: r => T('po.p.' + r.id) },
+            { key: 'was', label: T('c.was'), value: r => r.was ? r.was.value : -1, render: r => el('span', { class: 'mono', text: fmtV(r.def, r.was && r.was.value) }) },
+            { key: 'now', label: T('c.now'), value: r => r.now ? r.now.value : -1, render: r => el('span', { class: 'mono', text: fmtV(r.def, r.now && r.now.value) }) },
+            { key: 'status', label: T('c.status'), value: r => (r.was ? r.was.status : '') + '>' + (r.now ? r.now.status : ''),
+              render: r => el('span', { class: 'note', text: (r.was ? T('po.status.' + r.was.status) : '\u2014') + ' \u2192 ' + (r.now ? T('po.status.' + r.now.status) : '\u2014') }) },
+            { key: 'movement', label: T('tr.cMovement'), value: r => ({ newlyBroken: 0, worse: 1, newlyMet: 2, improved: 3, new: 4, gone: 5, same: 6 })[r.movement], render: r => el('span', { class: 'pill ' + MOVE_CLASS[r.movement], text: T('tr.mv.' + r.movement) }) }
+          ], rows: C2.rows.filter(r => r.on), pageSize: 15, exportName: 'kpi-movement', initialSort: { key: 'movement', dir: 1 },
+          onRowClick: r => HR.app.go('policies', { move: r.movement === 'same' ? '' : r.movement })
+        }))));
+    }
+
     const g = el('div', { class: 'grid g2', style: 'margin-top:14px' });
     g.appendChild(card(T('df.findingsMovement'), null, HR.table.make({
       columns: [
@@ -2192,6 +2214,44 @@
     return f;
   }
 
+  /* The direction, in one card: the score over every data point and what moved since
+     the compared one. Only with a history to speak of. */
+  function trendCard(m) {
+    const st = HR.app.state;
+    const snaps = (st.snapshots || []).slice().sort((a, b) => (a.dataDate - b.dataDate) || (a.importedAt - b.importedAt));
+    if (snaps.length < 2) return null;
+    const vals = snaps.map(s => s.summary && s.summary.governanceScore != null ? s.summary.governanceScore : null);
+    const first = snaps.find(s => s.summary && s.summary.governanceScore != null), last = snaps[snaps.length - 1];
+    const day = t => U.fmtDate(t).split(',')[0];
+    const d = st.diff;
+    const chip = (n, key, cls) => n ? el('span', { class: 'pill ' + cls, text: U.fmtInt(n) + ' ' + T(key) }) : null;
+    const chips = d ? [
+      d.controls ? chip(d.controls.newlyMet, 'tr.kpiNewlyMet', 'ok') : null,
+      d.controls ? chip(d.controls.improved, 'tr.kpiImproved', 'ok') : null,
+      d.controls ? chip(d.controls.worse, 'tr.kpiWorse', 'removed') : null,
+      d.controls ? chip(d.controls.newlyBroken, 'tr.kpiNewlyBroken', 'removed') : null,
+      chip(d.findings.filter(x => x.resolved).length, 'tr.findingsResolved', 'ok'),
+      chip(d.findings.filter(x => x.isNew).length, 'tr.findingsNew', 'removed'),
+      d.persons ? chip(d.persons.joined.length, 'tr.joined', '') : null,
+      d.persons ? chip(d.persons.left.length, 'tr.left', '') : null
+    ].filter(Boolean) : [];
+    const sp = HR.charts.spark(vals, { width: 600, height: 64, fluid: true, color: 'var(--good)', limit: 80 });
+    const base = st.snapshots.find(s => s.id === st.baselineId);
+    return card(T('tr.title'), T('tr.note', { n: snaps.length }), el('div', { class: 'trend-card' }, [
+      el('div', { class: 'row', style: 'gap:16px;align-items:baseline' }, [
+        el('div', { class: 'ctl-now mono', style: 'font-size:22px', text: first ? first.summary.governanceScore + ' \u2192 ' + (last.summary.governanceScore != null ? last.summary.governanceScore : '\u2014') : '\u2014' }),
+        el('span', { class: 'note', text: first ? T('tr.sinceFirst', { date: day(first.dataDate || first.importedAt) }) : T('tr.noScores') })
+      ]),
+      el('div', { class: 'spark-big', style: 'margin-top:8px' }, sp),
+      el('div', { class: 'note', text: T('tr.limitLine') }),
+      chips.length ? el('div', { class: 'trend-chips' }, [el('span', { class: 'note', text: T('tr.since', { date: base ? day(base.dataDate || base.importedAt) : '\u2014' }) })].concat(chips)) : null,
+      el('div', { class: 'slot-actions', style: 'margin-top:8px' }, [
+        el('button', { class: 'btn sm', text: T('tr.openPoints'), onclick: () => HR.app.go('snapshots') }),
+        d ? el('button', { class: 'btn sm', text: T('tr.openDiff'), onclick: () => HR.app.go('diff') }) : null
+      ].filter(Boolean))
+    ].filter(Boolean)));
+  }
+
   /* ============================================================== SNAPSHOTS */
   function snapshotsView(m) {
     const f = document.createDocumentFragment();
@@ -2202,6 +2262,7 @@
         el('p', { text: T('sn.lead') })
       ]),
       el('div', { class: 'row' }, [
+        (st.snapshots || []).length ? el('button', { class: 'btn sm', text: T('tr.rescore'), title: T('tr.rescoreTip'), onclick: () => HR.app.rescoreDataPoints() }) : null,
         el('button', { class: 'btn sm', text: T('sn.exportAll'), onclick: async () => {
           U.download('recon-snapshots.json', await HR.store.exportAll(), 'application/json');
         } }),
@@ -2292,6 +2353,46 @@
         { label: T('ov.recoverable'), color: C.STATUS.warning,
           points: ordered.map((s, i) => ({ x: i, y: Math.round(s.summary.wasteMonthly || 0) })) }
       ], labels)));
+
+      /* One KPI, one finding: the picker says which, the limit is drawn as its own flat line. */
+      const withKpis = ordered.filter(s => s.summary.controls);
+      const kpiIds = U.uniq(withKpis.flatMap(s => Object.keys(s.summary.controls)));
+      if (kpiIds.length && HR.policy) {
+        const pick = (st.params && st.params.kpi) || kpiIds[0];
+        const def = HR.policy.CATALOG.find(c => c.id === pick);
+        const sel = el('select', {}, kpiIds.map(k => el('option', { value: k, text: T('po.p.' + k), selected: k === pick })));
+        sel.onchange = () => HR.app.go('snapshots', { kpi: sel.value, finding: st.params && st.params.finding });
+        const pts = ordered.map((s, i) => { const c = s.summary.controls && s.summary.controls[pick]; return c ? { x: i, y: c.value, thr: c.threshold } : null; }).filter(Boolean);
+        const pct = def && def.unit === 'pct';
+        const fmt = v => pct ? U.fmtNum(v, 1) + '%' : U.fmtInt(v);
+        const lastThr = pts.length ? pts[pts.length - 1].thr : null;
+        g.appendChild(card(T('tr.oneKpi'), withKpis.length < ordered.length ? T('tr.missingPoints', { n: ordered.length - withKpis.length }) : T('sn.perImport'), [
+          el('div', { class: 'slot-actions', style: 'margin-bottom:8px' }, [sel]),
+          C.line([
+            { label: T('po.p.' + pick), color: C.slot(1), points: pts.map(p => ({ x: p.x, y: p.y, tip: '<div class="t-title">' + U.esc(T('po.p.' + pick)) + '</div><div class="t-row"><span>' + U.esc(labels[p.x]) + '</span><b>' + fmt(p.y) + '</b></div>' })) },
+            lastThr != null ? { label: T('tr.limit'), color: 'var(--muted)', points: pts.map(p => ({ x: p.x, y: p.thr, tip: '<div class="t-title">' + U.esc(T('tr.limit')) + '</div><div class="t-row"><span>' + U.esc(labels[p.x]) + '</span><b>' + fmt(p.thr) + '</b></div>' })) } : null
+          ].filter(Boolean), labels, { formatY: v => fmt(v), maxY: pct ? Math.max(1, ...pts.map(p => Math.max(p.y, p.thr || 0))) : undefined })
+        ]));
+      }
+      const withFindings = ordered.filter(s => s.summary.findingCounts);
+      const findingIds = U.uniq(withFindings.flatMap(s => Object.keys(s.summary.findingCounts)));
+      if (findingIds.length) {
+        const titleOf = id => { const f0 = m && m.findings ? m.findings.find(x => x.id === id) : null; return f0 ? f0.title : id; };
+        const pickF = (st.params && st.params.finding) || findingIds[0];
+        const selF = el('select', {}, findingIds.map(k => el('option', { value: k, text: titleOf(k), selected: k === pickF })));
+        selF.onchange = () => HR.app.go('snapshots', { finding: selF.value, kpi: st.params && st.params.kpi });
+        g.appendChild(card(T('tr.oneFinding'), withFindings.length < ordered.length ? T('tr.missingPoints', { n: ordered.length - withFindings.length }) : T('sn.perImport'), [
+          el('div', { class: 'slot-actions', style: 'margin-bottom:8px' }, [selF]),
+          C.line([{ label: titleOf(pickF), color: C.STATUS.critical,
+            points: ordered.map((s, i) => s.summary.findingCounts ? { x: i, y: s.summary.findingCounts[pickF] || 0 } : null).filter(Boolean) }], labels)
+        ]));
+      }
+      if (withKpis.length < ordered.length || withFindings.length < ordered.length) {
+        g.appendChild(card(T('tr.rescore'), null, [
+          el('p', { text: T('tr.rescoreWhy', { n: ordered.length - Math.min(withKpis.length, withFindings.length) }) }),
+          el('div', { class: 'slot-actions' }, el('button', { class: 'btn primary', text: T('tr.rescore'), onclick: () => HR.app.rescoreDataPoints() }))
+        ]));
+      }
       f.appendChild(g);
     }
 

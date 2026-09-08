@@ -222,6 +222,33 @@
     return s;
   }
 
+  /* ----------------------------------------------------------------- spark */
+  /** A line the size of a word: values in order, an optional flat limit, the last point marked.
+      Nulls break the line (a data point without that value). */
+  function spark(values, opts) {
+    opts = opts || {};
+    const W = opts.width || 96, H = opts.height || 24, pad = 3;
+    const s = svg(W, H);
+    const nums = values.filter(v => v != null);
+    if (!nums.length) return s;
+    const all = opts.limit != null ? nums.concat([opts.limit]) : nums;
+    const max = Math.max(1e-9, ...all), min = Math.min(0, ...all);
+    const sx = i => pad + (values.length > 1 ? (W - 2 * pad) * i / (values.length - 1) : (W - 2 * pad) / 2);
+    const sy = v => H - pad - (H - 2 * pad) * (v - min) / (max - min || 1);
+    if (opts.limit != null) {
+      s.appendChild(n('line', { x1: pad, x2: W - pad, y1: sy(opts.limit), y2: sy(opts.limit), stroke: 'var(--muted)', 'stroke-width': 1, 'stroke-dasharray': '3 2' }));
+    }
+    let d = '', pen = false;
+    values.forEach((v, i) => { if (v == null) { pen = false; return; } d += (pen ? 'L' : 'M') + sx(i) + ' ' + sy(v) + ' '; pen = true; });
+    s.appendChild(n('path', { d, fill: 'none', stroke: opts.color || 'var(--accent)', 'stroke-width': 1.5, 'stroke-linejoin': 'round' }));
+    const lastI = values.length - 1;
+    if (values[lastI] != null) s.appendChild(n('circle', { cx: sx(lastI), cy: sy(values[lastI]), r: 2.5, fill: opts.color || 'var(--accent)' }));
+    s.setAttribute('class', 'chart spark');
+    s.style.width = opts.fluid ? '100%' : W + 'px';
+    if (opts.fluid) s.setAttribute('preserveAspectRatio', 'none');
+    return s;
+  }
+
   /* --------------------------------------------------------------- heatmap */
   /** rows: [{label, cells:[{label, value, tip, onClick}]}] — sequential single hue. */
   function heatmap(rows, colLabels, opts) {
@@ -254,5 +281,5 @@
     return el('div', { class: 'tbl-wrap' }, table);
   }
 
-  HR.charts = { barList, stackedBar, histogram, scatter, line, heatmap, legend, slot, STATUS, seqStep };
+  HR.charts = { barList, stackedBar, histogram, scatter, line, spark, heatmap, legend, slot, STATUS, seqStep };
 })(window.HR);
