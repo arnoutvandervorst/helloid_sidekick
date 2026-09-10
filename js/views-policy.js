@@ -284,6 +284,13 @@
     const ev = HR.policy.evaluate(m);
     const s = ev.summary;
     const score = s.score;
+    /* Thin classification makes every category-based KPI weak: say so before the score. */
+    if (m.summary.classified < 0.7) {
+      f.appendChild(el('div', { class: 'notice' }, [
+        el('span', { text: T('st.classifiedWeak', { pct: U.fmtPct(m.summary.classified, 0), p: U.fmtInt(m.summary.unclassifiedPermissions), a: U.fmtInt(m.summary.unclassifiedAccounts) }) + ' ' }),
+        el('a', { href: '#', text: T('wz.stOpen'), onclick: e => { e.preventDefault(); HR.app.go('classify'); } })
+      ]));
+    }
     /* The same headline as everywhere else leads; the controls share is its second half. */
     const gs = m.summary;
     const gsSev = { good: 'good', watch: 'medium', poor: 'critical' }[gs.governanceBand] || 'medium';

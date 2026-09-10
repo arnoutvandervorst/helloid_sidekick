@@ -507,6 +507,11 @@
     const disabled = accs.filter(a => a.enabled === false);
     const orphans = accs.filter(a => a.orphan);
     const issueCounts = U.counts(m.records, r => r.issue);
+    /* Unclassified: a permission that fell through to the fallback category, and an
+       account whose name carries a marker shape (adm-, svc-, …-test) nobody answered.
+       A plain firstname.lastname account is a user account: the fallback is right there. */
+    const unclassifiedPerms = m.permissionList.filter(p => p.categorySource === 'default');
+    const unclassifiedAccs = accs.filter(a => a.clsSource === 'default' && HR.wizard && HR.wizard.cohortKeyOf(a.userName));
     return {
       rows: m.records.length,
       systems: m.systemList.length,
@@ -523,6 +528,13 @@
       issueCounts: Object.fromEntries(issueCounts),
       excludedRows: m.records.filter(r => r.resolution && r.resolution !== 'None').length,
       coverage: accs.length ? (accs.length - orphans.length) / accs.length : 0,
+      /* How much of the export the classification describes; when this is low, every
+         category-based figure is weak. */
+      unclassifiedPermissions: unclassifiedPerms.length,
+      unclassifiedAccounts: unclassifiedAccs.length,
+      classified: (m.permissionList.length + accs.length)
+        ? 1 - (unclassifiedPerms.length + unclassifiedAccs.length) / (m.permissionList.length + accs.length)
+        : 1,
       riskScore: m.risk.overall,
       riskBand: HR.config.severityOf(m.risk.overall),
       monthlyCost: m.cost.totalMonthly,
