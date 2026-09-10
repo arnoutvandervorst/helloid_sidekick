@@ -578,6 +578,8 @@ details.finding.finding-target { animation: finding-flash 2.4s ease-out 1; scrol
 .ctl-spark svg, svg.spark { display: block; overflow: visible; }
 .trend-card .spark-big { width: 100%; height: 64px; }
 .trend-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.cw-new td { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--series-1); }
+select.cw-auto { color: var(--muted); }
 /* ---------- editions ---------- */
 .topbar-edition { color: var(--accent, #4a7cf6); cursor: pointer; font-weight: 500; }
 .topbar-edition:hover { text-decoration: underline; }

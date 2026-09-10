@@ -70,36 +70,48 @@
     return (Array.isArray(stored) && stored.length) ? stored : DEFAULTS[kind];
   };
 
-  /** Category hint for an entitlement: its family token (the first word) and, when
-      the caller has it, the full name — the richer match kinds need the name. */
-  function categoryHintFor(token, name) {
+  /** Which category row wins for an entitlement — its index and the row — or null.
+      `rows` may be a draft vocabulary (the workbench previews edits before saving). */
+  function explain(token, name, rows) {
     const t = String(token || '').toLowerCase();
     const full = String(name || '') || t;
     if (!t && !full) return null;
-    for (const row of rowsFor('categories')) {
+    const list = rows || rowsFor('categories');
+    for (let i = 0; i < list.length; i++) {
+      const row = list[i];
       const op = row.op || 'starts';
       /* "starts" keeps its old meaning: the first word starts with the token. */
       const hit = op === 'starts' ? (t ? tokens(row).some(x => t.startsWith(x)) : matchesRow(row, full)) : matchesRow(row, full);
-      if (hit) {
-        const def = HR.config ? HR.config.categoryDefOf(row.id) : null;
-        return { hint: row.id, sensitivity: def ? def.sensitivity : 1.0 };
-      }
+      if (hit) return { index: i, row };
     }
+    return null;
+  }
+
+  /** Category hint for an entitlement: its family token (the first word) and, when
+      the caller has it, the full name — the richer match kinds need the name. */
+  function categoryHintFor(token, name) {
+    const hit = explain(token, name);
+    if (!hit) return null;
+    const def = HR.config ? HR.config.categoryDefOf(hit.row.id) : null;
+    return { hint: hit.row.id, sensitivity: def ? def.sensitivity : 1.0, rule: hit.index };
+  }
+
+  /** Which account-type row claims this leading/trailing word — index and row, or null. */
+  function explainClass(token, rows) {
+    const t = String(token || '').toLowerCase();
+    if (!t) return null;
+    const list = rows || rowsFor('classes');
+    for (let i = 0; i < list.length; i++) if (tokens(list[i]).includes(t)) return { index: i, row: list[i] };
     return null;
   }
 
   /** Account-type hint for a name's leading/trailing token (exact match). */
   function classHintFor(token) {
-    const t = String(token || '').toLowerCase();
-    if (!t) return null;
-    for (const row of rowsFor('classes')) {
-      if (tokens(row).includes(t)) {
-        const def = HR.config ? HR.config.classDefOf(row.id) : null;
-        return { id: row.id, weight: def ? def.weight : 1.2 };
-      }
-    }
-    return null;
+    const hit = explainClass(token);
+    if (!hit) return null;
+    const def = HR.config ? HR.config.classDefOf(hit.row.id) : null;
+    return { id: hit.row.id, weight: def ? def.weight : 1.2, rule: hit.index };
   }
 
-  HR.hints = { DEFAULTS, OPS, categoryHintFor, classHintFor, matchesRow, wordsOf, tokens };
+  HR.hints = { DEFAULTS, OPS, categoryHintFor, classHintFor, explain, explainClass, matchesRow, wordsOf, tokens, rowsFor };
 })(window.HR);

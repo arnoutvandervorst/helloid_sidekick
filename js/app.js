@@ -345,7 +345,7 @@
       const open = ex.unmapped.permissions + ex.unmapped.families + ex.unmapped.cohorts;
       if (open && !HR.config.get().skipReview) {
         state.review = ex;
-        go('classify');
+        go('classify', { filter: 'unclassified' });
         return;
       }
       if (open) U.toast(HR.i18n.t('wz.skippedToast', { n: U.fmtInt(open) }), 6000);
@@ -737,7 +737,7 @@
       const open = ex.unmapped.permissions + ex.unmapped.families + ex.unmapped.cohorts;
       if (open && !HR.config.get().skipReview) {
         state.review = ex;
-        go('classify');
+        go('classify', { filter: 'unclassified' });
         return;
       }
       if (open) U.toast(HR.i18n.t('wz.skippedToast', { n: U.fmtInt(open) }), 6000);

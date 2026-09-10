@@ -62,7 +62,7 @@
         let p = permissions.get(pk);
         if (!p) {
           /* item assignment > family assignment > built-in hint > fallback */
-          let cat = null, catSource = 'default';
+          let cat = null, catSource = 'default', catRule = null;
           const ov = catOverrides[r.permission];
           if (ov && categoryById(ov)) { cat = categoryById(ov); catSource = 'manual'; }
           if (!cat) {
@@ -72,7 +72,7 @@
               if (famId && categoryById(famId)) { cat = categoryById(famId); catSource = 'family'; }
               if (!cat) {
                 const hint = HR.mine.hintFor(fam, r.permission);
-                if (hint && categoryById(hint.hint)) { cat = categoryById(hint.hint); catSource = 'auto'; }
+                if (hint && categoryById(hint.hint)) { cat = categoryById(hint.hint); catSource = 'auto'; catRule = hint.rule; }
               }
             }
           }
@@ -81,7 +81,7 @@
           p = {
             key: pk, system: r.system, name: r.permission, path: r.permissionPath,
             category: cat.id, categoryLabel: HR.config.labelOf(cat), sensitivity: cat.sensitivity, colorSlot: cat.color,
-            categorySource: catSource,
+            categorySource: catSource, categoryRule: catRule,
             monthlyPrice: price.monthly, priceLabel: price.entry ? price.entry.label : null,
             holders: new Set(), holdersEnabled: 0, holdersDisabled: 0, holdersOrphan: 0,
             missingFor: new Set(), issues: {}, records: []
@@ -160,7 +160,7 @@
          membership > fallback. The membership step replaces the old
          group-pattern layer: an account holding privileged entitlements is an
          admin account, whatever its name says, unless assigned otherwise. */
-      let clsRow = null, clsSource = 'default';
+      let clsRow = null, clsSource = 'default', clsRule = null;
       const clsOv = clsOverrides[a.key];
       if (clsOv && classById(clsOv)) { clsRow = classById(clsOv); clsSource = 'manual'; }
       if (!clsRow) {
@@ -170,7 +170,7 @@
           if (famId && classById(famId)) { clsRow = classById(famId); clsSource = 'family'; }
           if (!clsRow) {
             const hint = HR.mine.classHintFor(co.slice(2));
-            if (hint && classById(hint.id)) { clsRow = classById(hint.id); clsSource = 'auto'; }
+            if (hint && classById(hint.id)) { clsRow = classById(hint.id); clsSource = 'auto'; clsRule = hint.rule; }
           }
         }
       }
@@ -182,6 +182,7 @@
       a.clsLabel = HR.config.labelOf(clsRow);
       a.clsWeight = clsRow.weight > 0 ? clsRow.weight : 1;
       a.clsSource = clsSource;
+      a.clsRule = clsRule;
       const ec = classifyByLayers(cfg.employeeCategories || [], ['Vault', 'Account', 'Group'], ctx);
       a.ecat = ec.row ? ec.row.id : '';
       a.ecatLabel = ec.row ? HR.config.labelOf(ec.row) : '';

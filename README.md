@@ -275,6 +275,18 @@ Each proposal shows how many names it matches right now, is editable before it i
 and nothing is written until you select it. **Continue without changes** skips the lot;
 a checkbox turns the step off for future imports (re-enable in Settings by resetting).
 
+**Classification workbench** (`#classify`, where an import with unclassified names lands):
+the rules are the engine and the fallout is the work list. Two tabs, entitlements and
+accounts, each with the recognition rules live (hits per rule, and *wins* — the names it
+is the first to claim; order decides, so a specific rule moves above a general one), a
+fallout strip (unclassified / by a rule / overruled by hand / family answer; for accounts
+also *unknown name shape* versus *user by default* — a plain firstname.lastname is a user
+account), and a table of every name with the draft's answer, who decided it, and a
+dropdown that overrules it. Select rows to set a category for all of them or to **make a
+rule** from them (the word most of them share, or their common prefix). Old wizard
+answers keep working, shown as *family answer*, convertible to a rule or forgotten.
+Nothing counts until **Save & re-score**.
+
 The "recognised" answers come from the **recognition vocabulary** on Settings › Recognition
 (its own tab; Classification keeps the definitions — categories with their sensitivity,
 account types with their weight, toxic pairs, workforce categories). Each entitlement row

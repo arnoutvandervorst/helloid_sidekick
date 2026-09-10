@@ -291,6 +291,6 @@
     return f;
   }
 
-  HR.views.classify = classifyView;
+  /* The classify view is the workbench now (js/views-classify.js); the wizard's pages stay for reference. */
   HR.views.review = classifyView;   // the old configuration-review address
 })(window.HR);

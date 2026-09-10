@@ -18,6 +18,12 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.64', date: '2026-09-10',
+      changes: [
+        'Classification workbench replaces the wizard. The rules are the engine, so the page is built on them: per rule how many names it hits and how many it wins (order decides; move a specific rule above a general one), a fallout strip — unclassified, by a rule, overruled by hand, family answer; for accounts an unknown name shape apart from a plain user name — and a table of every entitlement or account with the draft’s answer, who decided it, and a dropdown that overrules it. Select rows to set a category for all of them or to make a rule from them (the word most of them share, or their common prefix), proposed at the top for review. Old wizard answers keep working as “family answer”, convertible to a rule or forgotten. Everything previews at once and counts only on Save & re-score. An import with unclassified names lands here, filtered to the fallout.'
+      ]
+    },
+    {
       version: '2026.9.63', date: '2026-09-10',
       changes: ['“Accounts of unknown type” counts what the classification wizard actually asks about: the wizard leaves one-off name shapes alone as noise (a cohort below 2 or 1% of the accounts), and the count now follows the same rule, so the tile and the wizard agree. The Classified tile lands on the wizard step that is open.']
     },
