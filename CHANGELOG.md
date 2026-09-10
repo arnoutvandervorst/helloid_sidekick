@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.9.63] — 2026-09-10
+
+- “Accounts of unknown type” counts what the classification wizard actually asks about: the wizard leaves one-off name shapes alone as noise (a cohort below 2 or 1% of the accounts), and the count now follows the same rule, so the tile and the wizard agree. The Classified tile lands on the wizard step that is open.
+
 ## [2026.9.62] — 2026-09-10
 
 - The classified share reads 100% only when everything is classified: one entitlement in no category showed as 100% by rounding; it is 99% now.

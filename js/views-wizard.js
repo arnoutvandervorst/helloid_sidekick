@@ -255,7 +255,7 @@
     ].filter(Boolean));
   }
 
-  function classifyView(m) {
+  function classifyView(m, params) {
     const f = document.createDocumentFragment();
     f.appendChild(el('div', { class: 'view-head' }, el('div', {}, [
       el('h1', { text: T('wz.title') }),
@@ -268,6 +268,8 @@
       return f;
     }
     const wz = ensure(m);
+    /* A link may ask for a step: the Classified tile lands on what is open. */
+    if (params && params.step && [1, 2, 3].includes(+params.step)) { wz.step = +params.step; delete params.step; }
     const cov = wz.ex.coverage;
     const srcLine = src => ['manual', 'family', 'auto', 'membership', 'default']
       .filter(k => src[k]).map(k => T('wz.src.' + k) + ' ' + U.fmtInt(src[k])).join(' · ');

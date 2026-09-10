@@ -127,7 +127,7 @@
     }
     /* Cohorts that neither carry an answer nor a hint and are tiny are noise,
        not a question — personal names split into countless one-off heads. */
-    const floor = Math.max(2, Math.round(model.accountList.length * 0.01));
+    const floor = cohortFloor(model);
     const accountFamilies = Array.from(coMap.values())
       .filter(g => g.assigned || g.hintId || g.members.length >= floor);
     accountFamilies.forEach(g => {
@@ -237,5 +237,24 @@
     };
   }
 
-  HR.wizard = { examine, apply, famKeyOf, cohortKeyOf, famStoreKey };
+  /** The smallest name-shape cohort the wizard asks about; the summary counts by the same rule. */
+  const cohortFloor = model => Math.max(2, Math.round(model.accountList.length * 0.01));
+
+  /** The fallback accounts whose name shape the wizard would ask about and nobody
+      answered — the ones that count as "unknown type". */
+  function unansweredAccounts(model) {
+    const groups = new Map();
+    for (const a of model.accountList) {
+      if (a.clsSource !== 'default') continue;
+      const co = cohortKeyOf(a.userName);
+      if (!co) continue;
+      const key = famStoreKey(a.system, co);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(a);
+    }
+    const floor = cohortFloor(model);
+    return Array.from(groups.values()).filter(g => g.length >= floor).flat();
+  }
+
+  HR.wizard = { examine, apply, famKeyOf, cohortKeyOf, famStoreKey, cohortFloor, unansweredAccounts };
 })(window.HR);

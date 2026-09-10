@@ -508,10 +508,11 @@
     const orphans = accs.filter(a => a.orphan);
     const issueCounts = U.counts(m.records, r => r.issue);
     /* Unclassified: a permission that fell through to the fallback category, and an
-       account whose name carries a marker shape (adm-, svc-, …-test) nobody answered.
-       A plain firstname.lastname account is a user account: the fallback is right there. */
+       account whose name carries a marker shape (adm-, svc-, …-test) nobody answered —
+       by the wizard's own rule, so the count is what the wizard lists. A plain
+       firstname.lastname account is a user account: the fallback is right there. */
     const unclassifiedPerms = m.permissionList.filter(p => p.categorySource === 'default');
-    const unclassifiedAccs = accs.filter(a => a.clsSource === 'default' && HR.wizard && HR.wizard.cohortKeyOf(a.userName));
+    const unclassifiedAccs = HR.wizard && HR.wizard.unansweredAccounts ? HR.wizard.unansweredAccounts(m) : [];
     return {
       rows: m.records.length,
       systems: m.systemList.length,

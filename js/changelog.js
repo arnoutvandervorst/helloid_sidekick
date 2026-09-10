@@ -18,6 +18,10 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.63', date: '2026-09-10',
+      changes: ['“Accounts of unknown type” counts what the classification wizard actually asks about: the wizard leaves one-off name shapes alone as noise (a cohort below 2 or 1% of the accounts), and the count now follows the same rule, so the tile and the wizard agree. The Classified tile lands on the wizard step that is open.']
+    },
+    {
       version: '2026.9.62', date: '2026-09-10',
       changes: ['The classified share reads 100% only when everything is classified: one entitlement in no category showed as 100% by rounding; it is 99% now.']
     },

@@ -725,7 +725,7 @@
       tile(T('ov.accounts'), U.fmtInt(s.accounts), T('ov.enabledDisabled', { e: s.enabledAccounts, d: s.disabledAccounts }), { small: true, delta: bDelta('accounts'), onClick: () => HR.app.go('accounts') }),
       tile(T('ov.coverage'), U.fmtPct(s.coverage, 0), T('ov.coverageFoot'), { small: true, severity: s.coverage > .9 ? 'good' : 'medium', onClick: () => HR.app.go('people') }),
       tile(T('ov.classified'), U.fmtPctFloor(s.classified), T('ov.classifiedFoot', { p: U.fmtInt(s.unclassifiedPermissions), a: U.fmtInt(s.unclassifiedAccounts) }),
-        { small: true, severity: s.classified >= .9 ? 'good' : s.classified >= .7 ? 'medium' : 'high', onClick: () => HR.app.go('classify') }),
+        { small: true, severity: s.classified >= .9 ? 'good' : s.classified >= .7 ? 'medium' : 'high', onClick: () => HR.app.go('classify', { step: s.unclassifiedPermissions ? 1 : 2 }) }),
       tile(T('ov.licenceSpend'), U.fmtMoney(s.monthlyCost) + '/mo', T('ov.pricedGroups', { n: m.cost.pricedPermissions }), { small: true, delta: bDelta('monthlyCost'), deltaFormat: U.fmtMoney, onClick: () => HR.app.go('cost', { tab: 'spend' }) }),
       tile(T('ov.cleanup'), U.fmtMoney(m.cost.remediationCost), T('ov.cleanupFoot', { h: Math.round(m.cost.remediation.hours), rate: U.fmtMoney(m.cost.remediation.rate) }), { small: true, onClick: () => HR.app.go('cost', { tab: 'case' }) })
     );
