@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.9.62] — 2026-09-10
+
+- The classified share reads 100% only when everything is classified: one entitlement in no category showed as 100% by rounding; it is 99% now.
+
 ## [2026.9.61] — 2026-09-10
 
 - How much of the export is classified, said up front. The Overview gains a Classified tile — the share of entitlements in a category and accounts with an answered name shape, with the two counts under it; Settings › Recognition opens with the same line; and Compliance warns above the score when less than 70% is classified, because the KPIs, the cost model and the findings that rest on categories and account types are weak until it is. Plain firstname.lastname accounts count as classified — the user-account fallback is right for them; only accounts whose name carries a marker shape nobody answered count as unknown.

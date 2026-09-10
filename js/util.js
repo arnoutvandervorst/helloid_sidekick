@@ -30,6 +30,8 @@ window.HR = window.HR || {};
   const fmtNum = (n, d) => (n == null || isNaN(n)) ? '—'
     : n.toLocaleString(loc(), { minimumFractionDigits: d ?? 1, maximumFractionDigits: d ?? 1 });
   const fmtPct = (n, d) => (n == null || isNaN(n)) ? '—' : fmtNum(n * 100, d ?? 1) + '%';
+  /* A share that only reads 100% when it is complete: 0.998 is 99%, not 100%. */
+  const fmtPctFloor = n => (n == null || isNaN(n)) ? '—' : fmtNum(Math.floor(n * 100), 0) + '%';
 
   function fmtMoney(n, opts) {
     /* The net under every money figure: a role without the facet sees none, wherever it is drawn. */
@@ -121,7 +123,7 @@ window.HR = window.HR || {};
   const t = (k, p) => HR.i18n.t(k, p);
 
   HR.util = {
-    el, esc, t, fmtInt, fmtNum, fmtPct, fmtMoney, fmtDate, sum, uniq, by, counts, sortMap,
+    el, esc, t, fmtInt, fmtNum, fmtPct, fmtPctFloor, fmtMoney, fmtDate, sum, uniq, by, counts, sortMap,
     clamp, hash, severityRank, download, toCSV, toast, tip, showTip, hideTip
   };
 })(window.HR);

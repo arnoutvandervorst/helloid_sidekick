@@ -287,7 +287,7 @@
     /* Thin classification makes every category-based KPI weak: say so before the score. */
     if (m.summary.classified < 0.7) {
       f.appendChild(el('div', { class: 'notice' }, [
-        el('span', { text: T('st.classifiedWeak', { pct: U.fmtPct(m.summary.classified, 0), p: U.fmtInt(m.summary.unclassifiedPermissions), a: U.fmtInt(m.summary.unclassifiedAccounts) }) + ' ' }),
+        el('span', { text: T('st.classifiedWeak', { pct: U.fmtPctFloor(m.summary.classified), p: U.fmtInt(m.summary.unclassifiedPermissions), a: U.fmtInt(m.summary.unclassifiedAccounts) }) + ' ' }),
         el('a', { href: '#', text: T('wz.stOpen'), onclick: e => { e.preventDefault(); HR.app.go('classify'); } })
       ]));
     }
