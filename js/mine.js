@@ -57,7 +57,7 @@
 
   /* The recognition vocabulary lives in js/hints.js (editable data); these
      shims keep the callers' address stable. */
-  const hintFor = token => HR.hints.categoryHintFor(token);
+  const hintFor = (token, name) => HR.hints.categoryHintFor(token, name);
   const classHintFor = token => HR.hints.classHintFor(token);
 
   /* --- mining hygiene (shared by pyramid, roles and optimise) ---------------

@@ -71,22 +71,31 @@
       const key = famStoreKey(p.system, fam);
       let g = famMap.get(key);
       if (!g) {
-        const assigned = catFams[key] || null;
-        const hint = HR.mine.hintFor(fam);
-        g = {
-          key, system: p.system, prefix: fam, members: [],
-          assigned,
-          hintId: hint && (cfg.categories || []).some(c => c.id === hint.hint) ? hint.hint : null,
-          sensitivity: hint ? hint.sensitivity : null
-        };
-        g.current = assigned || g.hintId || 'other';
-        g.source = assigned ? 'family' : (g.hintId ? 'auto' : 'none');
+        g = { key, system: p.system, prefix: fam, members: [], assigned: catFams[key] || null, hintId: null, sensitivity: null };
         famMap.set(key, g);
       }
       g.members.push(p);
     }
     const permFamilies = Array.from(famMap.values());
     permFamilies.forEach(g => {
+      /* The family's recognised answer is what most of its members' names say — a
+         "contains" or "is a word" row that hits most of them colours the family. */
+      const votes = new Map();
+      let first = null;
+      g.members.forEach(p => {
+        const h = HR.mine.hintFor(g.prefix, p.name);
+        if (!h || !(cfg.categories || []).some(c => c.id === h.hint)) return;
+        if (!first) first = h;
+        votes.set(h.hint, (votes.get(h.hint) || 0) + 1);
+      });
+      if (votes.size) {
+        const top = Array.from(votes.entries()).sort((a, b) => b[1] - a[1] || (a[0] === first.hint ? -1 : 1))[0][0];
+        g.hintId = top;
+        const def = HR.config.categoryDefOf(top);
+        g.sensitivity = def ? def.sensitivity : first.sensitivity;
+      }
+      g.current = g.assigned || g.hintId || 'other';
+      g.source = g.assigned ? 'family' : (g.hintId ? 'auto' : 'none');
       g.count = g.members.length;
       g.overrides = g.members.filter(p => p.categorySource === 'manual').length;
       g.samples = g.members.slice(0, 4).map(p => p.name);

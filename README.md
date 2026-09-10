@@ -275,6 +275,18 @@ Each proposal shows how many names it matches right now, is editable before it i
 and nothing is written until you select it. **Continue without changes** skips the lot;
 a checkbox turns the step off for future imports (re-enable in Settings by resetting).
 
+The "recognised" answers come from the **recognition vocabulary** on Settings › Recognition
+(its own tab; Classification keeps the definitions — categories with their sensitivity,
+account types with their weight, toxic pairs, workforce categories). Each entitlement row
+says in plain language how its words match a name — *starts with*, *contains*, *ends
+with*, *is a word* (split on separators and case changes, so `adm` hits `GG_ADM_SQL` but
+not `admissions`), *is exactly* — and which category that means; the first row that hits
+wins, a wizard answer beats every row, and every row shows how many names in the loaded
+import it hits. The built-in table covers privileged, server, security, licence, business
+role, file share (`fs`, `shr`, `share`…), application, mailbox, project / workspace,
+distribution list, team and device. Account-type rows match an account's first or last
+word exactly.
+
 A **pattern tester** sits on the same page and in Settings: type a regex, pick permission or
 account names, and see the match count, a sample of hits, and a warning when the pattern is
 invalid or matches everything. Every rule row in Settings also shows its live match count

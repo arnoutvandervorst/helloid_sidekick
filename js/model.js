@@ -71,7 +71,7 @@
               const famId = catFamilies[HR.wizard.famStoreKey(r.system, fam)];
               if (famId && categoryById(famId)) { cat = categoryById(famId); catSource = 'family'; }
               if (!cat) {
-                const hint = HR.mine.hintFor(fam);
+                const hint = HR.mine.hintFor(fam, r.permission);
                 if (hint && categoryById(hint.hint)) { cat = categoryById(hint.hint); catSource = 'auto'; }
               }
             }

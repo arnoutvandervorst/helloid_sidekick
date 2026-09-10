@@ -2623,11 +2623,7 @@
     const hintCatCount = item => {
       const m2 = HR.app.state.model;
       if (!m2) return null;
-      const toks = HR.hints.tokens(item);
-      return { valid: true, count: m2.permissionList.filter(p => {
-        const fam = HR.wizard.famKeyOf(p.name);
-        return fam && toks.some(x => fam.toLowerCase().startsWith(x));
-      }).length };
+      return { valid: true, count: m2.permissionList.filter(p => HR.hints.matchesRow(item, p.name)).length };
     };
     const hintClsCount = item => {
       const m2 = HR.app.state.model;
@@ -2651,9 +2647,6 @@
       return { valid: true, count: n };
     };
     const classificationTab = () => grid([
-      HR.app.state.model ? card(T('wz.stTitle'), T('wz.stNote'), el('div', { class: 'slot-actions' },
-        el('button', { class: 'btn primary', text: T('wz.stOpen'),
-          onclick: () => HR.app.go('classify') }))) : null,
       editableList(T('st.categories'), T('st.categoriesNote'),
         cfg.categories,
         [{ key: 'label', label: T('c.category'), translated: true },
@@ -2666,13 +2659,6 @@
          { key: 'weight', label: T('st.weight'), num: true, step: '0.1' }],
         () => ({ id: 'custom' + Date.now(), label: 'New class', weight: 1 }),
         { matchFn: assignedClass }),
-      editableList(T('st.hintsCat'), T('st.hintsCatNote'),
-        cfg.hints.categories,
-        [{ key: 't', label: T('st.hintTokens'), width: '260px' },
-         { key: 'id', label: T('c.category'), options: () =>
-            cfg.categories.map(c => ({ value: c.id, label: HR.config.labelOf(c) })) }],
-        () => ({ t: '', id: 'other' }),
-        { matchFn: hintCatCount }),
       editableList(T('st.sodTitle'), T('st.sodNote'),
         cfg.sod,
         [{ key: 'label', label: T('st.sodLabel'), width: '200px' },
@@ -2684,13 +2670,6 @@
          { key: 'severity', label: T('c.sev'), options: () => HR.sod.SEVERITIES.map(v => ({ value: v, label: T('c.' + v) })) }],
         () => ({ id: 'sod' + Date.now(), label: '', why: '', aKind: 'category', aValue: '', bKind: 'category', bValue: '', severity: 'medium' }),
         { matchFn: sodCount }),
-      editableList(T('st.hintsCls'), T('st.hintsClsNote'),
-        cfg.hints.classes,
-        [{ key: 't', label: T('st.hintTokensExact'), width: '260px' },
-         { key: 'id', label: T('c.class'), options: () =>
-            cfg.accountClasses.map(c => ({ value: c.id, label: HR.config.labelOf(c) })) }],
-        () => ({ t: '', id: 'user' }),
-        { matchFn: hintClsCount }),
       editableList(T('st.ecats'), T('st.ecatsNote'),
         cfg.employeeCategories,
         [{ key: 'label', label: T('c.category'), translated: true },
@@ -2702,6 +2681,30 @@
           vaultPattern: '', vaultMatch: { op: 'contains', value: '' }, accountPattern: '', groupPattern: '' }))
     ]);
 
+
+    /* The vocabulary that feeds the wizard's "recognised" answers: a tab of its own,
+       because definitions and recognition are two different jobs. */
+    const recognitionTab = () => grid([
+      HR.app.state.model ? card(T('wz.stTitle'), T('wz.stNote'), el('div', { class: 'slot-actions' },
+        el('button', { class: 'btn primary', text: T('wz.stOpen'),
+          onclick: () => HR.app.go('classify') }))) : null,
+      editableList(T('st.hintsCat'), T('st.hintsCatNote'),
+        cfg.hints.categories,
+        [{ key: 'op', label: T('st.hintOp'), options: () => HR.hints.OPS.map(op => ({ value: op, label: T('st.hintOp.' + op) })) },
+         { key: 't', label: T('st.hintWords'), width: '260px' },
+         { key: 'id', label: T('c.category'), options: () =>
+            cfg.categories.map(c => ({ value: c.id, label: HR.config.labelOf(c) })) }],
+        () => ({ op: 'contains', t: '', id: 'other' }),
+        { matchFn: hintCatCount }),
+      editableList(T('st.hintsCls'), T('st.hintsClsNote'),
+        cfg.hints.classes,
+        [{ key: 'kind', label: T('st.hintOp'), options: () => [{ value: 'edge', label: T('st.hintOp.edge') }] },
+         { key: 't', label: T('st.hintWords'), width: '260px' },
+         { key: 'id', label: T('c.class'), options: () =>
+            cfg.accountClasses.map(c => ({ value: c.id, label: HR.config.labelOf(c) })) }],
+        () => ({ t: '', id: 'user' }),
+        { matchFn: hintClsCount })
+    ]);
 
     const pricingTab = () => grid([
       editableList(T('st.priceBook'), T('st.priceBookNote'),
@@ -3072,6 +3075,7 @@
 
     f.appendChild(tabbed('settings', [
       { id: 'classification', label: T('st.tab.classification'), build: classificationTab },
+      { id: 'recognition', label: T('st.tab.recognition'), build: recognitionTab },
       { id: 'pricing', label: T('st.tab.pricing'), build: pricingTab },
       { id: 'weights', label: T('st.tab.weights'), build: weightsTab },
       { id: 'matching', label: T('st.tab.matching'), build: matchingTab },

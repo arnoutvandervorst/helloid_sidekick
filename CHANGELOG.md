@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.9.60] — 2026-09-10
+
+- Recognition on its own Settings tab, with plain-language matching. Settings › Classification carried both the definitions and the recognition vocabulary, and the vocabulary knew one match — the name starts with a word — with regex as the only alternative. The vocabulary now lives on Settings › Recognition, and each entitlement row says how its words match: starts with, contains, ends with, is a word (adm hits GG_ADM_SQL, not admissions), is exactly. First row that hits still wins, a wizard answer still beats every row, every row shows how many names it hits; stored rows keep meaning “starts with”, so nothing reclassifies by itself. The wizard reads a family’s recognised answer from what most of its members’ names say. Two categories join the definitions — Project / workspace and Distribution list, with their sensitivity — and the vocabulary learns shr for file shares, prj/proj/project and dl/dist for the new two; a stored settings file gets the new categories added once, above the fallback row.
+
 ## [2026.9.59] — 2026-09-08
 
 - Board report › Export to PDF: no more empty pages and half-empty pages. A sheet measured a full A4 with its own padding and overflowed the page by rounding, printing a blank page after every section, and a sheet told never to break inside pushed itself whole to the next page. The page now owns the margins, only the cover claims a page of its own, sections run on after each other and across pages, tiles, cards, table rows and headings stay whole, table headers repeat, and the page canvas prints white in the dark theme too. The demo set prints in 13 pages instead of 20-odd, with nothing blank.

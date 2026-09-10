@@ -63,6 +63,8 @@
     { id: 'application', key: 'cat.application', label: 'Application', sensitivity: 1.2, color: 1 },
     { id: 'mailbox', key: 'cat.mailbox', label: 'Mailbox', sensitivity: 1.2, color: 6 },
     { id: 'team', key: 'cat.team', label: 'Team / collab', sensitivity: 0.8, color: 3 },
+    { id: 'project', key: 'cat.project', label: 'Project / workspace', sensitivity: 1.0, color: 5 },
+    { id: 'distribution', key: 'cat.distribution', label: 'Distribution list', sensitivity: 0.6, color: 4 },
     { id: 'device', key: 'cat.device', label: 'Device / print', sensitivity: 0.8, color: 6 },
     { id: 'other', key: 'cat.other', label: 'Uncategorised', sensitivity: 1.0, color: 2 }
   ];
@@ -294,6 +296,19 @@
       delete r.pattern; delete r.match; delete r.legacyPattern;
       delete r.groupPattern; delete r.groupMatch; delete r.vaultPattern; delete r.vaultMatch;
     }));
+    /* Categories added later than a stored config: a definition that never existed
+       there is added once, above the fallback row; a category the user deleted is
+       not brought back (the migration is remembered). */
+    current.migrations = current.migrations || {};
+    if (!current.migrations.cat2 && Array.isArray(current.categories)) {
+      ['project', 'distribution'].forEach(id => {
+        if (current.categories.some(c => c.id === id)) return;
+        const def = DEFAULT_CATEGORIES.find(c => c.id === id);
+        const at = current.categories.findIndex(c => c.id === 'other');
+        current.categories.splice(at < 0 ? current.categories.length : at, 0, clone(def));
+      });
+      current.migrations.cat2 = true;
+    }
     adoptKeys(current);
     compile(current);
     return current;
@@ -438,7 +453,7 @@
       const key = system ? system + '\u001f' + fam : Object.keys(fams).find(k => k.endsWith('\u001f' + fam));
       if (key && fams[key]) return categoryDefOf(fams[key]);
     }
-    const hint = fam && HR.mine ? HR.mine.hintFor(fam) : (HR.mine ? HR.mine.hintFor(name) : null);
+    const hint = HR.mine ? HR.mine.hintFor(fam, name) : null;
     if (hint) {
       const def = cfg.categories.find(c => c.id === hint.hint);
       if (def) return def;
