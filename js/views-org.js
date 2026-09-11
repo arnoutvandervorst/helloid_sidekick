@@ -751,6 +751,38 @@
         { severity: s.leaversWithAccess ? 'critical' : 'good' })
     ].filter(Boolean)));
 
+    /* One card per department: the ring is the share of its access the model explains,
+       the bars what a department owner acts on. */
+    const depts = sc.rows.filter(r => r.people > 0 && r.key !== sc.UNASSIGNED && r.key !== sc.UNOWNED).sort((a, b) => b.people - a.people);
+    if (depts.length) {
+      const band = v => v == null ? 'wait' : v >= .8 ? 'good' : v >= .5 ? 'medium' : 'critical';
+      const bar = (label, n, of, tone) => el('div', { class: 'sc-bar' }, [
+        el('div', { class: 'sc-row' }, [el('b', { text: label }), el('span', { class: 'mono note' }, [el('strong', { text: U.fmtInt(n) }), document.createTextNode(' ' + T('po.sc.of', { of: U.fmtInt(of) }))])]),
+        el('div', { class: 'sc-track' }, el('i', { class: tone || '', style: 'width:' + (of ? Math.min(100, 100 * n / of) : 0).toFixed(1) + '%' }))
+      ]);
+      wrap.appendChild(el('div', { class: 'grid g3 sc-grid', style: 'margin-bottom:14px' }, depts.map(r => {
+        const open = () => goWalk(r);
+        return el('section', { class: 'card sc-card', tabindex: '0', onclick: open, onkeydown: e => { if (e.key === 'Enter') open(); } }, [
+          el('div', { class: 'sc-kicker', text: T('sc.cardKicker', { people: U.fmtInt(r.people), accounts: U.fmtInt(r.accounts) }) }),
+          el('h2', {}, [el('a', { href: '#', text: r.name || r.key, onclick: e => { e.preventDefault(); open(); } }), document.createTextNode(' '),
+            r.leaversWithAccess ? el('span', { class: 'pill removed', text: T('sc.cardLeavers', { n: U.fmtInt(r.leaversWithAccess) }) }) : null]),
+          el('div', { class: 'sc-ringwrap' }, [el('div', { class: 'sc-cap', text: T('sc.cardRing') }),
+            HR.viewkit.ring(r.managedShare, r.managedShare == null ? '\u2014' : U.fmtPct(r.managedShare, 0), T('sc.cardRingSub', { n: U.fmtInt(r.driftRows) }), { band: band(r.managedShare), min: 0.03 })]),
+          el('div', { class: 'sc-meta' }, [
+            noMoney ? el('span', {}, [document.createTextNode(T('sc.cAccounts')), el('b', { text: U.fmtInt(r.accounts) })])
+              : el('span', {}, [document.createTextNode(T('sc.cPerHead')), el('b', { text: r.costPerHead == null ? '\u2014' : U.fmtMoney(r.costPerHead) })]),
+            noRisk ? el('span', {}, [document.createTextNode(T('sc.cLeavers')), el('b', { text: U.fmtInt(r.leaversWithAccess) })])
+              : el('span', {}, [document.createTextNode(T('sc.cRisk')), el('b', { text: String(Math.round(r.avgRisk)) })])
+          ]),
+          el('div', { class: 'sc-bars' }, [
+            bar(T('sc.cLeavers'), r.leaversWithAccess, r.people, r.leaversWithAccess ? 'crit' : 'good'),
+            bar(T('sc.cBaseline'), r.outsideBaseline, r.people, r.outsideBaseline ? '' : 'good'),
+            bar(T('sc.cDrift'), r.driftRows, r.permRows, '')
+          ])
+        ].filter(Boolean));
+      })));
+    }
+
     /* What to look at first, said in words before the table asks for reading. */
     if (sc.outliers.length && !noMoney) {
       wrap.appendChild(card(T('sc.outliersTitle'), null,

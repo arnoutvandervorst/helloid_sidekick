@@ -503,6 +503,8 @@ code.inline { background: var(--hover); padding: 1px 5px; border-radius: 5px; fo
 .verdict.tone-bad { border-left-color: #d03b3b; background: #fdf4f4; }
 .verdict-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #6b6a66; }
 .verdict-score { line-height: 1; margin: 2px 0 6px; }
+.verdict-score .k-ring { --ring: 110px; }
+.verdict-score .k-ring .k-num { font-size: 34px; font-weight: 660; }
 .verdict-score .vs-num { font-size: 42px; font-weight: 660; letter-spacing: -.03em; }
 .verdict-score .vs-den { font-size: 16px; color: #6b6a66; }
 .verdict-text { margin: 0; font-size: 13.5px; line-height: 1.5; max-width: 60em; }

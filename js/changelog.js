@@ -18,6 +18,12 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.77', date: '2026-09-11',
+      changes: [
+        'Rings in three more places. Organisation › Scorecards: one card per department — the ring is the share of its access the model explains (rules, products, baseline; 100 % minus drift), bars for leavers with access, people below the baseline and unmanaged rows, €/head and average risk beside it; a card opens the department. Evidence › Engine health: failed actions, days since the last evaluation, failed imports and open incidents as rings against the same limits the KPIs use, opening the operations KPIs. Board report: the governance score on the cover is a ring, the departments page leads with the five largest as rings, and the joiners / movers / leavers page shows each flow as the share of people inside its service level.'
+      ]
+    },
+    {
       version: '2026.9.76', date: '2026-09-11',
       changes: ['Rings render crisp: the arc is vector, the number on top is ordinary page text, and the caption (limit, “8 / 22”, “44 unowned”) sits under the ring instead of squeezed inside it.']
     },

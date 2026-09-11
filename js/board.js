@@ -254,8 +254,8 @@
         el('div', { class: 'verdict tone-' + ({ good: 'good', watch: 'watch', poor: 'bad' }[s.governanceBand] || 'watch') }, [
           el('div', { class: 'verdict-label', text: T('gs.title') }),
           el('div', { class: 'verdict-score' }, [
-            el('span', { class: 'vs-num', text: String(s.governanceScore) }),
-            el('span', { class: 'vs-den', text: '/100' })
+            HR.viewkit.ring(s.governanceScore == null ? null : s.governanceScore / 100, String(s.governanceScore), '/ 100',
+              { band: { good: 'good', watch: 'medium', poor: 'critical' }[s.governanceBand] || 'medium', min: 0.03, size: 'lg' })
           ]),
           el('div', { class: 'verdict-parts', text: s.governancePartial
             ? T('gs.partsPartial', { risk: s.riskScore })
@@ -470,10 +470,17 @@
               el('td', { class: 'num', text: String(Math.round(r.avgRisk)) })
             ]);
           })));
+          /* The largest departments as rings: how much of their access the model explains. */
+          const dr = el('div', { class: 'sc-rings' }, rows.slice(0, 5).map(r => el('div', {}, [
+            HR.viewkit.ring(r.managedShare, r.managedShare == null ? '\u2014' : U.fmtPct(r.managedShare, 0), T('sc.cardRingSub', { n: U.fmtInt(r.driftRows) }),
+              { band: r.managedShare == null ? 'wait' : r.managedShare >= .8 ? 'good' : r.managedShare >= .5 ? 'medium' : 'critical', min: 0.03 }),
+            el('div', { class: 'lbl', text: r.name || r.key }), el('div', { class: 'sub', text: T('sc.cardKicker', { people: U.fmtInt(r.people), accounts: U.fmtInt(r.accounts) }) })
+          ])));
           paper.appendChild(page([
             el('h2', { class: 'sheet-h', text: T('bd.secDepartments') }),
             el('p', { class: 'lead', text: T('bd.deptLead', { n: scd.summary.departments, median: med == null ? '—' : U.fmtMoney(med),
               outliers: scd.outliers.length }) }),
+            dr,
             dt,
             el('p', { class: 'footnote', text: T('bd.deptFoot') })
           ]));
@@ -506,6 +513,12 @@
             sub: T('bd.jLeaversOpen', { n: lv.summary.withEnabled, money: U.fmtMoney(lv.summary.monthly) }) });
         }
         if (jml.length) {
+          /* The three flows as rings: the share of people inside the service level. */
+          const jr = el('div', { class: 'sc-rings' }, jml.map(r => el('div', {}, [
+            HR.viewkit.ring(r.n ? 1 - r.breaches / r.n : null, r.n ? U.fmtPct(1 - r.breaches / r.n, 0) : '\u2014', T('bd.jInSla', { n: U.fmtInt(r.n - r.breaches), of: U.fmtInt(r.n) }),
+              { band: !r.n ? 'wait' : r.breaches === 0 ? 'good' : r.breaches / r.n > .25 ? 'critical' : 'medium', min: 0.03 }),
+            el('div', { class: 'lbl', text: r.what }), el('div', { class: 'sub', text: r.sla })
+          ])));
           const jt = el('table', { class: 'board-tbl' });
           jt.appendChild(el('thead', {}, el('tr', {}, [
             el('th', { text: T('bd.jFlow') }), el('th', { class: 'num', text: T('bd.jCount') }),
@@ -524,6 +537,7 @@
           paper.appendChild(page([
             el('h2', { class: 'sheet-h', text: T('bd.secJml') }),
             el('p', { class: 'lead', text: T('bd.jmlLead') }),
+            jr,
             jt,
             el('p', { class: 'footnote', text: T('bd.jmlFoot') + (lat ? '' : ' ' + T('bd.jmlNoHistory')) })
           ]));

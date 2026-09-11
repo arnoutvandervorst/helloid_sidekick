@@ -159,16 +159,27 @@
     const wrap = el('div', {});
     const C = HR.charts;
     const ms = v => v == null ? '—' : v >= 60000 ? U.fmtNum(v / 60000, 1) + ' min' : U.fmtNum(v / 1000, 1) + ' s';
+    /* The four as rings against the limits the KPIs already use; incidents against zero. */
+    const kpiRow = id => HR.policy && m ? HR.policy.evaluate(m).rows.find(r => r.def.id === id) : null;
+    const kpiCard = (id, title, kicker, foot, goto) => {
+      const row = kpiRow(id);
+      const ringEl = row && row.applicable && HR.views.kpiRing ? HR.views.kpiRing(row) : HR.viewkit.ring(null, '\u2014', '', {});
+      return el('div', { class: 'card ring-card click', tabindex: '0', onclick: goto, onkeydown: e => { if (e.key === 'Enter') goto(); } }, [
+        ringEl,
+        el('div', { class: 'rc-body' }, [el('div', { class: 'sc-kicker', text: kicker }), el('h3', { text: title }), el('div', { class: 'note rc-foot', text: foot })])
+      ]);
+    };
+    const toKpi = id => () => HR.app.go('policies', { tab: 'kpis', fw: 'theme:operations' });
+    const inc = h.incidents.open.length;
     wrap.appendChild(el('div', { class: 'grid g4', style: 'margin-bottom:14px' }, [
-      tile(T('au.kFailRate'), U.fmtPct(h.failures.recentRate, 1), T('au.kFailRateFoot', { failed: U.fmtInt(h.failures.recentFailed), n: U.fmtInt(h.failures.recentActions), until: day(h.failures.recentUntil), all: U.fmtPct(h.failures.rate, 1) }),
-        { severity: h.failures.recentRate > 0.05 ? 'critical' : h.failures.recentRate > 0.02 ? 'high' : 'good' }),
-      tile(T('au.kEvalAge'), h.evaluations.ageDays == null ? '—' : T('wf.days', { n: U.fmtInt(h.evaluations.ageDays) }),
-        T('au.kEvalAgeFoot', { n: U.fmtInt(h.evaluations.starts), enf: U.fmtInt(h.evaluations.enforcements), sched: U.fmtInt(h.evaluations.scheduled) }),
-        { severity: h.evaluations.ageDays == null || h.evaluations.ageDays > 7 ? 'critical' : h.evaluations.ageDays > 1 ? 'medium' : 'good' }),
-      tile(T('au.kImports'), U.fmtInt(h.imports.runs), T('au.kImportsFoot', { failed: U.fmtInt(h.imports.failed), recent: U.fmtInt(h.imports.failedRecent), median: ms(h.imports.medianMs) }),
-        { severity: h.imports.failedRecent ? 'high' : h.imports.failed ? 'medium' : 'good', small: true }),
-      tile(T('au.kIncidents'), U.fmtInt(h.incidents.open.length), T('au.kIncidentsFoot', { n: U.fmtInt(h.incidents.distinct), agents: U.fmtInt(h.incidents.agentDown) }),
-        { severity: h.incidents.agentDown ? 'high' : h.incidents.open.length ? 'medium' : 'good', small: true })
+      kpiCard('failed-actions-rate', T('au.kFailRate'), T('au.kFailRateK'), T('au.kFailRateFoot', { failed: U.fmtInt(h.failures.recentFailed), n: U.fmtInt(h.failures.recentActions), until: day(h.failures.recentUntil), all: U.fmtPct(h.failures.rate, 1) }), toKpi('failed-actions-rate')),
+      kpiCard('evaluation-age', T('au.kEvalAge'), T('au.kEvalAgeK'), T('au.kEvalAgeFoot', { n: U.fmtInt(h.evaluations.starts), enf: U.fmtInt(h.evaluations.enforcements), sched: U.fmtInt(h.evaluations.scheduled) }), toKpi('evaluation-age')),
+      kpiCard('import-failures', T('au.kImports'), T('au.kImportsK'), T('au.kImportsFoot', { failed: U.fmtInt(h.imports.failed), recent: U.fmtInt(h.imports.failedRecent), median: ms(h.imports.medianMs) }), toKpi('import-failures')),
+      el('div', { class: 'card ring-card' }, [
+        HR.viewkit.ring(inc ? 0 : 1, String(inc), T('po.limitIs', { limit: '\u2264 0' }), { band: h.incidents.agentDown ? 'high' : inc ? 'medium' : 'good', min: inc ? 0.04 : 0 }),
+        el('div', { class: 'rc-body' }, [el('div', { class: 'sc-kicker', text: T('au.kIncidentsK') }), el('h3', { text: T('au.kIncidents') }),
+          el('div', { class: 'note rc-foot', text: T('au.kIncidentsFoot', { n: U.fmtInt(h.incidents.distinct), agents: U.fmtInt(h.incidents.agentDown) }) })])
+      ])
     ]));
 
     wrap.appendChild(card(T('au.failuresTitle'), T('au.failuresNote'), HR.table.make({

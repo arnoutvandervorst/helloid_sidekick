@@ -493,5 +493,7 @@
 
   HR.views.policies = policiesView;
   HR.views.policyRing = ring;
+  HR.views.kpiRing = kpiRing;
+  HR.views.kpiScore = kpiScore;
   HR.views.policyShowRefs = showRefs;
 })(window.HR);
