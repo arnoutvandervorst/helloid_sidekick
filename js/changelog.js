@@ -18,6 +18,10 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.66', date: '2026-09-11',
+      changes: ['The hosted image moves from nginx 1.27 to the current stable 1.30 line (Alpine). The app itself has no packages: plain JavaScript in the browser, Python collectors on the standard library, PowerShell collectors on the ActiveDirectory and Microsoft.Graph modules the admin installs.']
+    },
+    {
       version: '2026.9.65', date: '2026-09-11',
       changes: ['Dutch: “Naleving” is “Compliance” everywhere — the sidebar, the page, the limits, the trend line, the board’s method page. The word is the one Dutch readers use.']
     },
