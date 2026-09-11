@@ -18,6 +18,10 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.65', date: '2026-09-11',
+      changes: ['Dutch: “Naleving” is “Compliance” everywhere — the sidebar, the page, the limits, the trend line, the board’s method page. The word is the one Dutch readers use.']
+    },
+    {
       version: '2026.9.64', date: '2026-09-10',
       changes: [
         'Classification workbench replaces the wizard. The rules are the engine, so the page is built on them: per rule how many names it hits and how many it wins (order decides; move a specific rule above a general one), a fallout strip — unclassified, by a rule, overruled by hand, family answer; for accounts an unknown name shape apart from a plain user name — and a table of every entitlement or account with the draft’s answer, who decided it, and a dropdown that overrules it. Select rows to set a category for all of them or to make a rule from them (the word most of them share, or their common prefix), proposed at the top for review. Old wizard answers keep working as “family answer”, convertible to a rule or forgotten. Everything previews at once and counts only on Save & re-score. An import with unclassified names lands here, filtered to the fallout.'
