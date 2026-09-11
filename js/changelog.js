@@ -18,6 +18,10 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.74', date: '2026-09-11',
+      changes: ['Ring text stays inside the band: the value and the line under it shrink when they are long, and the Overview rings say “8 / 22”, “44 unowned”, “1 open” instead of a sentence.']
+    },
+    {
       version: '2026.9.73', date: '2026-09-11',
       changes: ['The Overview opens with four rings — governance score, controls met, identity coverage, classified — each a share against a whole or a target, with its delta against the compared data point and a click to the page behind it; risk exposure, unowned, unmanaged, recoverable, accounts, spend and clean-up stay tiles. One ring in the codebase now: the scorecards, the KPI cards, the board and the Overview draw the same one.']
     },

@@ -262,7 +262,13 @@
     const fill = score == null ? 0 : Math.max(Math.min(1, score), opts.min || 0);
     s.appendChild(svgN('circle', { class: 'arc', cx: 50, cy: 50, r: 45, 'stroke-dasharray': (C * fill).toFixed(1) + ' ' + C.toFixed(1), transform: 'rotate(-90 50 50)' }));
     s.appendChild(svgN('text', { class: 'v', x: 50, y: 45, 'text-anchor': 'middle', 'dominant-baseline': 'central' }, value));
-    if (sub) s.appendChild(svgN('text', { class: 'of', x: 50, y: 66, 'text-anchor': 'middle' }, sub));
+    /* Both texts must stay inside the band (inner width ~74 units): long ones shrink. */
+    const vFs = Math.min(22, 22 * 5 / Math.max(5, String(value).length));
+    s.querySelector('.v').setAttribute('style', 'font-size:' + vFs.toFixed(1) + 'px');
+    if (sub) {
+      const fs = Math.min(8.5, 8.5 * 13 / Math.max(13, String(sub).length));
+      s.appendChild(svgN('text', { class: 'of', x: 50, y: 66, 'text-anchor': 'middle', style: 'font-size:' + fs.toFixed(1) + 'px' }, sub));
+    }
     return s;
   }
   /**
@@ -753,15 +759,15 @@
         value: s.governanceScore == null ? '\u2014' : String(s.governanceScore), sub: '/ 100', band: gsSev, min: 0.03,
         delta: bDelta('governanceScore'), inverse: true, foot: governanceFoot(s), facet: 'governance', onClick: () => HR.app.go('policies') }),
       ringCard({ title: T('po.kScore'), kicker: T('po.title'), score: s.policyEvaluated ? s.policyScore : null,
-        value: s.policyEvaluated ? U.fmtPct(s.policyScore, 0) : '\u2014', sub: s.policyEvaluated ? T('ov.controlsSub', { met: s.policyPassed, of: s.policyEvaluated }) : T('po.needs'),
+        value: s.policyEvaluated ? U.fmtPct(s.policyScore, 0) : '\u2014', sub: s.policyEvaluated ? s.policyPassed + ' / ' + s.policyEvaluated : T('po.needs'),
         band: s.policyScore >= .9 ? 'good' : s.policyScore >= .6 ? 'medium' : 'critical', min: 0.03,
         delta: pScore ? { change: Math.round(100 * pScore.change) } : undefined, deltaFormat: v => v + 'pp', inverse: true,
         foot: T('gs.halfOfShort'), facet: 'governance', onClick: () => HR.app.go('policies', { tab: 'scorecards' }) }),
       ringCard({ title: T('ov.coverage'), kicker: T('ov.coverageFoot'), score: s.coverage, value: U.fmtPct(s.coverage, 0),
-        sub: T('ov.unownedSub', { n: U.fmtInt(s.orphanAccounts) }), band: s.coverage >= .9 ? 'good' : s.coverage >= .75 ? 'medium' : 'high', min: 0.03,
+        sub: U.fmtInt(s.orphanAccounts) + ' ' + T('c.unowned').toLowerCase(), band: s.coverage >= .9 ? 'good' : s.coverage >= .75 ? 'medium' : 'high', min: 0.03,
         delta: bDelta('orphanAccounts'), foot: T('ov.stillEnabled', { n: s.orphanEnabled }), onClick: () => HR.app.go('accounts', { filter: 'orphan' }) }),
       ringCard({ title: T('ov.classified'), kicker: T('ov.classifiedKicker'), score: s.classified, value: U.fmtPctFloor(s.classified),
-        sub: T('ov.classifiedSub', { p: U.fmtInt(s.unclassifiedPermissions), a: U.fmtInt(s.unclassifiedAccounts) }),
+        sub: U.fmtInt(s.unclassifiedPermissions + s.unclassifiedAccounts) + ' ' + T('ov.openShort'),
         band: s.classified >= .9 ? 'good' : s.classified >= .7 ? 'medium' : 'high', min: 0.03,
         foot: T('ov.classifiedFoot', { p: U.fmtInt(s.unclassifiedPermissions), a: U.fmtInt(s.unclassifiedAccounts) }),
         onClick: () => HR.app.go('classify', { tab: s.unclassifiedPermissions ? 'perms' : 'accounts', filter: 'unclassified' }) })
