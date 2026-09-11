@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.9.70] — 2026-09-11
+
+- The KPIs are cards now, as previewed: three to a row per severity, each with its ring, status, the articles it cites, what it means, the affected list and owner / due. A card opens the full control in a drawer — how it evidences the articles, the framework texts, the fold with limit, owner, due date and exception — and an edit there shows at once.
+
 ## [2026.9.69] — 2026-09-11
 
 - Every KPI is a ring. In The KPIs each control carries its own ring instead of the value / limit / gauge column: today’s value inside, the limit under it, the fill how far it is from the limit (full when met; against an upper limit limit ÷ value, against a lower one value ÷ limit; a breached limit of 0 shows a sliver), the colour the severity of what is open — green when met, amber when accepted, dotted grey while waiting on data.

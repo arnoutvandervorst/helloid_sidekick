@@ -78,6 +78,7 @@
     })));
   }
 
+  let OPEN_CTL = null;
   function change(m, id, patch) {
     HR.policy.set(id, patch);
     delete m._policy;
@@ -85,6 +86,50 @@
     try { Object.assign(m.summary, HR.policy.summaryOf(m)); HR.model.governance(m.summary); } catch (e) { /* not scoreable yet */ }
     HR.app.updateTopbar && HR.app.updateTopbar();
     HR.app.render();
+    /* The control's drawer, if it is open, shows the edit at once. */
+    if (OPEN_CTL === id) openControl(m, id);
+  }
+
+  /** One control in full — what it means, the articles, the affected, the fold — in a drawer. */
+  function openControl(m, id) {
+    const row = HR.policy.evaluate(m).rows.find(r => r.def.id === id);
+    if (!row) return;
+    OPEN_CTL = id;
+    const head = el('div', {}, [
+      el('h2', {}, [el('span', { class: 'sev ' + (row.def.severity || 'medium') }), document.createTextNode(' ' + T('po.p.' + id))]),
+      el('p', { class: 'note', text: T('po.p.' + id + '.d') })
+    ]);
+    openDrawer(head, el('div', { class: 'stack ctl-drawer' }, policyLine(m, row)));
+  }
+
+  /** The card: ring, status, articles, title, what it means, the affected — the row's summary. */
+  function policyCard(m, row) {
+    const id = row.def.id;
+    const status = !row.applicable
+      ? el('span', { class: 'pill muted', text: T('po.needs') })
+      : !row.on ? el('span', { class: 'pill muted', text: T('po.off') })
+      : el('span', { class: 'pill ' + (row.status === 'met' ? 'ok' : row.status === 'accepted' ? 'warn' : 'removed'), text: T('po.status.' + row.status) });
+    const refs = HR.policy.FRAMEWORKS.filter(k => row.def.refs && row.def.refs[k]).map(k => fwLabel[k] + ' ' + row.def.refs[k]).join(' \u00b7 ');
+    const mv = movementOf(id);
+    const open = () => openControl(m, id);
+    const c = el('article', { class: 'card k-card' + (row.applicable && row.on && row.status === 'notMet' ? ' open' : ''), tabindex: '0', onclick: open, onkeydown: e => { if (e.key === 'Enter') open(); } }, [
+      kpiRing(row),
+      el('div', { class: 'k-body' }, [
+        el('div', { class: 'k-top' }, [status, el('span', { class: 'k-refs mono', text: refs })]),
+        el('h3', { text: T('po.p.' + id) }),
+        el('p', { class: 'note', text: T('po.p.' + id + '.d') }),
+        el('div', { class: 'k-foot' }, [
+          row.applicable && row.affected.length
+            ? el('a', { href: '#', text: T('po.affectedN', { n: U.fmtInt(row.affected.length) }) + ' \u2192', onclick: e => { e.preventDefault(); e.stopPropagation(); openAffected(m, row); } })
+            : el('span', {}),
+          el('span', { class: 'note' }, [
+            mv && mv.was ? el('span', { class: 'pill ' + MOVE_CLASS[mv.movement], text: T('tr.mv.' + mv.movement), style: 'margin-right:6px' }) : null,
+            document.createTextNode(T('po.owner') + ' ' + (row.owner || '\u2014') + ' \u00b7 ' + T('po.due') + ' ' + (row.due || '\u2014'))
+          ].filter(Boolean))
+        ])
+      ])
+    ]);
+    return c;
   }
 
   const fwLabel = { nis2: 'NIS2', iso27001: 'ISO 27001', bio: 'BIO 2.0' };
@@ -454,7 +499,7 @@
     kpis.appendChild(card(T('po.cardTitle'), T('po.cardNote'), [chips].concat(groups.map(g => el('div', {}, [
       el('h3', { style: 'margin:14px 0 4px' }, [el('span', { class: 'sev ' + g.sev, text: T('po.sev.' + g.sev) }),
         document.createTextNode(' ' + T('po.groupFoot', { n: U.fmtInt(g.rows.length), open: U.fmtInt(g.rows.filter(r => r.applicable && r.on && r.status === 'notMet').length) }))]),
-      el('div', {}, g.rows.map(row => policyLine(m, row)))
+      el('div', { class: 'k-grid' }, g.rows.map(row => policyCard(m, row)))
     ])))));
     kpis.appendChild(el('p', { class: 'note', style: 'margin-top:10px', text: T('po.foot') }));
 
