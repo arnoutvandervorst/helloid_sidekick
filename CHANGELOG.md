@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.9.78] — 2026-09-11
+
+- Overview: the department × entitlement-category heatmap spans the page; it was cropped in half a row.
+
 ## [2026.9.77] — 2026-09-11
 
 - Rings in three more places. Organisation › Scorecards: one card per department — the ring is the share of its access the model explains (rules, products, baseline; 100 % minus drift), bars for leavers with access, people below the baseline and unmanaged rows, €/head and average risk beside it; a card opens the department. Evidence › Engine health: failed actions, days since the last evaluation, failed imports and open incidents as rings against the same limits the KPIs use, opening the operations KPIs. Board report: the governance score on the cover is a ring, the departments page leads with the five largest as rings, and the joiners / movers / leavers page shows each flow as the share of people inside its service level.
