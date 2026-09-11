@@ -61,7 +61,7 @@
     HR.app.render();
   }
 
-  const fwLabel = { nis2: 'NIS2', iso27001: 'ISO 27001', bio: 'BIO' };
+  const fwLabel = { nis2: 'NIS2', iso27001: 'ISO 27001', bio: 'BIO 2.0' };
   const refPills = (def, onclick) => Object.keys(def.refs || {}).map(fw =>
     el('button', { class: 'pill mono' + (onclick ? ' clickable' : ''), title: T('po.fw.' + fw), text: fwLabel[fw] + ' ' + def.refs[fw], onclick }));
 
@@ -267,7 +267,84 @@
     }));
   }
 
-  function policiesView(m) {
+  /* ---- scorecards: the ring, the bars, one card per framework ---------------- */
+  const NS = 'http://www.w3.org/2000/svg';
+  const svgEl = (tag, attrs, text) => { const n = document.createElementNS(NS, tag); Object.keys(attrs || {}).forEach(k => n.setAttribute(k, attrs[k])); if (text != null) n.textContent = text; return n; };
+  const bandOf = score => score >= 0.9 ? 'good' : score >= 0.6 ? 'medium' : 'critical';
+  /** The score as a ring: the weighted share met, the points under it. */
+  function ring(score, points, total, size) {
+    const s = svgEl('svg', { viewBox: '0 0 100 100', class: 'sc-ring' + (size === 'lg' ? ' lg' : '') });
+    const C = 2 * Math.PI * 42;
+    s.appendChild(svgEl('circle', { cx: 50, cy: 50, r: 42, fill: 'none', stroke: 'var(--grid)', 'stroke-width': 10 }));
+    s.appendChild(svgEl('circle', { cx: 50, cy: 50, r: 42, fill: 'none', stroke: 'var(--' + bandOf(score) + ')', 'stroke-width': 10,
+      'stroke-dasharray': (C * Math.max(0, Math.min(1, score))).toFixed(1) + ' ' + C.toFixed(1), transform: 'rotate(-90 50 50)' }));
+    s.appendChild(svgEl('text', { x: 50, y: 46, 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'sc-v' }, U.fmtPct(score, 0)));
+    s.appendChild(svgEl('text', { x: 50, y: 70, 'text-anchor': 'middle', class: 'sc-of' }, T('po.sc.pts', { n: U.fmtNum(points, 0), of: U.fmtNum(total, 0) })));
+    return s;
+  }
+  function bar(label, n, of, tone) {
+    const pct = of ? 100 * n / of : 0;
+    return el('div', { class: 'sc-bar' }, [
+      el('div', { class: 'sc-row' }, [el('b', { text: label }), el('span', { class: 'mono note' }, [el('strong', { text: U.fmtInt(n) }), document.createTextNode(' ' + T('po.sc.of', { of: U.fmtInt(of) }))])]),
+      el('div', { class: 'sc-track' }, el('i', { class: tone || '', style: 'width:' + pct.toFixed(1) + '%' }))
+    ]);
+  }
+  /** Since the compared data point, for the controls this card covers. */
+  function movementLine(st) {
+    const d = HR.app.state.diff;
+    if (!d || !d.controls) return T('po.sc.noCompare');
+    const ids = new Set(st.rows.map(r => r.def.id));
+    const rows = d.controls.rows.filter(r => r.on && ids.has(r.id));
+    const n = mv => rows.filter(r => r.movement === mv).length;
+    const bits = [];
+    if (n('newlyMet')) bits.push(U.fmtInt(n('newlyMet')) + ' ' + T('tr.mv.newlyMet'));
+    if (n('newlyBroken')) bits.push(U.fmtInt(n('newlyBroken')) + ' ' + T('tr.mv.newlyBroken'));
+    if (n('improved')) bits.push(U.fmtInt(n('improved')) + ' ' + T('tr.mv.improved'));
+    if (n('worse')) bits.push(U.fmtInt(n('worse')) + ' ' + T('tr.mv.worse'));
+    return bits.length ? bits.join(' \u00b7 ') : T('df.noChange');
+  }
+  function scorecard(m, fw, opts) {
+    const st = HR.policy.frameworkStats(m, fw);
+    const gs = m.summary;
+    const title = fw ? st.meta.name : T('po.sc.all');
+    const kicker = fw ? st.meta.kicker : T('po.sc.allKicker', { date: (() => { const cur = HR.app.state.snapshots.find(x => x.id === HR.app.state.currentSnapshotId); return cur ? U.fmtDate(cur.dataDate || cur.importedAt).split(',')[0] : '\u2014'; })() });
+    const open = () => HR.app.go('policies', { tab: 'kpis', fw });
+    const c = el('section', { class: 'card sc-card' + (opts && opts.detail ? ' detail' : ''), tabindex: '0', onclick: opts && opts.detail ? null : open, onkeydown: e => { if (e.key === 'Enter' && !(opts && opts.detail)) open(); } }, [
+      el('div', { class: 'sc-kicker', text: kicker }),
+      el('h2', {}, [
+        opts && opts.detail ? document.createTextNode(title) : el('a', { href: '#', text: title, onclick: e => { e.preventDefault(); open(); } }),
+        document.createTextNode(' '),
+        st.criticalOpen ? el('span', { class: 'pill removed', text: T('po.sc.criticalOpen', { n: U.fmtInt(st.criticalOpen) }) })
+          : st.critical ? el('span', { class: 'pill ok', text: T('po.sc.criticalAllMet') }) : null
+      ]),
+      el('div', { class: 'sc-ringwrap' }, [el('div', { class: 'sc-cap', text: T('po.sc.score') }), ring(st.score, st.points, st.total, opts && opts.detail ? 'lg' : '')]),
+      el('div', { class: 'sc-meta' }, [
+        el('span', {}, [document.createTextNode(fw ? T('po.sc.cited') : T('gs.title')), el('b', { text: fw ? (st.cites.join(' \u00b7 ') || '\u2014') : (gs.governanceScore == null ? '\u2014' : gs.governanceScore + ' / 100') })]),
+        el('span', {}, [document.createTextNode(T('po.sc.since')), el('b', { text: movementLine(st) })])
+      ]),
+      el('div', { class: 'sc-bars' }, [
+        bar(T('po.sc.controlsMet'), st.met, st.evaluated, ''),
+        bar(T('po.sc.criticalMet'), st.criticalMet, st.critical, st.criticalMet < st.critical ? 'crit' : 'good'),
+        bar(T('po.sc.owned'), st.owned, st.evaluated, 'good')
+      ]),
+      el('div', { class: 'sc-foot' }, [
+        el('span', { text: T('po.sc.waiting', { n: U.fmtInt(st.waiting) }) }),
+        st.worst.length ? el('span', { text: T('po.sc.worst', { list: st.worst.map(r => T('po.p.' + r.def.id)).join(', ') }) }) : el('span', { text: T('po.sc.nothingOpen') }),
+        opts && opts.detail ? null : el('a', { href: '#', text: T('po.sc.open'), onclick: e => { e.preventDefault(); e.stopPropagation(); open(); } })
+      ])
+    ]);
+    return c;
+  }
+  function scorecardsTab(m, params) {
+    const wrap = el('div', {});
+    const sevFilter = (params && params.sev) || '';
+    wrap.appendChild(el('div', { class: 'grid g2 sc-grid' }, [''].concat(HR.policy.FRAMEWORKS).map(fw => scorecard(m, fw))));
+    wrap.appendChild(el('p', { class: 'note', style: 'margin-top:10px', text: T('po.sc.foot') }));
+    return wrap;
+  }
+
+  function policiesView(m, params) {
+    params = params || {};
     const f = document.createDocumentFragment();
     f.appendChild(el('div', { class: 'view-head' }, el('div', {}, [
       el('h1', { text: T('po.title') }),
@@ -313,12 +390,15 @@
         T('po.kWaitingFoot'), { small: true })
     ]));
 
-    /* Which framework's articles to show — a control with no article for it hides. */
+    /* Two tabs: the scorecards, and the KPI list — which, filtered to a framework,
+       opens with that framework's own ring. */
+    const kpis = document.createDocumentFragment();
     const fw = (HR.app.state.params && HR.app.state.params.fw) || '';
+    if (fw && HR.policy.FRAMEWORK_META[fw]) kpis.appendChild(el('div', { style: 'margin-bottom:14px' }, scorecard(m, fw, { detail: true })));
     const chips = el('div', { class: 'slot-actions', style: 'margin-bottom:8px' },
       [['', T('c.all')]].concat(HR.policy.FRAMEWORKS.map(k => [k, fwLabel[k]])).map(([k, label]) =>
         el('button', { class: 'btn sm' + (fw === k ? ' primary' : ''), text: label,
-          onclick: () => HR.app.go('policies', { fw: k }) })));
+          onclick: () => HR.app.go('policies', { tab: 'kpis', fw: k }) })));
     chips.appendChild(el('button', { class: 'btn sm' + (showRefs() ? ' primary' : ''), text: T(showRefs() ? 'po.hideRefs' : 'po.showRefs'),
       onclick: () => { setShowRefs(!showRefs()); HR.app.render(); } }));
     chips.appendChild(el('span', { class: 'spacer' }));
@@ -340,23 +420,31 @@
         el('span', { class: 'note', text: T('tr.since', { date: base ? U.fmtDate(base.dataDate || base.importedAt).split(',')[0] : '\u2014' }) })
       ].concat(['newlyMet', 'improved', 'worse', 'newlyBroken'].map(mvk => el('button', {
         class: 'btn sm' + (mvFilter === mvk ? ' primary' : ''), text: U.fmtInt(d.controls[mvk]) + ' ' + T('tr.mv.' + mvk),
-        onclick: () => HR.app.go('policies', { fw, move: mvFilter === mvk ? '' : mvk }) }))));
-      f.appendChild(card(null, null, strip));
+        onclick: () => HR.app.go('policies', { tab: 'kpis', fw, move: mvFilter === mvk ? '' : mvk }) }))));
+      kpis.appendChild(card(null, null, strip));
     }
     /* Critical first, then the rest; inside a group, failing before passing. */
     const shown = ev.rows.filter(r => !fw || (r.def.refs && r.def.refs[fw]))
       .filter(r => !mvFilter || (movementOf(r.def.id) || {}).movement === mvFilter);
     const groups = HR.policy.SEVERITIES.map(sev => ({ sev, rows: shown.filter(r => (r.def.severity || 'medium') === sev)
       .sort((a, b) => (a.status === 'notMet' ? 0 : 1) - (b.status === 'notMet' ? 0 : 1)) })).filter(g => g.rows.length);
-    f.appendChild(card(T('po.cardTitle'), T('po.cardNote'), [chips].concat(groups.map(g => el('div', {}, [
+    kpis.appendChild(card(T('po.cardTitle'), T('po.cardNote'), [chips].concat(groups.map(g => el('div', {}, [
       el('h3', { style: 'margin:14px 0 4px' }, [el('span', { class: 'sev ' + g.sev, text: T('po.sev.' + g.sev) }),
         document.createTextNode(' ' + T('po.groupFoot', { n: U.fmtInt(g.rows.length), open: U.fmtInt(g.rows.filter(r => r.applicable && r.on && r.status === 'notMet').length) }))]),
       el('div', {}, g.rows.map(row => policyLine(m, row)))
     ])))));
-    f.appendChild(el('p', { class: 'note', style: 'margin-top:10px', text: T('po.foot') }));
+    kpis.appendChild(el('p', { class: 'note', style: 'margin-top:10px', text: T('po.foot') }));
+
+    /* A framework chip or a scorecard opens the KPI tab; the tab remembers the filter. */
+    const tabParams = Object.assign({}, params, { tab: params.tab || (fw || params.move ? 'kpis' : 'scorecards') });
+    f.appendChild(HR.viewkit.tabbed('policies', [
+      { id: 'scorecards', label: T('po.tab.scorecards'), build: p => scorecardsTab(m, p) },
+      { id: 'kpis', label: T('po.tab.kpis'), count: s.evaluated - s.passed, build: () => kpis }
+    ], tabParams));
     return f;
   }
 
   HR.views.policies = policiesView;
+  HR.views.policyRing = ring;
   HR.views.policyShowRefs = showRefs;
 })(window.HR);

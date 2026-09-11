@@ -37,7 +37,7 @@ one it is for (`#choose`, or `?edition=govern|health|consult`; the hostname pref
 `helloid-govern.` etc. presets it):
 
 - **Govern** — governance analytics for partners and their customers: compliance against
-  NIS2 / ISO 27001 / BIO, risk, cost, evidence of decisions, one person end to end, the
+  NIS2 / ISO 27001 / BIO 2.0, risk, cost, evidence of decisions, one person end to end, the
   board pack.
 - **Health check** — is this HelloID well built and does it run: rules against reality,
   what the engine did and failed, naming conventions, correlation quality, what to
@@ -303,6 +303,16 @@ A **pattern tester** sits on the same page and in Settings: type a regex, pick p
 account names, and see the match count, a sample of hits, and a warning when the pattern is
 invalid or matches everything. Every rule row in Settings also shows its live match count
 against the loaded import.
+
+## Compliance scorecards
+
+Compliance opens on **scorecards**: one card for all KPIs and one per framework — NIS2
+(Directive 2022/2555, article 21(2)), ISO 27001:2022 Annex A, **BIO 2.0** (ISO 27002:2022
+numbering). Each card is the weighted compliance share as a ring (a critical control counts
+three times a housekeeping one; "10 of 39 pts"), the articles cited, the movement since the
+compared data point, and three bars: controls met, critical controls met, with an owner and
+a due date. A card opens **The KPIs** tab filtered to that framework, with the same ring as
+its header; the board's Policy KPIs page leads with the four rings.
 
 ## Business rules
 

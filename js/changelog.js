@@ -18,6 +18,12 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.67', date: '2026-09-11',
+      changes: [
+        'Compliance opens on scorecards: one card for all KPIs and one per framework, each with the weighted score as a ring (points met of points possible), the articles cited, the movement since the compared data point, and bars for controls met, critical controls met and with an owner and a due date. A card opens The KPIs tab filtered to its framework with the same ring as header — the drill-down — and the board’s Policy KPIs page leads with the four rings. BIO is BIO 2.0 now: every reference follows ISO 27002:2022 numbering (5.3, 5.9, 5.15, 5.16, 5.18, 8.2, 8.5, 8.15) with the control texts rewritten to match; the old 27002:2013 numbers are gone from the KPIs, the evidence sentences and the board appendix.'
+      ]
+    },
+    {
       version: '2026.9.66', date: '2026-09-11',
       changes: ['The hosted image moves from nginx 1.27 to the current stable 1.30 line (Alpine). The app itself has no packages: plain JavaScript in the browser, Python collectors on the standard library, PowerShell collectors on the ActiveDirectory and Microsoft.Graph modules the admin installs.']
     },

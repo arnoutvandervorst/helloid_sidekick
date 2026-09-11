@@ -1,7 +1,7 @@
 /* The articles behind the compliance references.
 
    Every control names the framework articles it evidences — NIS2 21(2)(i), ISO 27001
-   A.5.18, BIO 9.2.6 — but a number alone tells a reader nothing. This resolves each
+   A.5.18, BIO 2.0 5.18 — but a number alone tells a reader nothing. This resolves each
    reference to a title and a text, so the page can say what the article asks and the
    control can say how its measurement evidences it.
 
@@ -19,7 +19,7 @@
   const META = {
     nis2: { label: 'NIS2', official: true, source: 'https://eur-lex.europa.eu/eli/dir/2022/2555/oj' },
     iso27001: { label: 'ISO 27001', official: false, source: 'https://www.iso.org/standard/27001' },
-    bio: { label: 'BIO', official: false, source: 'https://www.bio-overheid.nl' }
+    bio: { label: 'BIO 2.0', official: false, source: 'https://www.bio-overheid.nl' }
   };
 
   const key = (fw, ref) => 'fw.' + fw + '.' + ref;

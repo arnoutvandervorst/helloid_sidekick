@@ -644,10 +644,20 @@
           });
         pt.appendChild(ptb);
         const sevLine = order.map(sev => T('po.sev.' + sev) + ' ' + ps.bySeverity[sev].passed + '/' + ps.bySeverity[sev].of).join(' \u00b7 ');
+        /* The three framework rings first: the shape of the answer before the table. */
+        const rings = el('div', { class: 'sc-rings' }, [''].concat(HR.policy.FRAMEWORKS).map(fw => {
+          const st = HR.policy.frameworkStats(m, fw);
+          return el('div', {}, [
+            HR.views.policyRing ? HR.views.policyRing(st.score, st.points, st.total) : null,
+            el('div', { class: 'lbl', text: fw ? st.meta.name : T('po.sc.all') }),
+            el('div', { class: 'sub', text: T('po.sc.controlsMet') + ' ' + st.met + '/' + st.evaluated + ' \u00b7 ' + T('po.sc.criticalMet') + ' ' + st.criticalMet + '/' + st.critical })
+          ]);
+        }));
         paper.appendChild(page([
           el('h2', { class: 'sheet-h', text: T('bd.polTitle') }),
           el('p', { class: 'lead', text: T('bd.polLead', {
             passed: ps.passed, n: ps.evaluated, score: U.fmtPct(ps.score, 0) }) + ' ' + T('bd.polBySeverity', { line: sevLine }) }),
+          rings,
           pt,
           el('p', { class: 'footnote', text: T('bd.polFoot') + ' ' + T('bd.polRefsFoot') })
         ]));
