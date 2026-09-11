@@ -369,7 +369,7 @@
     return bits.length ? bits.join(' \u00b7 ') : null;
   }
 
-  function sourcesCard(m) {
+  function sourcesCard(m, opts) {
     const st = HR.app.state;
     const now = Date.now();
     const days = ts => ts ? Math.round((now - ts) / 86400000) : null;
@@ -473,12 +473,27 @@
     if (oldest && days(oldest) > 30) notes.push(T('src.stale', { n: U.fmtInt(days(oldest)) }));
     if (missing.length) notes.push(T('src.missing', { list: missing.join(', ') }));
 
-    return card(T('src.title'), T('src.note'), [
+    const full = card(T('src.title'), T('src.note'), [
       table,
       el('p', { style: 'margin-top:10px' },
         el('button', { class: 'btn ghost', text: T('src.manage'), onclick: () => HR.app.go('sources') })),
       notes.length ? el('p', { class: 'note', style: 'margin-top:10px', text: notes.join(' ') }) : null
     ].filter(Boolean));
+    if (!opts || !opts.compact) return full;
+    /* On the Overview: one remark line, the table behind a fold — the numbers come first. */
+    const line = rows.map(r => r.kind + ' ' + (r.loaded ? T('src.daysAgo', { n: U.fmtInt(days(r.loaded)) }) : '')).join(' \u00b7 ')
+      + (missing.length ? ' \u00b7 ' + T('src.missing', { list: missing.join(', ') }) : '');
+    const warn = notes.filter(n => !n.startsWith(T('src.missing', { list: '' }).slice(0, 8)));
+    const d = el('details', { class: 'sources-fold' }, [
+      el('summary', {}, [
+        el('span', { class: 'note', text: T('src.standingOn') + ' ' }),
+        el('span', { class: 'note', text: line }),
+        warn.length ? el('span', { class: 'slot-health', text: ' \u26a0 ' + warn.join(' ') }) : null,
+        el('a', { href: '#', class: 'note', text: ' ' + T('src.manage'), onclick: e => { e.preventDefault(); e.stopPropagation(); HR.app.go('sources'); } })
+      ].filter(Boolean)),
+      full
+    ]);
+    return d;
   }
 
 
@@ -748,7 +763,7 @@
       ])
     ]));
 
-    f.appendChild(el('div', { class: 'grid', style: 'margin-bottom:14px' }, sourcesCard(m)));
+    f.appendChild(sourcesCard(m, { compact: true }));
 
     const gsSev = { good: 'good', watch: 'medium', poor: 'critical' }[s.governanceBand] || 'medium';
     /* The four shares a reader recognises at a glance, as rings; the counts stay tiles. */

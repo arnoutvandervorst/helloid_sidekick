@@ -334,7 +334,8 @@ span.info:not(.sev), .tooltip-glyph {
 .k-foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 11.5px; flex-wrap: wrap; }
 .ctl-drawer .ctl { grid-template-columns: 1fr; }
 .ctl-drawer .ctl-stand { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
-.k-ring circle { fill: none; stroke: var(--grid); stroke-width: 7; }
+.k-ring circle { fill: none; stroke: var(--grid); stroke-width: 6; stroke-linecap: round; shape-rendering: geometricPrecision; }
+.k-ring { shape-rendering: geometricPrecision; text-rendering: optimizeLegibility; }
 .k-ring .arc { stroke: var(--good); }
 .k-ring.critical .arc { stroke: var(--critical); }
 .k-ring.high .arc { stroke: var(--serious); }
@@ -344,6 +345,12 @@ span.info:not(.sev), .tooltip-glyph {
 .k-ring.wait circle { stroke-dasharray: 3 3; } .k-ring.wait .arc { display: none; }
 .k-ring .v { font: 500 20px/1 var(--mono, ui-monospace, monospace); fill: var(--text-primary); }
 .k-ring .of { font-size: 8.5px; fill: var(--muted); }
+.sources-fold { margin: -4px 0 14px; font-size: 12px; }
+.sources-fold > summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; padding: 6px 0; }
+.sources-fold > summary::-webkit-details-marker { display: none; }
+.sources-fold > summary::before { content: '\25B8'; color: var(--muted); margin-right: 4px; }
+.sources-fold[open] > summary::before { content: '\25BE'; }
+.sources-fold > .card { margin-top: 8px; }
 .ring-card { display: grid; grid-template-columns: 84px 1fr; gap: 12px; align-items: center; padding: 14px; }
 .ring-card.click { cursor: pointer; }
 .ring-card.click:hover, .ring-card:focus-visible { border-color: var(--border-strong); outline: none; }

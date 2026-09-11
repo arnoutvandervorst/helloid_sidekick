@@ -18,6 +18,10 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.75', date: '2026-09-11',
+      changes: ['Overview: “what this analysis is standing on” is one remark line under the title — the sources, how old they are, what is not loaded — with the table behind a fold; the rings come first. The rings themselves are softer: rounded ends, a slightly thinner band, precise rendering.']
+    },
+    {
       version: '2026.9.74', date: '2026-09-11',
       changes: ['Ring text stays inside the band: the value and the line under it shrink when they are long, and the Overview rings say “8 / 22”, “44 unowned”, “1 open” instead of a sentence.']
     },

@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.9.75] — 2026-09-11
+
+- Overview: “what this analysis is standing on” is one remark line under the title — the sources, how old they are, what is not loaded — with the table behind a fold; the rings come first. The rings themselves are softer: rounded ends, a slightly thinner band, precise rendering.
+
 ## [2026.9.74] — 2026-09-11
 
 - Ring text stays inside the band: the value and the line under it shrink when they are long, and the Overview rings say “8 / 22”, “44 unowned”, “1 open” instead of a sentence.
