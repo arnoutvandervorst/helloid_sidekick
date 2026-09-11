@@ -245,6 +245,49 @@
     return wrap;
   }
 
+  /* ---- the ring: a share against a whole or a target, the number inside ---- */
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const svgN = (tag, attrs, text) => { const n = document.createElementNS(SVGNS, tag); Object.keys(attrs || {}).forEach(k => n.setAttribute(k, attrs[k])); if (text != null) n.textContent = text; return n; };
+  /**
+   * @param {number|null} score 0..1 (null = waiting: dotted, no arc)
+   * @param {string} value  the text inside
+   * @param {string} sub    the text under it
+   * @param {Object} [opts] { band: 'good'|'medium'|'high'|'critical'|'warn'|'low', min: sliver when 0, size: 'lg' }
+   */
+  function ring(score, value, sub, opts) {
+    opts = opts || {};
+    const s = svgN('svg', { viewBox: '0 0 100 100', class: 'k-ring ' + (score == null ? 'wait' : (opts.band || 'good')) + (opts.size === 'lg' ? ' lg' : '') });
+    const C = 2 * Math.PI * 45;
+    s.appendChild(svgN('circle', { cx: 50, cy: 50, r: 45 }));
+    const fill = score == null ? 0 : Math.max(Math.min(1, score), opts.min || 0);
+    s.appendChild(svgN('circle', { class: 'arc', cx: 50, cy: 50, r: 45, 'stroke-dasharray': (C * fill).toFixed(1) + ' ' + C.toFixed(1), transform: 'rotate(-90 50 50)' }));
+    s.appendChild(svgN('text', { class: 'v', x: 50, y: 45, 'text-anchor': 'middle', 'dominant-baseline': 'central' }, value));
+    if (sub) s.appendChild(svgN('text', { class: 'of', x: 50, y: 66, 'text-anchor': 'middle' }, sub));
+    return s;
+  }
+  /**
+   * A card with the ring on the left and the words on the right:
+   * { title, kicker, score, value, sub, band, delta, deltaFormat, inverse, foot, onClick, facet }
+   */
+  function ringCard(o) {
+    if (o.facet && !can(o.facet)) return null;
+    const c = el('div', { class: 'card ring-card' + (o.onClick ? ' click' : ''), tabindex: o.onClick ? '0' : null,
+      onclick: o.onClick || null, onkeydown: o.onClick ? (e => { if (e.key === 'Enter') o.onClick(); }) : null }, [
+      ring(o.score, o.value, o.sub, { band: o.band, min: o.min }),
+      el('div', { class: 'rc-body' }, [
+        o.kicker ? el('div', { class: 'sc-kicker', text: o.kicker }) : null,
+        el('h3', { text: o.title }),
+        o.foot ? el('div', { class: 'note rc-foot' }, [
+          document.createTextNode(o.foot),
+          o.delta != null ? document.createTextNode(' \u00b7 ') : null,
+          o.delta != null ? deltaBadge(o.delta, o.deltaFormat, o.inverse) : null
+        ].filter(Boolean)) : (o.delta != null ? el('div', { class: 'note rc-foot' }, deltaBadge(o.delta, o.deltaFormat, o.inverse)) : null)
+      ].filter(Boolean))
+    ]);
+    if (o.facet) c.dataset.facet = o.facet;
+    return c;
+  }
+
   /**
    * A view in sections, one on screen at a time.
    *
@@ -702,11 +745,30 @@
     f.appendChild(el('div', { class: 'grid', style: 'margin-bottom:14px' }, sourcesCard(m)));
 
     const gsSev = { good: 'good', watch: 'medium', poor: 'critical' }[s.governanceBand] || 'medium';
-    const kpis = el('div', { class: 'grid g5' });
+    /* The four shares a reader recognises at a glance, as rings; the counts stay tiles. */
+    const pScore = bDelta('policyScore');
+    const rings = el('div', { class: 'grid g4', style: 'margin-bottom:14px' });
+    rings.append(...[
+      ringCard({ title: T('gs.title'), kicker: T('gs.higherBetter'), score: s.governanceScore == null ? null : s.governanceScore / 100,
+        value: s.governanceScore == null ? '\u2014' : String(s.governanceScore), sub: '/ 100', band: gsSev, min: 0.03,
+        delta: bDelta('governanceScore'), inverse: true, foot: governanceFoot(s), facet: 'governance', onClick: () => HR.app.go('policies') }),
+      ringCard({ title: T('po.kScore'), kicker: T('po.title'), score: s.policyEvaluated ? s.policyScore : null,
+        value: s.policyEvaluated ? U.fmtPct(s.policyScore, 0) : '\u2014', sub: s.policyEvaluated ? T('ov.controlsSub', { met: s.policyPassed, of: s.policyEvaluated }) : T('po.needs'),
+        band: s.policyScore >= .9 ? 'good' : s.policyScore >= .6 ? 'medium' : 'critical', min: 0.03,
+        delta: pScore ? { change: Math.round(100 * pScore.change) } : undefined, deltaFormat: v => v + 'pp', inverse: true,
+        foot: T('gs.halfOfShort'), facet: 'governance', onClick: () => HR.app.go('policies', { tab: 'scorecards' }) }),
+      ringCard({ title: T('ov.coverage'), kicker: T('ov.coverageFoot'), score: s.coverage, value: U.fmtPct(s.coverage, 0),
+        sub: T('ov.unownedSub', { n: U.fmtInt(s.orphanAccounts) }), band: s.coverage >= .9 ? 'good' : s.coverage >= .75 ? 'medium' : 'high', min: 0.03,
+        delta: bDelta('orphanAccounts'), foot: T('ov.stillEnabled', { n: s.orphanEnabled }), onClick: () => HR.app.go('accounts', { filter: 'orphan' }) }),
+      ringCard({ title: T('ov.classified'), kicker: T('ov.classifiedKicker'), score: s.classified, value: U.fmtPctFloor(s.classified),
+        sub: T('ov.classifiedSub', { p: U.fmtInt(s.unclassifiedPermissions), a: U.fmtInt(s.unclassifiedAccounts) }),
+        band: s.classified >= .9 ? 'good' : s.classified >= .7 ? 'medium' : 'high', min: 0.03,
+        foot: T('ov.classifiedFoot', { p: U.fmtInt(s.unclassifiedPermissions), a: U.fmtInt(s.unclassifiedAccounts) }),
+        onClick: () => HR.app.go('classify', { tab: s.unclassifiedPermissions ? 'perms' : 'accounts', filter: 'unclassified' }) })
+    ].filter(Boolean));
+    f.appendChild(rings);
+    const kpis = el('div', { class: 'grid g4' });
     kpis.append(
-      tile(T('gs.title'), String(s.governanceScore), governanceFoot(s), {
-        severity: gsSev, delta: bDelta('governanceScore'), inverse: true, onClick: () => HR.app.go('policies')
-      }),
       tile(T('gs.risk'), String(s.riskScore), T('gs.lowerBetter'), {
         severity: s.riskBand, delta: bDelta('riskScore'), onClick: () => HR.app.go('risk')
       }),
@@ -719,13 +781,10 @@
     );
     f.appendChild(kpis);
 
-    const kpis2 = el('div', { class: 'grid g5' });
+    const kpis2 = el('div', { class: 'grid g3' });
     kpis2.style.marginTop = '14px';
     kpis2.append(
       tile(T('ov.accounts'), U.fmtInt(s.accounts), T('ov.enabledDisabled', { e: s.enabledAccounts, d: s.disabledAccounts }), { small: true, delta: bDelta('accounts'), onClick: () => HR.app.go('accounts') }),
-      tile(T('ov.coverage'), U.fmtPct(s.coverage, 0), T('ov.coverageFoot'), { small: true, severity: s.coverage > .9 ? 'good' : 'medium', onClick: () => HR.app.go('people') }),
-      tile(T('ov.classified'), U.fmtPctFloor(s.classified), T('ov.classifiedFoot', { p: U.fmtInt(s.unclassifiedPermissions), a: U.fmtInt(s.unclassifiedAccounts) }),
-        { small: true, severity: s.classified >= .9 ? 'good' : s.classified >= .7 ? 'medium' : 'high', onClick: () => HR.app.go('classify', { tab: s.unclassifiedPermissions ? 'perms' : 'accounts', filter: 'unclassified' }) }),
       tile(T('ov.licenceSpend'), U.fmtMoney(s.monthlyCost) + '/mo', T('ov.pricedGroups', { n: m.cost.pricedPermissions }), { small: true, delta: bDelta('monthlyCost'), deltaFormat: U.fmtMoney, onClick: () => HR.app.go('cost', { tab: 'spend' }) }),
       tile(T('ov.cleanup'), U.fmtMoney(m.cost.remediationCost), T('ov.cleanupFoot', { h: Math.round(m.cost.remediation.hours), rate: U.fmtMoney(m.cost.remediation.rate) }), { small: true, onClick: () => HR.app.go('cost', { tab: 'case' }) })
     );
@@ -4322,7 +4381,7 @@
   /* What the split-out view files build with. Everything here was already shared inside
      this file; naming it makes the seam explicit rather than accidental. */
   HR.viewkit = {
-    card, tile, scoreBar, dl, partialNotice, syntheticVaultNotice, personRow, peopleIndex, entitlementTable,
+    card, tile, ring, ringCard, scoreBar, dl, partialNotice, syntheticVaultNotice, personRow, peopleIndex, entitlementTable,
     openDrawer, closeDrawer, drawerAccount, drawerPermission, drawerVaultPerson, drawerSystem,
     drawerChangelog, STATE_SEV, stateLabel, offsetText, sourcesCard, tabbed,
     lead, info, explain, collapseNotes, fitNotice

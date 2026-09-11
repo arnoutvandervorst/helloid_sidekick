@@ -18,6 +18,10 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.73', date: '2026-09-11',
+      changes: ['The Overview opens with four rings — governance score, controls met, identity coverage, classified — each a share against a whole or a target, with its delta against the compared data point and a click to the page behind it; risk exposure, unowned, unmanaged, recoverable, accounts, spend and clean-up stay tiles. One ring in the codebase now: the scorecards, the KPI cards, the board and the Overview draw the same one.']
+    },
+    {
       version: '2026.9.72', date: '2026-09-11',
       changes: ['Dutch wording: IAM terms are the English ones the trade uses — Identity, Policy, Evidence, Risk, Findings, Attestation, Leavers, Workforce, Privileged access, Access hygiene, Joiners / movers / leavers, workspace, lifecycle, baseline, SoD (functiescheiding) — in the sidebar, the tabs, the theme cards and the sentences. Explanations stay Dutch; the nouns of the trade do not get translated.']
     },

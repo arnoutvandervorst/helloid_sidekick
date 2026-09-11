@@ -344,6 +344,12 @@ span.info:not(.sev), .tooltip-glyph {
 .k-ring.wait circle { stroke-dasharray: 3 3; } .k-ring.wait .arc { display: none; }
 .k-ring .v { font: 500 20px/1 var(--mono, ui-monospace, monospace); fill: var(--text-primary); }
 .k-ring .of { font-size: 8.5px; fill: var(--muted); }
+.ring-card { display: grid; grid-template-columns: 84px 1fr; gap: 12px; align-items: center; padding: 14px; }
+.ring-card.click { cursor: pointer; }
+.ring-card.click:hover, .ring-card:focus-visible { border-color: var(--border-strong); outline: none; }
+.ring-card .k-ring { width: 84px; height: 84px; margin: 0; }
+.ring-card h3 { margin: 2px 0; font-size: 14px; }
+.ring-card .rc-foot { line-height: 1.35; }
 .ctl-now { font-size: 22px; font-weight: 600; line-height: 1.1; }
 .ctl-gauge { position: relative; height: 6px; margin: 8px 0 6px; border-radius: 3px; background: var(--surface-2); overflow: visible; }
 .ctl-gauge i { display: block; height: 6px; border-radius: 3px; }
@@ -607,7 +613,7 @@ details.finding.finding-target { animation: finding-flash 2.4s ease-out 1; scrol
 /* compliance scorecards: ring, bars, one card per framework */
 .sc-grid { gap: 14px; }
 .sc-h { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
-.grid.g3.sc-grid .sc-ring { width: 80px; height: 80px; }
+.grid.g3.sc-grid .k-ring { width: 80px; height: 80px; }
 .sc-card { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; cursor: pointer; }
 .sc-card.detail { cursor: default; }
 .sc-card:hover, .sc-card:focus-visible { border-color: var(--border-strong); outline: none; }
@@ -617,10 +623,8 @@ details.finding.finding-target { animation: finding-flash 2.4s ease-out 1; scrol
 .sc-kicker, .sc-card h2, .sc-meta { grid-column: 1; }
 .sc-ringwrap { grid-column: 2; grid-row: 1 / span 3; align-self: start; text-align: center; }
 .sc-cap { font-size: 10.5px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-bottom: 4px; }
-.sc-ring { display: block; width: 100px; height: 100px; }
-.sc-ring.lg { width: 124px; height: 124px; }
-.sc-v { font: 500 22px/1 var(--mono, ui-monospace, monospace); fill: var(--text-primary); }
-.sc-of { font-size: 9px; fill: var(--muted); }
+.sc-ringwrap .k-ring { width: 100px; height: 100px; }
+.sc-ringwrap .k-ring.lg { width: 124px; height: 124px; }
 .sc-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; font-size: 11.5px; color: var(--muted); margin-top: 4px; }
 .sc-meta b { display: block; color: var(--text-secondary); font-weight: 500; }
 .sc-bars { grid-column: 1 / -1; border-top: 1px solid var(--border); margin-top: 8px; padding-top: 10px; display: grid; gap: 10px; }
@@ -635,7 +639,7 @@ details.finding.finding-target { animation: finding-flash 2.4s ease-out 1; scrol
 .sc-foot a { color: var(--series-1); text-decoration: none; margin-left: auto; }
 .sheet .sc-rings { display: flex; gap: 18px; justify-content: space-between; margin: 6px 0 10px; }
 .sheet .sc-rings > div { text-align: center; flex: 1; }
-.sheet .sc-rings .sc-ring { margin: 0 auto; }
+.sheet .sc-rings .k-ring { margin: 0 auto; width: 96px; height: 96px; }
 .sheet .sc-rings .lbl { font-size: 12px; font-weight: 600; margin-top: 4px; }
 .sheet .sc-rings .sub { font-size: 11px; color: #6b6a66; }
 .cw-new td { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--series-1); }

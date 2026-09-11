@@ -22,20 +22,11 @@
     if (row.def.dir === 'max') return v <= l + 1e-9 ? 1 : (l <= 0 ? 0 : Math.max(0, Math.min(1, l / v)));
     return v >= l - 1e-9 ? 1 : (l <= 0 ? 0 : Math.max(0, Math.min(1, v / l)));
   }
-  const NS2 = 'http://www.w3.org/2000/svg';
-  const svg2 = (tag, attrs, text) => { const n = document.createElementNS(NS2, tag); Object.keys(attrs || {}).forEach(k => n.setAttribute(k, attrs[k])); if (text != null) n.textContent = text; return n; };
   /** The control as a ring: today's value inside, the limit under it, colour by what is open. */
   function kpiRing(row) {
     const sc = kpiScore(row);
-    const tone = sc === null ? 'wait' : row.status === 'met' ? 'good' : row.status === 'accepted' ? 'warn' : (row.def.severity || 'medium');
-    const s = svg2('svg', { viewBox: '0 0 100 100', class: 'k-ring ' + tone });
-    const C = 2 * Math.PI * 45;
-    s.appendChild(svg2('circle', { cx: 50, cy: 50, r: 45 }));
-    /* A breached limit of 0 is an empty ring; a sliver keeps the colour readable. */
-    const fill = sc === null ? 0 : Math.max(sc, row.status === 'notMet' ? 0.04 : 0);
-    s.appendChild(svg2('circle', { class: 'arc', cx: 50, cy: 50, r: 45, 'stroke-dasharray': (C * fill).toFixed(1) + ' ' + C.toFixed(1), transform: 'rotate(-90 50 50)' }));
-    s.appendChild(svg2('text', { class: 'v', x: 50, y: 45, 'text-anchor': 'middle', 'dominant-baseline': 'central' }, row.applicable ? fmtVal(row) : '\u2014'));
-    s.appendChild(svg2('text', { class: 'of', x: 50, y: 66, 'text-anchor': 'middle' }, T('po.limitIs', { limit: fmtLimit(row) })));
+    const tone = sc === null ? null : row.status === 'met' ? 'good' : row.status === 'accepted' ? 'warn' : (row.def.severity || 'medium');
+    const s = HR.viewkit.ring(sc, row.applicable ? fmtVal(row) : '\u2014', T('po.limitIs', { limit: fmtLimit(row) }), { band: tone, min: row.status === 'notMet' ? 0.04 : 0 });
     s.setAttribute('title', row.applicable ? T('po.ringTip', { pct: U.fmtPct(sc, 0) }) : T('po.needs'));
     return s;
   }
@@ -330,21 +321,9 @@
   }
 
   /* ---- scorecards: the ring, the bars, one card per framework ---------------- */
-  const NS = 'http://www.w3.org/2000/svg';
-  const svgEl = (tag, attrs, text) => { const n = document.createElementNS(NS, tag); Object.keys(attrs || {}).forEach(k => n.setAttribute(k, attrs[k])); if (text != null) n.textContent = text; return n; };
   const bandOf = score => score >= 0.9 ? 'good' : score >= 0.6 ? 'medium' : 'critical';
   /** The score as a ring: the weighted share met, the points under it. */
-  function ring(score, points, total, size) {
-    const s = svgEl('svg', { viewBox: '0 0 100 100', class: 'sc-ring' + (size === 'lg' ? ' lg' : '') });
-    /* A thin band with a wide inside: the numbers must never touch the stroke. */
-    const C = 2 * Math.PI * 45;
-    s.appendChild(svgEl('circle', { cx: 50, cy: 50, r: 45, fill: 'none', stroke: 'var(--grid)', 'stroke-width': 7 }));
-    s.appendChild(svgEl('circle', { cx: 50, cy: 50, r: 45, fill: 'none', stroke: 'var(--' + bandOf(score) + ')', 'stroke-width': 7,
-      'stroke-dasharray': (C * Math.max(0, Math.min(1, score))).toFixed(1) + ' ' + C.toFixed(1), transform: 'rotate(-90 50 50)' }));
-    s.appendChild(svgEl('text', { x: 50, y: 45, 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'sc-v' }, U.fmtPct(score, 0)));
-    s.appendChild(svgEl('text', { x: 50, y: 66, 'text-anchor': 'middle', class: 'sc-of' }, T('po.sc.pts', { n: U.fmtNum(points, 0), of: U.fmtNum(total, 0) })));
-    return s;
-  }
+  const ring = (score, points, total, size) => HR.viewkit.ring(score, U.fmtPct(score, 0), T('po.sc.pts', { n: U.fmtNum(points, 0), of: U.fmtNum(total, 0) }), { band: bandOf(score), size });
   function bar(label, n, of, tone) {
     const pct = of ? 100 * n / of : 0;
     return el('div', { class: 'sc-bar' }, [
