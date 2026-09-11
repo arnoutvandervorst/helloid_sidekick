@@ -18,6 +18,10 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.72', date: '2026-09-11',
+      changes: ['Dutch wording: IAM terms are the English ones the trade uses — Identity, Policy, Evidence, Risk, Findings, Attestation, Leavers, Workforce, Privileged access, Access hygiene, Joiners / movers / leavers, workspace, lifecycle, baseline, SoD (functiescheiding) — in the sidebar, the tabs, the theme cards and the sentences. Explanations stay Dutch; the nouns of the trade do not get translated.']
+    },
+    {
       version: '2026.9.71', date: '2026-09-11',
       changes: ['Dutch: “raamwerk” is “framework” everywhere. The chip on The KPIs says what it does now — “Show framework texts”: the article texts inside a control’s drawer.']
     },

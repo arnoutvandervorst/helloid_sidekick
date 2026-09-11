@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.9.72] — 2026-09-11
+
+- Dutch wording: IAM terms are the English ones the trade uses — Identity, Policy, Evidence, Risk, Findings, Attestation, Leavers, Workforce, Privileged access, Access hygiene, Joiners / movers / leavers, workspace, lifecycle, baseline, SoD (functiescheiding) — in the sidebar, the tabs, the theme cards and the sentences. Explanations stay Dutch; the nouns of the trade do not get translated.
+
 ## [2026.9.71] — 2026-09-11
 
 - Dutch: “raamwerk” is “framework” everywhere. The chip on The KPIs says what it does now — “Show framework texts”: the article texts inside a control’s drawer.
