@@ -14,6 +14,32 @@
   const fmtV = (def, v) => v == null ? '\u2014' : (def.unit === 'pct' ? U.fmtNum(v, 1) + '%' : U.fmtInt(v));
   const MOVE_CLASS = { newlyMet: 'ok', improved: 'ok', same: '', worse: 'removed', newlyBroken: 'removed', new: 'muted', gone: 'muted' };
 
+  /** How far a control is from its limit, 0..1: full when met; against an upper limit
+      limit ÷ value, against a lower one value ÷ limit; a breached limit of 0 is empty. */
+  function kpiScore(row) {
+    if (!row.applicable) return null;
+    const v = row.value, l = row.threshold;
+    if (row.def.dir === 'max') return v <= l + 1e-9 ? 1 : (l <= 0 ? 0 : Math.max(0, Math.min(1, l / v)));
+    return v >= l - 1e-9 ? 1 : (l <= 0 ? 0 : Math.max(0, Math.min(1, v / l)));
+  }
+  const NS2 = 'http://www.w3.org/2000/svg';
+  const svg2 = (tag, attrs, text) => { const n = document.createElementNS(NS2, tag); Object.keys(attrs || {}).forEach(k => n.setAttribute(k, attrs[k])); if (text != null) n.textContent = text; return n; };
+  /** The control as a ring: today's value inside, the limit under it, colour by what is open. */
+  function kpiRing(row) {
+    const sc = kpiScore(row);
+    const tone = sc === null ? 'wait' : row.status === 'met' ? 'good' : row.status === 'accepted' ? 'warn' : (row.def.severity || 'medium');
+    const s = svg2('svg', { viewBox: '0 0 100 100', class: 'k-ring ' + tone });
+    const C = 2 * Math.PI * 45;
+    s.appendChild(svg2('circle', { cx: 50, cy: 50, r: 45 }));
+    /* A breached limit of 0 is an empty ring; a sliver keeps the colour readable. */
+    const fill = sc === null ? 0 : Math.max(sc, row.status === 'notMet' ? 0.04 : 0);
+    s.appendChild(svg2('circle', { class: 'arc', cx: 50, cy: 50, r: 45, 'stroke-dasharray': (C * fill).toFixed(1) + ' ' + C.toFixed(1), transform: 'rotate(-90 50 50)' }));
+    s.appendChild(svg2('text', { class: 'v', x: 50, y: 45, 'text-anchor': 'middle', 'dominant-baseline': 'central' }, row.applicable ? fmtVal(row) : '\u2014'));
+    s.appendChild(svg2('text', { class: 'of', x: 50, y: 66, 'text-anchor': 'middle' }, T('po.limitIs', { limit: fmtLimit(row) })));
+    s.setAttribute('title', row.applicable ? T('po.ringTip', { pct: U.fmtPct(sc, 0) }) : T('po.needs'));
+    return s;
+  }
+
   /** This control's movement against the compared data point, if there is one. */
   function movementOf(id) {
     const d = HR.app.state.diff;
@@ -147,17 +173,8 @@
 
     /* --- column 2: now vs limit --- */
     const stand = el('div', { class: 'ctl-stand' });
+    stand.appendChild(kpiRing(row));
     if (row.applicable) {
-      const pct = row.def.unit === 'pct';
-      stand.appendChild(el('div', { class: 'ctl-now mono', text: fmtVal(row) }));
-      stand.appendChild(el('div', { class: 'note', text: T('po.limitIs', { limit: fmtLimit(row) }) }));
-      if (pct) {
-        const cap = Math.max(row.threshold, row.value, 1);
-        stand.appendChild(el('div', { class: 'ctl-gauge' }, [
-          el('i', { class: row.met ? 'ok' : 'bad', style: 'width:' + Math.min(100, 100 * row.value / cap) + '%' }),
-          el('b', { style: 'left:' + Math.min(100, 100 * row.threshold / cap) + '%', title: fmtLimit(row) })
-        ]));
-      }
       if (row.affected.length) {
         stand.appendChild(el('a', { href: '#', class: 'ctl-affected', text: T('po.affectedN', { n: U.fmtInt(row.affected.length) }),
           onclick: e => { e.preventDefault(); openAffected(m, row); } }));

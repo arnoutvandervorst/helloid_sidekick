@@ -18,6 +18,10 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.69', date: '2026-09-11',
+      changes: ['Every KPI is a ring. In The KPIs each control carries its own ring instead of the value / limit / gauge column: today’s value inside, the limit under it, the fill how far it is from the limit (full when met; against an upper limit limit ÷ value, against a lower one value ÷ limit; a breached limit of 0 shows a sliver), the colour the severity of what is open — green when met, amber when accepted, dotted grey while waiting on data.']
+    },
+    {
       version: '2026.9.68', date: '2026-09-11',
       changes: ['Scorecards by theme, under the frameworks: Identity, Joiners / movers / leavers, Privileged access, Access hygiene, Licences and cost, HelloID operations — each the question a reader asks, cutting across frameworks, with the same ring, bars and drill-down to its KPIs (theme chips on The KPIs too). The ring is a thinner band with the numbers well inside it; they touched the stroke.']
     },

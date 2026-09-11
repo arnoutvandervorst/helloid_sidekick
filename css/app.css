@@ -318,6 +318,18 @@ span.info:not(.sev), .tooltip-glyph {
 .ctl-refs .pill { font-size: 10.5px; }
 .ctl-fix { margin: 6px 0 0; }
 .ctl-stand { padding-top: 2px; }
+/* a KPI as a ring: value inside, limit under it, colour by what is open */
+.k-ring { width: 96px; height: 96px; display: block; margin-bottom: 4px; }
+.k-ring circle { fill: none; stroke: var(--grid); stroke-width: 7; }
+.k-ring .arc { stroke: var(--good); }
+.k-ring.critical .arc { stroke: var(--critical); }
+.k-ring.high .arc { stroke: var(--serious); }
+.k-ring.medium .arc { stroke: var(--warning); }
+.k-ring.low .arc { stroke: var(--muted); }
+.k-ring.warn .arc { stroke: var(--warning); }
+.k-ring.wait circle { stroke-dasharray: 3 3; } .k-ring.wait .arc { display: none; }
+.k-ring .v { font: 500 20px/1 var(--mono, ui-monospace, monospace); fill: var(--text-primary); }
+.k-ring .of { font-size: 8.5px; fill: var(--muted); }
 .ctl-now { font-size: 22px; font-weight: 600; line-height: 1.1; }
 .ctl-gauge { position: relative; height: 6px; margin: 8px 0 6px; border-radius: 3px; background: var(--surface-2); overflow: visible; }
 .ctl-gauge i { display: block; height: 6px; border-radius: 3px; }
