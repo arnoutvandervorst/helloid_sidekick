@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.9.71] — 2026-09-11
+
+- Dutch: “raamwerk” is “framework” everywhere. The chip on The KPIs says what it does now — “Show framework texts”: the article texts inside a control’s drawer.
+
 ## [2026.9.70] — 2026-09-11
 
 - The KPIs are cards now, as previewed: three to a row per severity, each with its ring, status, the articles it cites, what it means, the affected list and owner / due. A card opens the full control in a drawer — how it evidences the articles, the framework texts, the fold with limit, owner, due date and exception — and an edit there shows at once.

@@ -18,6 +18,10 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.71', date: '2026-09-11',
+      changes: ['Dutch: “raamwerk” is “framework” everywhere. The chip on The KPIs says what it does now — “Show framework texts”: the article texts inside a control’s drawer.']
+    },
+    {
       version: '2026.9.70', date: '2026-09-11',
       changes: ['The KPIs are cards now, as previewed: three to a row per severity, each with its ring, status, the articles it cites, what it means, the affected list and owner / due. A card opens the full control in a drawer — how it evidences the articles, the framework texts, the fold with limit, owner, due date and exception — and an edit there shows at once.']
     },
