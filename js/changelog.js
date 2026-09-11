@@ -18,6 +18,10 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.76', date: '2026-09-11',
+      changes: ['Rings render crisp: the arc is vector, the number on top is ordinary page text, and the caption (limit, “8 / 22”, “44 unowned”) sits under the ring instead of squeezed inside it.']
+    },
+    {
       version: '2026.9.75', date: '2026-09-11',
       changes: ['Overview: “what this analysis is standing on” is one remark line under the title — the sources, how old they are, what is not loaded — with the table behind a fold; the rings come first. The rings themselves are softer: rounded ends, a slightly thinner band, precise rendering.']
     },

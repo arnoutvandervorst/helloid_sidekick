@@ -256,21 +256,20 @@
    */
   function ring(score, value, sub, opts) {
     opts = opts || {};
-    const s = svgN('svg', { viewBox: '0 0 100 100', class: 'k-ring ' + (score == null ? 'wait' : (opts.band || 'good')) + (opts.size === 'lg' ? ' lg' : '') });
+    /* The arc is vector; the numbers are HTML on top of it so they render as crisp as
+       any other text on the page, and the caption sits under the ring, never inside it. */
+    const wrap = el('div', { class: 'k-ring ' + (score == null ? 'wait' : (opts.band || 'good')) + (opts.size === 'lg' ? ' lg' : '') });
+    const s = svgN('svg', { viewBox: '0 0 100 100', class: 'k-arc' });
     const C = 2 * Math.PI * 45;
     s.appendChild(svgN('circle', { cx: 50, cy: 50, r: 45 }));
     const fill = score == null ? 0 : Math.max(Math.min(1, score), opts.min || 0);
     s.appendChild(svgN('circle', { class: 'arc', cx: 50, cy: 50, r: 45, 'stroke-dasharray': (C * fill).toFixed(1) + ' ' + C.toFixed(1), transform: 'rotate(-90 50 50)' }));
-    s.appendChild(svgN('text', { class: 'v', x: 50, y: 45, 'text-anchor': 'middle', 'dominant-baseline': 'central' }, value));
-    /* Both texts must stay inside the band (inner width ~74 units): long ones shrink. */
-    const vFs = Math.min(22, 22 * 5 / Math.max(5, String(value).length));
-    s.querySelector('.v').setAttribute('style', 'font-size:' + vFs.toFixed(1) + 'px');
-    if (sub) {
-      const fs = Math.min(8.5, 8.5 * 13 / Math.max(13, String(sub).length));
-      s.appendChild(svgN('text', { class: 'of', x: 50, y: 66, 'text-anchor': 'middle', style: 'font-size:' + fs.toFixed(1) + 'px' }, sub));
-    }
-    return s;
+    wrap.appendChild(s);
+    wrap.appendChild(el('div', { class: 'k-num mono', text: String(value) }));
+    if (sub) wrap.appendChild(el('div', { class: 'k-sub note', text: String(sub) }));
+    return wrap;
   }
+
   /**
    * A card with the ring on the left and the words on the right:
    * { title, kicker, score, value, sub, band, delta, deltaFormat, inverse, foot, onClick, facet }
