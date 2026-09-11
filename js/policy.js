@@ -416,21 +416,34 @@
     bio: { name: 'BIO 2.0', kicker: 'Baseline Informatiebeveiliging Overheid 2.0 \u00b7 ISO 27002:2022 numbering' }
   };
 
+  /* Themes: the question a reader asks, cutting across frameworks. A control may sit
+     in more than one. Ids double as i18n keys (po.theme.<id>). */
+  const THEMES = {
+    identity: { controls: ['unowned-share', 'unowned-enabled', 'duplicate-ids', 'shared-share', 'test-share', 'multiple-accounts', 'no-account-employees', 'former-accounts'] },
+    jml: { controls: ['joiner-latency', 'mover-residue-sla', 'leaver-revoke-sla', 'leavers-enabled', 'former-accounts', 'stale-managers'] },
+    privileged: { controls: ['admin-share', 'privileged-unowned', 'service-unowned', 'privileged-reviewed', 'sod-violations', 'local-admin-logins', 'portal-login-failures'] },
+    hygiene: { controls: ['unmanaged-share', 'rule-coverage', 'over-provisioned', 'peer-outliers', 'wide-membership', 'disabled-entitled', 'empty-groups', 'deep-nesting', 'dormant-accounts', 'disabled-share'] },
+    cost: { controls: ['disabled-licensed', 'dormant-accounts', 'disabled-entitled'] },
+    operations: { controls: ['failed-actions-rate', 'import-failures', 'evaluation-age', 'exclusions-without-reason'] }
+  };
+
   /**
    * One scorecard's numbers: the controls that cite a framework (all of them for
-   * fw = ''), scored the way the page scores everything — weighted, critical counting
-   * three times a housekeeping one.
+   * fw = ''), or the controls of a theme ('theme:<id>'), scored the way the page
+   * scores everything — weighted, critical counting three times a housekeeping one.
    */
   function frameworkStats(m, fw) {
     const ev = evaluate(m);
-    const rows = ev.rows.filter(r => !fw || (r.def.refs && r.def.refs[fw]));
+    const theme = fw && fw.startsWith('theme:') ? THEMES[fw.slice(6)] : null;
+    const rows = theme ? ev.rows.filter(r => theme.controls.includes(r.def.id))
+      : ev.rows.filter(r => !fw || (r.def.refs && r.def.refs[fw]));
     const scored = rows.filter(r => r.applicable && r.on);
     const w = list => U.sum(list, r => r.weight);
     const critical = scored.filter(r => r.severity === 'critical');
     const open = scored.filter(r => !r.pass).sort((a, b) => SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity));
     const cites = U.uniq(rows.filter(r => fw && r.def.refs && r.def.refs[fw]).map(r => r.def.refs[fw])).sort();
     return {
-      fw, meta: FRAMEWORK_META[fw] || null, rows, scored,
+      fw, theme: theme ? fw.slice(6) : null, meta: FRAMEWORK_META[fw] || null, rows, scored,
       evaluated: scored.length, met: scored.filter(r => r.pass).length,
       points: w(scored.filter(r => r.pass)), total: w(scored),
       score: scored.length ? w(scored.filter(r => r.pass)) / w(scored) : 0,
@@ -453,5 +466,5 @@
       policyCritical: ev.summary.criticalOpen, policyAccepted: ev.summary.accepted, controls };
   }
 
-  HR.policy = { CATALOG, SEVERITIES, SEVERITY_WEIGHT, FRAMEWORKS, FRAMEWORK_META, evaluate, summaryOf, frameworkStats, set, settingsFor };
+  HR.policy = { CATALOG, SEVERITIES, SEVERITY_WEIGHT, FRAMEWORKS, FRAMEWORK_META, THEMES, evaluate, summaryOf, frameworkStats, set, settingsFor };
 })(window.HR);

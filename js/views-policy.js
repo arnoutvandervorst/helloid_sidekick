@@ -274,12 +274,13 @@
   /** The score as a ring: the weighted share met, the points under it. */
   function ring(score, points, total, size) {
     const s = svgEl('svg', { viewBox: '0 0 100 100', class: 'sc-ring' + (size === 'lg' ? ' lg' : '') });
-    const C = 2 * Math.PI * 42;
-    s.appendChild(svgEl('circle', { cx: 50, cy: 50, r: 42, fill: 'none', stroke: 'var(--grid)', 'stroke-width': 10 }));
-    s.appendChild(svgEl('circle', { cx: 50, cy: 50, r: 42, fill: 'none', stroke: 'var(--' + bandOf(score) + ')', 'stroke-width': 10,
+    /* A thin band with a wide inside: the numbers must never touch the stroke. */
+    const C = 2 * Math.PI * 45;
+    s.appendChild(svgEl('circle', { cx: 50, cy: 50, r: 45, fill: 'none', stroke: 'var(--grid)', 'stroke-width': 7 }));
+    s.appendChild(svgEl('circle', { cx: 50, cy: 50, r: 45, fill: 'none', stroke: 'var(--' + bandOf(score) + ')', 'stroke-width': 7,
       'stroke-dasharray': (C * Math.max(0, Math.min(1, score))).toFixed(1) + ' ' + C.toFixed(1), transform: 'rotate(-90 50 50)' }));
-    s.appendChild(svgEl('text', { x: 50, y: 46, 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'sc-v' }, U.fmtPct(score, 0)));
-    s.appendChild(svgEl('text', { x: 50, y: 70, 'text-anchor': 'middle', class: 'sc-of' }, T('po.sc.pts', { n: U.fmtNum(points, 0), of: U.fmtNum(total, 0) })));
+    s.appendChild(svgEl('text', { x: 50, y: 45, 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'sc-v' }, U.fmtPct(score, 0)));
+    s.appendChild(svgEl('text', { x: 50, y: 66, 'text-anchor': 'middle', class: 'sc-of' }, T('po.sc.pts', { n: U.fmtNum(points, 0), of: U.fmtNum(total, 0) })));
     return s;
   }
   function bar(label, n, of, tone) {
@@ -306,8 +307,8 @@
   function scorecard(m, fw, opts) {
     const st = HR.policy.frameworkStats(m, fw);
     const gs = m.summary;
-    const title = fw ? st.meta.name : T('po.sc.all');
-    const kicker = fw ? st.meta.kicker : T('po.sc.allKicker', { date: (() => { const cur = HR.app.state.snapshots.find(x => x.id === HR.app.state.currentSnapshotId); return cur ? U.fmtDate(cur.dataDate || cur.importedAt).split(',')[0] : '\u2014'; })() });
+    const title = st.theme ? T('po.theme.' + st.theme) : fw ? st.meta.name : T('po.sc.all');
+    const kicker = st.theme ? T('po.theme.' + st.theme + '.k', { n: U.fmtInt(st.rows.length) }) : fw ? st.meta.kicker : T('po.sc.allKicker', { date: (() => { const cur = HR.app.state.snapshots.find(x => x.id === HR.app.state.currentSnapshotId); return cur ? U.fmtDate(cur.dataDate || cur.importedAt).split(',')[0] : '\u2014'; })() });
     const open = () => HR.app.go('policies', { tab: 'kpis', fw });
     const c = el('section', { class: 'card sc-card' + (opts && opts.detail ? ' detail' : ''), tabindex: '0', onclick: opts && opts.detail ? null : open, onkeydown: e => { if (e.key === 'Enter' && !(opts && opts.detail)) open(); } }, [
       el('div', { class: 'sc-kicker', text: kicker }),
@@ -319,7 +320,8 @@
       ]),
       el('div', { class: 'sc-ringwrap' }, [el('div', { class: 'sc-cap', text: T('po.sc.score') }), ring(st.score, st.points, st.total, opts && opts.detail ? 'lg' : '')]),
       el('div', { class: 'sc-meta' }, [
-        el('span', {}, [document.createTextNode(fw ? T('po.sc.cited') : T('gs.title')), el('b', { text: fw ? (st.cites.join(' \u00b7 ') || '\u2014') : (gs.governanceScore == null ? '\u2014' : gs.governanceScore + ' / 100') })]),
+        el('span', {}, [document.createTextNode(st.theme ? T('po.sc.frameworks') : fw ? T('po.sc.cited') : T('gs.title')),
+          el('b', { text: st.theme ? (U.uniq(st.rows.flatMap(r => Object.keys(r.def.refs || {}))).map(k => fwLabel[k]).join(' \u00b7 ') || '\u2014') : fw ? (st.cites.join(' \u00b7 ') || '\u2014') : (gs.governanceScore == null ? '\u2014' : gs.governanceScore + ' / 100') })]),
         el('span', {}, [document.createTextNode(T('po.sc.since')), el('b', { text: movementLine(st) })])
       ]),
       el('div', { class: 'sc-bars' }, [
@@ -335,10 +337,13 @@
     ]);
     return c;
   }
-  function scorecardsTab(m, params) {
+  function scorecardsTab(m) {
     const wrap = el('div', {});
-    const sevFilter = (params && params.sev) || '';
+    wrap.appendChild(el('h3', { class: 'sc-h', text: T('po.sc.byFramework') }));
     wrap.appendChild(el('div', { class: 'grid g2 sc-grid' }, [''].concat(HR.policy.FRAMEWORKS).map(fw => scorecard(m, fw))));
+    /* Themes: the question a reader asks, across frameworks. */
+    wrap.appendChild(el('h3', { class: 'sc-h', style: 'margin-top:18px', text: T('po.sc.byTheme') }));
+    wrap.appendChild(el('div', { class: 'grid g3 sc-grid' }, Object.keys(HR.policy.THEMES).map(id => scorecard(m, 'theme:' + id))));
     wrap.appendChild(el('p', { class: 'note', style: 'margin-top:10px', text: T('po.sc.foot') }));
     return wrap;
   }
@@ -394,9 +399,10 @@
        opens with that framework's own ring. */
     const kpis = document.createDocumentFragment();
     const fw = (HR.app.state.params && HR.app.state.params.fw) || '';
-    if (fw && HR.policy.FRAMEWORK_META[fw]) kpis.appendChild(el('div', { style: 'margin-bottom:14px' }, scorecard(m, fw, { detail: true })));
+    const themeId = fw.startsWith('theme:') ? fw.slice(6) : null;
+    if (fw && (HR.policy.FRAMEWORK_META[fw] || (themeId && HR.policy.THEMES[themeId]))) kpis.appendChild(el('div', { style: 'margin-bottom:14px' }, scorecard(m, fw, { detail: true })));
     const chips = el('div', { class: 'slot-actions', style: 'margin-bottom:8px' },
-      [['', T('c.all')]].concat(HR.policy.FRAMEWORKS.map(k => [k, fwLabel[k]])).map(([k, label]) =>
+      [['', T('c.all')]].concat(HR.policy.FRAMEWORKS.map(k => [k, fwLabel[k]])).concat(Object.keys(HR.policy.THEMES).map(k => ['theme:' + k, T('po.theme.' + k)])).map(([k, label]) =>
         el('button', { class: 'btn sm' + (fw === k ? ' primary' : ''), text: label,
           onclick: () => HR.app.go('policies', { tab: 'kpis', fw: k }) })));
     chips.appendChild(el('button', { class: 'btn sm' + (showRefs() ? ' primary' : ''), text: T(showRefs() ? 'po.hideRefs' : 'po.showRefs'),
@@ -424,7 +430,7 @@
       kpis.appendChild(card(null, null, strip));
     }
     /* Critical first, then the rest; inside a group, failing before passing. */
-    const shown = ev.rows.filter(r => !fw || (r.def.refs && r.def.refs[fw]))
+    const shown = ev.rows.filter(r => !fw || (themeId ? (HR.policy.THEMES[themeId] || { controls: [] }).controls.includes(r.def.id) : (r.def.refs && r.def.refs[fw])))
       .filter(r => !mvFilter || (movementOf(r.def.id) || {}).movement === mvFilter);
     const groups = HR.policy.SEVERITIES.map(sev => ({ sev, rows: shown.filter(r => (r.def.severity || 'medium') === sev)
       .sort((a, b) => (a.status === 'notMet' ? 0 : 1) - (b.status === 'notMet' ? 0 : 1)) })).filter(g => g.rows.length);

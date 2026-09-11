@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.9.68] — 2026-09-11
+
+- Scorecards by theme, under the frameworks: Identity, Joiners / movers / leavers, Privileged access, Access hygiene, Licences and cost, HelloID operations — each the question a reader asks, cutting across frameworks, with the same ring, bars and drill-down to its KPIs (theme chips on The KPIs too). The ring is a thinner band with the numbers well inside it; they touched the stroke.
+
 ## [2026.9.67] — 2026-09-11
 
 - Compliance opens on scorecards: one card for all KPIs and one per framework, each with the weighted score as a ring (points met of points possible), the articles cited, the movement since the compared data point, and bars for controls met, critical controls met and with an owner and a due date. A card opens The KPIs tab filtered to its framework with the same ring as header — the drill-down — and the board’s Policy KPIs page leads with the four rings. BIO is BIO 2.0 now: every reference follows ISO 27002:2022 numbering (5.3, 5.9, 5.15, 5.16, 5.18, 8.2, 8.5, 8.15) with the control texts rewritten to match; the old 27002:2013 numbers are gone from the KPIs, the evidence sentences and the board appendix.
