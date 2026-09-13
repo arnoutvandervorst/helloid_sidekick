@@ -272,7 +272,7 @@
 
   /**
    * A card with the ring on the left and the words on the right:
-   * { title, kicker, score, value, sub, band, delta, deltaFormat, inverse, foot, onClick, facet }
+   * { title, kicker, score, value, sub, band, delta, deltaFormat, inverse, foot, spark, onClick, facet }
    */
   function ringCard(o) {
     if (o.facet && !can(o.facet)) return null;
@@ -286,7 +286,8 @@
           document.createTextNode(o.foot),
           o.delta != null ? document.createTextNode(' \u00b7 ') : null,
           o.delta != null ? deltaBadge(o.delta, o.deltaFormat, o.inverse) : null
-        ].filter(Boolean)) : (o.delta != null ? el('div', { class: 'note rc-foot' }, deltaBadge(o.delta, o.deltaFormat, o.inverse)) : null)
+        ].filter(Boolean)) : (o.delta != null ? el('div', { class: 'note rc-foot' }, deltaBadge(o.delta, o.deltaFormat, o.inverse)) : null),
+        o.spark ? el('div', { class: 'rc-spark' }, o.spark) : null
       ].filter(Boolean))
     ]);
     if (o.facet) c.dataset.facet = o.facet;
@@ -745,11 +746,11 @@
 
 
   /* ================================================================ OVERVIEW */
-  /** The governance score's own footnote: the two halves it is made of. */
-  function governanceFoot(s) {
+  /** The governance score's own footnote: the two halves it is made of, in a caption's width. */
+  function governanceFootShort(s) {
     return s.governancePartial
       ? T('gs.footPartial', { risk: s.riskScore })
-      : T('gs.foot', { risk: s.riskScore, pct: U.fmtPct(s.policyScore || 0, 0) });
+      : T('gs.footShort', { risk: s.riskScore, pct: U.fmtPct(s.policyScore || 0, 0) });
   }
 
   function overview(m) {
@@ -758,7 +759,7 @@
     f.appendChild(el('div', { class: 'view-head' }, [
       el('div', {}, [
         el('h1', { text: T('ov.title') }),
-        el('p', { text: T('ov.lead', { rows: U.fmtInt(s.rows), accounts: s.accounts, perms: s.permissions, systems: s.systems }) })
+        el('p', { text: T('ov.lead', { rows: U.fmtInt(s.rows), accounts: s.accounts, perms: s.permissions, systems: s.systems === 1 ? T('ov.systems1') : T('ov.systemsN', { n: s.systems }) }) })
       ])
     ]));
 
@@ -771,12 +772,12 @@
     rings.append(...[
       ringCard({ title: T('gs.title'), kicker: T('gs.higherBetter'), score: s.governanceScore == null ? null : s.governanceScore / 100,
         value: s.governanceScore == null ? '\u2014' : String(s.governanceScore), sub: '/ 100', band: gsSev, min: 0.03,
-        delta: bDelta('governanceScore'), inverse: true, foot: governanceFoot(s), facet: 'governance', onClick: () => HR.app.go('policies') }),
+        delta: bDelta('governanceScore'), inverse: true, foot: governanceFootShort(s), spark: ringSpark(m, 'governanceScore'), facet: 'governance', onClick: () => HR.app.go('policies') }),
       ringCard({ title: T('po.kScore'), kicker: T('po.title'), score: s.policyEvaluated ? s.policyScore : null,
         value: s.policyEvaluated ? U.fmtPct(s.policyScore, 0) : '\u2014', sub: s.policyEvaluated ? s.policyPassed + ' / ' + s.policyEvaluated : T('po.needs'),
         band: s.policyScore >= .9 ? 'good' : s.policyScore >= .6 ? 'medium' : 'critical', min: 0.03,
         delta: pScore ? { change: Math.round(100 * pScore.change) } : undefined, deltaFormat: v => v + 'pp', inverse: true,
-        foot: T('gs.halfOfShort'), facet: 'governance', onClick: () => HR.app.go('policies', { tab: 'scorecards' }) }),
+        foot: T('gs.halfOfShort'), spark: ringSpark(m, 'policyScore'), facet: 'governance', onClick: () => HR.app.go('policies', { tab: 'scorecards' }) }),
       ringCard({ title: T('ov.coverage'), kicker: T('ov.coverageFoot'), score: s.coverage, value: U.fmtPct(s.coverage, 0),
         sub: U.fmtInt(s.orphanAccounts) + ' ' + T('c.unowned').toLowerCase(), band: s.coverage >= .9 ? 'good' : s.coverage >= .75 ? 'medium' : 'high', min: 0.03,
         delta: bDelta('orphanAccounts'), foot: T('ov.stillEnabled', { n: s.orphanEnabled }), onClick: () => HR.app.go('accounts', { filter: 'orphan' }) }),
@@ -965,9 +966,11 @@
       el('p', { text: T('rk.lead') })
     ])));
 
-    const top = el('div', { class: 'grid g4' });
+    const top = el('div', { class: 'grid g4 rings1' });
     top.append(
-      tile(T('gs.risk'), String(m.risk.overall), T('c.' + m.summary.riskBand) + ' \u00b7 ' + T('gs.lowerBetter'), { severity: m.summary.riskBand, delta: bDelta('riskScore') }),
+      /* The arc is the exposure itself: a short arc is a small exposure, coloured by band. */
+      ringCard({ title: T('gs.risk'), kicker: T('gs.lowerBetter'), score: m.risk.overall / 100, value: String(m.risk.overall), sub: '/ 100',
+        band: m.summary.riskBand, min: 0.03, delta: bDelta('riskScore'), foot: T('c.' + m.summary.riskBand) + ' \u00b7 ' + T('gs.halfOfShort') }),
       tile(T('rk.criticalFindings'), String(m.summary.criticalFindings), T('rk.actWeek'), { severity: 'critical' }),
       tile(T('rk.highFindings'), String(m.summary.highFindings), T('rk.actQuarter'), { severity: 'high' }),
       tile(T('rk.atHigh'), String((m.risk.bands.critical || 0) + (m.risk.bands.high || 0)), T('rk.ofN', { n: m.summary.accounts }), { severity: 'high' })
@@ -1111,15 +1114,34 @@
         }
       })
     ]));
-    m.findings.forEach(fd => {
-      const card = findingCard(fd, m);
-      /* Arriving from a control: this one opens, lights up and is the first thing on screen. */
-      if (target && fd.id === target) {
-        card.open = true;
-        card.classList.add('finding-target');
-        requestAnimationFrame(() => setTimeout(() => card.scrollIntoView({ block: 'start', behavior: 'smooth' }), 50));
-      }
-      list.appendChild(card);
+    /* The areas as filter chips — a reader who owns one area reads only that. */
+    const cat = (params && params.cat) || '';
+    const cats = U.uniq(m.findings.map(f => f.category));
+    if (cats.length > 1) list.appendChild(el('div', { class: 'slot-actions' }, [['', T('c.all')]].concat(cats.map(c => [c, c])).map(([k, label]) =>
+      el('button', { class: 'btn sm' + (cat === k ? ' primary' : ''), text: label + (k ? ' ' + m.findings.filter(f => f.category === k).length : ''),
+        onclick: () => HR.app.go('risk', { tab: 'findings', cat: k }) }))));
+    /* "Open n days" on every row says the same thing 36 times when all findings date from
+       one data point: then it is one line above the list, and the chip only when it differs. */
+    const seen = HR.app.state.findingsSeen || {};
+    const firsts = U.uniq(m.findings.map(f => seen[f.id] ? U.fmtDate(seen[f.id].first).split(',')[0] : null).filter(Boolean));
+    const sameDay = firsts.length === 1;
+    if (sameDay) list.appendChild(el('div', { class: 'note', text: T('rk.allOpenSince', { date: firsts[0] }) }));
+    const shown = cat ? m.findings.filter(f => f.category === cat) : m.findings;
+    /* Grouped by severity, each group headed by its count. */
+    ['critical', 'high', 'medium', 'low', 'info'].forEach(sev => {
+      const group = shown.filter(f => f.severity === sev);
+      if (!group.length) return;
+      list.appendChild(el('div', { class: 'f-group' }, [el('span', { class: 'sev ' + sev, text: T('c.' + sev) }), el('span', { class: 'note', text: T(group.length === 1 ? 'rk.finding1' : 'rk.findingN', { n: group.length }) })]));
+      group.forEach(fd => {
+        const card = findingCard(fd, m, { ageChip: !sameDay });
+        /* Arriving from a control: this one opens, lights up and is the first thing on screen. */
+        if (target && fd.id === target) {
+          card.open = true;
+          card.classList.add('finding-target');
+          requestAnimationFrame(() => setTimeout(() => card.scrollIntoView({ block: 'start', behavior: 'smooth' }), 50));
+        }
+        list.appendChild(card);
+      });
     });
     if (target && !m.findings.some(f => f.id === target)) {
       list.insertBefore(el('p', { class: 'note', text: T('rk.findingGone') }), list.children[1] || null);
@@ -1143,7 +1165,8 @@
     })));
   }
 
-  function findingCard(fd, m) {
+  function findingCard(fd, m, opts) {
+    opts = opts || {};
     const d = el('details', { class: 'finding' });
     const sum = el('summary');
     /* append() stringifies a null argument into the literal text "null", so filter. */
@@ -1155,7 +1178,7 @@
       fd.impactMonthly ? el('span', { class: 'pill', text: U.fmtMoney(fd.impactMonthly) + '/mo · ' + T(fd.recoverable ? 'rk.recoverable' : 'rk.atStake') }) : null,
       (() => {
         const seen = HR.app.state.findingsSeen && HR.app.state.findingsSeen[fd.id];
-        if (!seen) return null;
+        if (!seen || opts.ageChip === false) return null;
         const days = Math.round((Date.now() - seen.first) / 86400000);
         return el('span', { class: 'pill' + (days > 90 ? ' warn' : ''), title: new Date(seen.first).toLocaleDateString(HR.i18n.locale),
           text: T('rk.openSince', { days: U.fmtInt(days) }) });
@@ -1270,10 +1293,15 @@
       el('p', { text: T('ct.lead') })
     ])));
 
-    const k = el('div', { class: 'grid g4' });
+    const k = el('div', { class: 'grid g4 rings1' });
+    /* The recoverable amount as a share of what is spent: the ring says how much of the
+       bill a cleanup would take off. */
+    const wasteShare = c.totalMonthly > 0 ? c.wasteMonthly / c.totalMonthly : null;
     k.append(
+      ringCard({ title: T('ct.recoverableNow'), kicker: T('ct.recoverableKicker'), score: wasteShare, value: wasteShare == null ? '—' : U.fmtPct(wasteShare, wasteShare < 0.1 ? 1 : 0),
+        sub: U.fmtMoney(c.wasteMonthly) + '/mo', band: !c.wasteMonthly ? 'good' : wasteShare > 0.1 ? 'high' : 'medium', min: c.wasteMonthly ? 0.03 : 0,
+        foot: T('ov.perYear', { amount: U.fmtMoney(c.wasteAnnual) }), facet: 'money', onClick: () => HR.app.go('cost', { tab: 'waste' }) }),
       tile(T('ov.licenceSpend'), U.fmtMoney(c.totalMonthly) + '/mo', T('ov.perYear', { amount: U.fmtMoney(c.totalAnnual) }), { delta: bDelta('monthlyCost'), deltaFormat: U.fmtMoney, onClick: () => HR.app.go('cost', { tab: 'spend' }) }),
-      tile(T('ct.recoverableNow'), U.fmtMoney(c.wasteMonthly) + '/mo', T('ov.perYear', { amount: U.fmtMoney(c.wasteAnnual) }), { severity: c.wasteMonthly ? 'high' : 'good', onClick: () => HR.app.go('cost', { tab: 'waste' }) }),
       c.hidden ? tile(T('ct.hidden'), U.fmtMoney(c.hidden.hiddenMonthly) + '/mo', T('ct.hiddenFoot', { amount: U.fmtMoney(c.hidden.hiddenMonthly * 12) }),
         { severity: c.hidden.hiddenMonthly ? 'medium' : 'good', onClick: () => HR.app.go('cost', { tab: 'waste' }) })
         : tile(T('ct.outsideControl'), U.fmtMoney(c.unmanagedSpend) + '/mo', T('ct.outsideControlFoot'), { severity: 'medium', onClick: () => HR.app.go('permissions') }),
@@ -2311,12 +2339,37 @@
 
   /* The direction, in one card: the score over every data point and what moved since
      the compared one. Only with a history to speak of. */
-  function trendCard(m) {
+  /**
+   * One summary number over the data points, oldest first — null where there are fewer
+   * than two. The loaded data point is scored live: its stored number can lag behind when
+   * the rules changed since it was saved, so the series ends where the rest of the page is.
+   */
+  function scoreSeries(m, key) {
     const st = HR.app.state;
     const snaps = (st.snapshots || []).slice().sort((a, b) => (a.dataDate - b.dataDate) || (a.importedAt - b.importedAt));
     if (snaps.length < 2) return null;
-    const vals = snaps.map(s => s.summary && s.summary.governanceScore != null ? s.summary.governanceScore : null);
-    const first = snaps.find(s => s.summary && s.summary.governanceScore != null), last = snaps[snaps.length - 1];
+    const live = m.summary && m.summary[key] != null ? m.summary[key] : null;
+    const scoreOf = s => s.id === st.currentSnapshotId && live != null ? live
+      : s.summary && s.summary[key] != null ? s.summary[key] : null;
+    const cur = snaps.find(s => s.id === st.currentSnapshotId);
+    const stored = cur && cur.summary ? cur.summary[key] : null;
+    return { snaps, vals: snaps.map(scoreOf), scoreOf, cur, stale: cur && live != null && stored != null && stored !== live, stored };
+  }
+  /** A ring caption's trend: the series in a hand-sized spark, scaled to its own range. */
+  function ringSpark(m, key) {
+    const ser = scoreSeries(m, key);
+    if (!ser || ser.vals.filter(v => v != null).length < 2) return null;
+    const sp = HR.charts.spark(ser.vals, { width: 120, height: 20, tight: true, color: 'var(--series-1)' });
+    sp.setAttribute('title', T('tr.ringSparkTip', { n: ser.snaps.length }));
+    return sp;
+  }
+
+  function trendCard(m) {
+    const st = HR.app.state;
+    const ser = scoreSeries(m, 'governanceScore');
+    if (!ser) return null;
+    const { snaps, vals, scoreOf, cur, stale } = ser;
+    const first = snaps.find(s => scoreOf(s) != null), last = snaps[snaps.length - 1];
     const day = t => U.fmtDate(t).split(',')[0];
     const d = st.diff;
     const chip = (n, key, cls) => n ? el('span', { class: 'pill ' + cls, text: U.fmtInt(n) + ' ' + T(key) }) : null;
@@ -2334,11 +2387,15 @@
     const base = st.snapshots.find(s => s.id === st.baselineId);
     return card(T('tr.title'), T('tr.note', { n: snaps.length }), el('div', { class: 'trend-card' }, [
       el('div', { class: 'row', style: 'gap:16px;align-items:baseline' }, [
-        el('div', { class: 'ctl-now mono', style: 'font-size:22px', text: first ? first.summary.governanceScore + ' \u2192 ' + (last.summary.governanceScore != null ? last.summary.governanceScore : '\u2014') : '\u2014' }),
+        el('div', { class: 'ctl-now mono', style: 'font-size:22px', text: first ? scoreOf(first) + ' \u2192 ' + (scoreOf(last) != null ? scoreOf(last) : '\u2014') : '\u2014' }),
         el('span', { class: 'note', text: first ? T('tr.sinceFirst', { date: day(first.dataDate || first.importedAt) }) : T('tr.noScores') })
       ]),
       el('div', { class: 'spark-big', style: 'margin-top:8px' }, sp),
       el('div', { class: 'note', text: T('tr.limitLine') }),
+      stale ? el('div', { class: 'note warn-note' }, [
+        document.createTextNode(T('tr.staleNote', { stored: cur.summary.governanceScore }) + ' '),
+        el('a', { href: '#', text: T('tr.rescore'), onclick: e => { e.preventDefault(); HR.app.rescoreDataPoints(); } })
+      ]) : null,
       chips.length ? el('div', { class: 'trend-chips' }, [el('span', { class: 'note', text: T('tr.since', { date: base ? day(base.dataDate || base.importedAt) : '\u2014' }) })].concat(chips)) : null,
       el('div', { class: 'slot-actions', style: 'margin-top:8px' }, [
         el('button', { class: 'btn sm', text: T('tr.openPoints'), onclick: () => HR.app.go('snapshots') }),
@@ -4407,6 +4464,6 @@
     card, tile, ring, ringCard, scoreBar, dl, partialNotice, syntheticVaultNotice, personRow, peopleIndex, entitlementTable,
     openDrawer, closeDrawer, drawerAccount, drawerPermission, drawerVaultPerson, drawerSystem,
     drawerChangelog, STATE_SEV, stateLabel, offsetText, sourcesCard, tabbed,
-    lead, info, explain, collapseNotes, fitNotice
+    lead, info, explain, collapseNotes, fitNotice, ringSpark
   };
 })(window.HR);

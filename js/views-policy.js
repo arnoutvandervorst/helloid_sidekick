@@ -7,7 +7,7 @@
 
   const U = HR.util, el = U.el;
   const T = (k, p) => HR.i18n.t(k, p);
-  const { card, tile, openDrawer, drawerAccount, drawerPermission, drawerVaultPerson,
+  const { card, tile, ringCard, openDrawer, drawerAccount, drawerPermission, drawerVaultPerson,
     personRow, partialNotice } = HR.viewkit;
 
   const fmtVal = r => r.def.unit === 'pct' ? U.fmtNum(r.value, 1) + '%' : U.fmtInt(r.value);
@@ -418,14 +418,17 @@
     const gs = m.summary;
     const gsSev = { good: 'good', watch: 'medium', poor: 'critical' }[gs.governanceBand] || 'medium';
     const diffGs = HR.app.state.diff && HR.app.state.diff.summary.governanceScore;
-    f.appendChild(el('div', { class: 'grid g5', style: 'margin-bottom:14px' }, [
-      tile(T('gs.title'), gs.governanceScore == null ? '\u2014' : String(gs.governanceScore),
-        gs.governancePartial ? T('gs.footPartial', { risk: gs.riskScore }) : T('gs.foot', { risk: gs.riskScore, pct: U.fmtPct(score, 0) }),
-        { severity: gsSev, delta: diffGs, inverse: true, onClick: () => HR.app.go('overview') }),
-      tile(T('po.kScore'), U.fmtPct(score, 0),
-        T('po.kScoreFoot', { passed: s.passed, n: s.evaluated }) + ' \u00b7 ' + T('po.kScoreWeighted') + ' \u00b7 ' + T('gs.halfOfShort'),
-        { small: true, severity: score >= 1 ? 'good' : score >= 0.7 ? 'medium' : 'high', delta: HR.app.state.diff && HR.app.state.diff.summary.policyScore
-          ? { change: Math.round(100 * HR.app.state.diff.summary.policyScore.change) } : undefined, deltaFormat: v => v + 'pp', inverse: true }),
+    const diffPs = HR.app.state.diff && HR.app.state.diff.summary.policyScore;
+    f.appendChild(el('div', { class: 'grid g5 rings2', style: 'margin-bottom:14px' }, [
+      ringCard({ title: T('gs.title'), kicker: T('gs.higherBetter'), score: gs.governanceScore == null ? null : gs.governanceScore / 100,
+        value: gs.governanceScore == null ? '\u2014' : String(gs.governanceScore), sub: '/ 100', band: gsSev, min: 0.03,
+        delta: diffGs, inverse: true, foot: gs.governancePartial ? T('gs.footPartial', { risk: gs.riskScore }) : T('gs.footShort', { risk: gs.riskScore, pct: U.fmtPct(score, 0) }),
+        spark: HR.viewkit.ringSpark(m, 'governanceScore'), onClick: () => HR.app.go('overview') }),
+      ringCard({ title: T('po.kScore'), kicker: T('gs.halfOfShort'), score: s.evaluated ? score : null,
+        value: s.evaluated ? U.fmtPct(score, 0) : '\u2014', sub: s.evaluated ? s.passed + ' / ' + s.evaluated : T('po.needs'),
+        band: score >= 1 ? 'good' : score >= 0.7 ? 'medium' : 'high', min: 0.03,
+        delta: diffPs ? { change: Math.round(100 * diffPs.change) } : undefined, deltaFormat: v => v + 'pp', inverse: true,
+        foot: T('po.kScoreWeightedShort'), spark: HR.viewkit.ringSpark(m, 'policyScore') }),
       tile(T('po.kCritical'), U.fmtInt(s.criticalOpen),
         s.worstOpen ? T('po.kCriticalFoot', { control: T('po.p.' + s.worstOpen.def.id) }) : T('po.kCriticalNone'),
         { severity: s.criticalOpen ? 'critical' : 'good', small: true }),

@@ -37,10 +37,15 @@
     const active = audit.exclusions.filter(x => !x.until || x.until >= now);
     const expired = audit.exclusions.filter(x => x.until && x.until < now);
     const noReason = audit.exclusions.filter(x => !String(x.comment || '').trim());
-    wrap.appendChild(el('div', { class: 'grid g4', style: 'margin-bottom:14px' }, [
+    /* The share an audit can read: exclusions that carry a reason. */
+    const n = audit.exclusions.length, withReason = n ? (n - noReason.length) / n : null;
+    wrap.appendChild(el('div', { class: 'grid g4 rings1', style: 'margin-bottom:14px' }, [
+      HR.viewkit.ringCard({ title: T('au.kWithReason'), kicker: T('au.kWithReasonKicker'), score: withReason,
+        value: withReason == null ? '—' : U.fmtPct(withReason, 0), sub: U.fmtInt(noReason.length) + ' ' + T('au.kNoReason').toLowerCase(),
+        band: withReason == null ? 'good' : withReason >= 0.9 ? 'good' : withReason >= 0.7 ? 'medium' : 'high', min: 0.03,
+        foot: T('au.kNoReasonFoot') }),
       tile(T('au.kExclusions'), U.fmtInt(audit.exclusions.length), T('au.kExclusionsFoot', { active: U.fmtInt(active.length), expired: U.fmtInt(expired.length) }),
         { severity: noReason.length ? 'medium' : 'good' }),
-      tile(T('au.kNoReason'), U.fmtInt(noReason.length), T('au.kNoReasonFoot'), { severity: noReason.length ? 'high' : 'good', small: true }),
       tile(T('au.kThresholds'), U.fmtInt(audit.thresholds.length), T('au.kThresholdsFoot'), { small: true }),
       tile(T('au.kUnmanaged'), U.fmtInt(audit.entitlements.filter(r => /unmanage/i.test(r.action)).length), T('au.kUnmanagedFoot'), { small: true })
     ]));

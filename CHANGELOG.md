@@ -3,6 +3,13 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.9.79] — 2026-09-13
+
+- Governance pages polished. Every page in the section leads with the same head row: Compliance opens with the governance score and controls met as rings (its cut-off caption is gone), Risk & findings with risk exposure as a ring whose arc is the exposure itself, Cost with what is recoverable as a share of the licence spend seen, Evidence › Decisions with the share of exclusions that carry a reason. The governance and controls rings on Overview and Compliance carry a small trend line of the score over the data points.
+- The Overview trend card ends on today’s score: the loaded data point is scored live, and when its stored score differs (rules changed since it was saved) a line says so and offers the recalculation — it read 51 → 51 next to a 49.
+- Risk & findings: findings are grouped under severity headings with counts, filter chips per area (Identity, Entitlements, Cost, …), and “open n days” is one line above the list when every finding dates from the same data point instead of a chip on each row.
+- Names follow the sidebar in Dutch — Evidence (was Bewijs), Risk & findings (was Risico & findings) — the Overview lead says “1 target system” or “3 target systems” rather than “system(s)”, and the governance ring caption is “risk 24 · controls 22 %”.
+
 ## [2026.9.78] — 2026-09-11
 
 - Overview: the department × entitlement-category heatmap spans the page; it was cropped in half a row.

@@ -352,11 +352,17 @@ span.info:not(.sev), .tooltip-glyph {
 .sources-fold[open] > summary::before { content: '\25BE'; }
 .sources-fold > .card { margin-top: 8px; }
 .ring-card { display: grid; grid-template-columns: 120px 1fr; gap: 12px; align-items: center; padding: 14px; }
+/* A head row that mixes rings with tiles: the ring cards take the wider columns. */
+.grid.g4.rings1 { grid-template-columns: 1.5fr 1fr 1fr 1fr; }
+.grid.g5.rings2 { grid-template-columns: 1.5fr 1.5fr 1fr 1fr 1fr; }
+@media (max-width: 1100px) { .grid.g4.rings1, .grid.g5.rings2 { grid-template-columns: 1fr 1fr; } }
 .ring-card.click { cursor: pointer; }
 .ring-card.click:hover, .ring-card:focus-visible { border-color: var(--border-strong); outline: none; }
 .ring-card .k-ring { --ring: 84px; margin: 0; }
 .ring-card h3 { margin: 2px 0; font-size: 14px; }
 .ring-card .rc-foot { line-height: 1.35; }
+.ring-card .rc-spark { margin-top: 6px; line-height: 0; }
+.ring-card .rc-spark svg { height: 20px; }
 .ctl-now { font-size: 22px; font-weight: 600; line-height: 1.1; }
 .ctl-gauge { position: relative; height: 6px; margin: 8px 0 6px; border-radius: 3px; background: var(--surface-2); overflow: visible; }
 .ctl-gauge i { display: block; height: 6px; border-radius: 3px; }
@@ -422,6 +428,8 @@ span.info:not(.sev), .tooltip-glyph {
 .kv dt { color: var(--text-secondary); }
 .kv dd { margin: 0; }
 .note { color: var(--text-secondary); font-size: 12px; }
+.warn-note { border-left: 3px solid var(--warning); padding-left: 8px; margin-top: 6px; }
+.warn-note a { color: var(--series-1); }
 .stack { display: flex; flex-direction: column; gap: 14px; }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 ul.clean { list-style: none; padding: 0; margin: 0; }
@@ -434,6 +442,8 @@ code.inline { background: var(--hover); padding: 1px 5px; border-radius: 5px; fo
 .finding .f-title { font-weight: 600; flex: 1; }
 .finding .f-body { padding: 0 14px 14px; }
 .finding .f-meta { display: flex; gap: 16px; flex-wrap: wrap; color: var(--text-secondary); font-size: 12px; margin-bottom: 8px; }
+.f-group { display: flex; gap: 10px; align-items: center; margin: 8px 0 -6px; padding-top: 4px; }
+.f-group:first-of-type { margin-top: 0; }
 .progress { height: 6px; background: var(--grid); border-radius: 3px; overflow: hidden; }
 .progress > i { display: block; height: 100%; background: var(--series-1); }
 .scorebar { display: inline-block; width: 46px; height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; vertical-align: middle; }

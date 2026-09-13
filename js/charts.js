@@ -232,7 +232,10 @@
     const nums = values.filter(v => v != null);
     if (!nums.length) return s;
     const all = opts.limit != null ? nums.concat([opts.limit]) : nums;
-    const max = Math.max(1e-9, ...all), min = Math.min(0, ...all);
+    /* tight: scale to the values' own range (a hand-sized spark under a ring), else from 0. */
+    const span = Math.max(...all) - Math.min(...all);
+    const max = opts.tight ? Math.max(...all) + Math.max(span * .15, 1e-9) : Math.max(1e-9, ...all);
+    const min = opts.tight ? Math.min(...all) - span * .15 : Math.min(0, ...all);
     const sx = i => pad + (values.length > 1 ? (W - 2 * pad) * i / (values.length - 1) : (W - 2 * pad) / 2);
     const sy = v => H - pad - (H - 2 * pad) * (v - min) / (max - min || 1);
     if (opts.limit != null) {
