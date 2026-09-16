@@ -3,6 +3,11 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.9.80] — 2026-09-16
+
+- Ring values stay inside the band: a value of five, six or seven characters (“98,7%”, “100,0%”, “€ 1.234”) steps down in size instead of touching the arc.
+- An open KPI card is tinted — a translucent red fill over the card — instead of carrying a red line down its left edge.
+
 ## [2026.9.79] — 2026-09-13
 
 - Governance pages polished. Every page in the section leads with the same head row: Compliance opens with the governance score and controls met as rings (its cut-off caption is gone), Risk & findings with risk exposure as a ring whose arc is the exposure itself, Cost with what is recoverable as a share of the licence spend seen, Evidence › Decisions with the share of exclusions that carry a reason. The governance and controls rings on Overview and Compliance carry a small trend line of the score over the data points.

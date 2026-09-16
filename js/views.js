@@ -265,7 +265,9 @@
     const fill = score == null ? 0 : Math.max(Math.min(1, score), opts.min || 0);
     s.appendChild(svgN('circle', { class: 'arc', cx: 50, cy: 50, r: 45, 'stroke-dasharray': (C * fill).toFixed(1) + ' ' + C.toFixed(1), transform: 'rotate(-90 50 50)' }));
     wrap.appendChild(s);
-    wrap.appendChild(el('div', { class: 'k-num mono', text: String(value) }));
+    /* Long values ("100,0%", "€ 1.234") shrink to stay inside the band; short ones keep the size. */
+    const txt = String(value), len = txt.replace(/\s/g, '').length;
+    wrap.appendChild(el('div', { class: 'k-num mono' + (len >= 7 ? ' n7' : len >= 6 ? ' n6' : len >= 5 ? ' n5' : ''), text: txt }));
     if (sub) wrap.appendChild(el('div', { class: 'k-sub note', text: String(sub) }));
     return wrap;
   }
