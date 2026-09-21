@@ -29,9 +29,14 @@
       return Promise.reject(new Error('storage disabled'));
     }
     if (dbPromise) return dbPromise;
-    dbPromise = new Promise((resolve, reject) => {
+    dbPromise = openDb(DB_NAME).catch(err => { usingMemory = true; throw err; });
+    return dbPromise;
+  }
+  /** Open any workspace's database with the same shape; a new name is created on the spot. */
+  function openDb(name) {
+    return new Promise((resolve, reject) => {
       let req;
-      try { req = indexedDB.open(DB_NAME, DB_VERSION); }
+      try { req = indexedDB.open(name, DB_VERSION); }
       catch (e) { return reject(e); }
       req.onupgradeneeded = () => {
         const db = req.result;
@@ -46,8 +51,18 @@
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
       req.onblocked = () => reject(new Error('IndexedDB blocked'));
-    }).catch(err => { usingMemory = true; throw err; });
-    return dbPromise;
+    });
+  }
+  /** Write a full snapshot into another workspace's database (a data point moving house). */
+  async function copyTo(dbName, snap) {
+    const db = await openDb(dbName);
+    try {
+      await new Promise((resolve, reject) => {
+        const t = db.transaction(STORE, 'readwrite');
+        t.objectStore(STORE).put(snap);
+        t.oncomplete = resolve; t.onerror = () => reject(t.error);
+      });
+    } finally { db.close(); }
   }
 
   function tx(mode, fn, storeName) {
@@ -206,6 +221,6 @@
     });
   }
 
-  HR.store = { list, get, put, remove, clear, makeSnapshot, dateFromName, exportAll, exportBundle, importJSON, isMemory,
+  HR.store = { list, get, put, remove, clear, copyTo, makeSnapshot, dateFromName, exportAll, exportBundle, importJSON, isMemory,
     saveContext, loadContext, clearContext, wipeDb };
 })(window.HR);

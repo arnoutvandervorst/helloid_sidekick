@@ -120,6 +120,21 @@
     ]);
   }
 
+  /** Two tenants in one workspace: say so, and offer the ways out. */
+  function tenantNotice(st) {
+    const t = st.tenant;
+    const cur = st.snapshots.find(s => s.id === st.currentSnapshotId) || {}, prev = st.baselineSnapshot || {};
+    return el('div', { class: 'notice tenant' }, [
+      el('strong', { text: T('tn.title') }),
+      el('span', { text: ' ' + T('tn.text', { cur: cur.name || '\u2014', prev: prev.name || '\u2014', pct: U.fmtPct(t.share, 0), n: U.fmtInt(t.accounts.matched), of: U.fmtInt(t.accounts.of) }) + ' ' }),
+      el('span', { class: 'slot-actions', style: 'display:inline-flex;margin-left:6px' }, [
+        el('button', { class: 'btn sm primary', text: T('tn.move'), onclick: () => HR.app.tenantMove() }),
+        el('button', { class: 'btn sm', text: T('tn.delete'), onclick: () => HR.app.tenantDelete() }),
+        el('button', { class: 'btn ghost sm', text: T('tn.keep'), onclick: () => HR.app.tenantKeep() })
+      ])
+    ]);
+  }
+
   /** The Sources card: every judged pair with its overlap and verdict. */
   function fitCard() {
     const fit = HR.app.state.fit;
@@ -4466,6 +4481,6 @@
     card, tile, ring, ringCard, scoreBar, dl, partialNotice, syntheticVaultNotice, personRow, peopleIndex, entitlementTable,
     openDrawer, closeDrawer, drawerAccount, drawerPermission, drawerVaultPerson, drawerSystem,
     drawerChangelog, STATE_SEV, stateLabel, offsetText, sourcesCard, tabbed,
-    lead, info, explain, collapseNotes, fitNotice, ringSpark
+    lead, info, explain, collapseNotes, fitNotice, tenantNotice, ringSpark
   };
 })(window.HR);

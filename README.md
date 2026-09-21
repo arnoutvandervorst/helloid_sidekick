@@ -729,6 +729,14 @@ than the one it is compared with, the view says the comparison runs backwards.
 Importing a file identical to an existing data point (full-text fingerprint) reuses it.
 Data points export to JSON — vaults included — so they can be moved between machines.
 
+A workspace is one tenant, and every import in it joins that tenant's series. When the
+loaded data point shares fewer than 15 % of its account keys with the one it is compared
+with (and both have at least 20 accounts), a notice says it looks like another tenant —
+the trend, the diff and the KPI movement would compare two customers as one — and offers
+three ways out: move the data point to a new workspace (the app reopens there), delete it,
+or keep the two together; a kept pair stays quiet. The same check runs on every start, so
+an old mistake surfaces too.
+
 **Trends.** Every data point stores each KPI's value and status and each finding's count,
 so the history is per KPI, not only per score: the Overview leads with a Trend card
 (the governance score over every data point, and what moved since the compared one —

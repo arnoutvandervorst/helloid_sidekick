@@ -142,5 +142,29 @@
     return { pairs, worst, mismatches: pairs.filter(p => p.level === 'mismatch') };
   }
 
-  HR.fit = { check, personBits, localOf };
+  /**
+   * Do two data points describe the same tenant? A month-over-month pair of the same
+   * tenant shares most of its account keys; another customer's export shares none.
+   * Accounts decide; persons (when both carry a vault) and system names are shown beside.
+   */
+  function tenant(cur, base) {
+    if (!cur || !base) return null;
+    const shareOf = (a, b) => {
+      const of = Math.min(a.size, b.size);
+      let matched = 0;
+      for (const k of a) if (b.has(k)) matched++;
+      return { matched, of, share: of ? matched / of : 0 };
+    };
+    const accounts = shareOf(new Set(cur.accounts.keys()), new Set(base.accounts.keys()));
+    const persons = cur.vault && base.vault
+      ? shareOf(new Set(cur.vault.persons.map(p => p.externalId || p.personId)), new Set(base.vault.persons.map(p => p.externalId || p.personId)))
+      : null;
+    const systems = shareOf(new Set(cur.systemList.map(x => norm(x.name))), new Set(base.systemList.map(x => norm(x.name))));
+    /* Accounts decide: the vault loaded before an import stays attached to it, so a
+       person overlap can be high while the accounts have nothing in common. */
+    const lvl = accounts.of < MIN_ITEMS ? 'small' : accounts.share < WEAK ? 'foreign' : 'same';
+    return { level: lvl, share: accounts.share, accounts, persons, systems };
+  }
+
+  HR.fit = { check, tenant, personBits, localOf };
 })(window.HR);

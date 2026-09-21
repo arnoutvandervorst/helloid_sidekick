@@ -718,6 +718,7 @@ select.cw-auto { color: var(--muted); }
 .nowrap-cell .pill { flex: 0 0 auto; }
 
 /* A view running on partial evidence says so, without shouting. */
+.notice.tenant { border-left-color: var(--warning); }
 .notice { border: 1px solid var(--border-strong); border-left: 4px solid var(--series-1);
   background: var(--surface-1); border-radius: var(--radius); padding: 10px 14px;
   font-size: 13px; color: var(--text-secondary); margin-bottom: 14px; }

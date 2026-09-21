@@ -88,6 +88,7 @@
     if (state.fit && state.fit.worst === 'mismatch' && state.view !== 'sources' && HR.viewkit.fitNotice) {
       root.appendChild(HR.viewkit.fitNotice(state.fit));
     }
+    if (tenantForeign() && HR.viewkit.tenantNotice) root.appendChild(HR.viewkit.tenantNotice(state));
     try {
       root.appendChild(missing.length ? HR.views.gatePage(state.view, missing) : fn(state.model, state.params));
     } catch (err) {
@@ -327,7 +328,8 @@
     const prev = previousDataPoint(state.currentSnapshotId);
     if (prev) {
       await setBaseline(prev.id, true);
-      if (!dup) U.toast(T('toast.dataPointVs', { name: snap.name, date: U.fmtDate(snap.dataDate).split(',')[0], prev: prev.name, prevDate: U.fmtDate(prev.dataDate).split(',')[0] }), 8000);
+      if (!dup) U.toast(tenantForeign() ? T('toast.tenantWarn', { prev: prev.name })
+        : T('toast.dataPointVs', { name: snap.name, date: U.fmtDate(snap.dataDate).split(',')[0], prev: prev.name, prevDate: U.fmtDate(prev.dataDate).split(',')[0] }), 8000);
     } else {
       await recomputeDiff();
       if (!dup) U.toast(T('toast.dataPoint', { name: snap.name, date: U.fmtDate(snap.dataDate).split(',')[0] }), 6000);
@@ -819,7 +821,41 @@
     await refreshSnapshots();
     const prev = previousDataPoint(state.currentSnapshotId);
     if (prev) await setBaseline(prev.id, true); else await recomputeDiff();
+    if (prev && tenantForeign()) U.toast(T('toast.tenantWarn', { prev: prev.name }), 8000);
     updateTopbar();
+  }
+
+  const tenantForeign = () => !!(state.tenant && state.tenant.level === 'foreign' && !state.tenant.dismissed);
+
+  /** The three ways out of two tenants in one workspace. */
+  async function tenantKeep() {
+    const ctx = await HR.store.loadContext();
+    const ok = (ctx && ctx.tenantOk || []).concat([state.tenant.pairId]);
+    await HR.store.saveContext({ tenantOk: ok });
+    state.tenant.dismissed = true;
+    render();
+  }
+  async function tenantDelete() {
+    const cur = state.snapshots.find(s => s.id === state.currentSnapshotId);
+    if (!cur || !confirm(T('sn.deleteConfirm', { name: cur.name }))) return;
+    const prevId = state.baselineId;
+    await HR.store.remove(cur.id);
+    await refreshSnapshots();
+    if (prevId) await loadSnapshot(prevId);
+    else { state.tenant = null; render(); }
+  }
+  async function tenantMove() {
+    const cur = state.snapshots.find(s => s.id === state.currentSnapshotId);
+    if (!cur) return;
+    const name = prompt(T('tn.movePrompt'), cur.name.replace(/\.[a-z]+$/i, ''));
+    if (!name || !name.trim()) return;
+    await withBusy(T('tn.moving'), async () => {
+      const full = await HR.store.get(cur.id);
+      const id = HR.workspace.create(name.trim());
+      await HR.store.copyTo(HR.workspace.dbName('helloid-recon', id), full);
+      await HR.store.remove(cur.id);
+      HR.workspace.switchTo(id);
+    });
   }
 
   /** The data point dated just before this one; import order breaks the tie. */
@@ -936,6 +972,16 @@
 
   async function recomputeDiff() {
     state.diff = (state.model && state.baselineModel) ? HR.diff.compare(state.model, state.baselineModel) : null;
+    /* Does the compared data point even describe the same tenant? A workspace is one
+       tenant, so two customers' exports in one workspace read as one series — and every
+       trend, diff and movement between them is fiction. Judged every time, so an old
+       mistake surfaces too; a pair the user kept on purpose stays quiet. */
+    state.tenant = (state.model && state.baselineModel && HR.fit) ? HR.fit.tenant(state.model, state.baselineModel) : null;
+    if (state.tenant) {
+      const ctx = await HR.store.loadContext();
+      state.tenant.pairId = state.currentSnapshotId + '|' + state.baselineId;
+      state.tenant.dismissed = !!(ctx && (ctx.tenantOk || []).includes(state.tenant.pairId));
+    }
     /* When each finding was first and last seen, read off the snapshots that carried it. */
     const seen = {};
     (state.snapshots || []).forEach(sn => (sn.summary && sn.summary.findingIds || []).forEach(id => {
@@ -1333,7 +1379,8 @@
 
   const REPO_URL = 'https://github.com/arnoutvandervorst/helloid_sidekick';
 
-  HR.app = { REPO_URL, state, go, rebuild, rebuildBusy, batch, loadSnapshot, setBaseline, refreshSnapshots, rescoreDataPoints, importText, render, applyChrome, updateTopbar,
+  HR.app = {
+    tenantKeep, tenantDelete, tenantMove, REPO_URL, state, go, rebuild, rebuildBusy, batch, loadSnapshot, setBaseline, refreshSnapshots, rescoreDataPoints, importText, render, applyChrome, updateTopbar,
     importFileAs, clearSource, clearRecon, detectKind, loadSample, findSample, sampleName: () => sampleFile || null,
     demoAvailable: () => demoManifest };
   document.addEventListener('DOMContentLoaded', init);

@@ -18,6 +18,12 @@
 
   const ENTRIES = [
     {
+      version: '2026.9.81', date: '2026-09-21',
+      changes: [
+        'Tenant guard. A workspace is one tenant; a data point that shares almost none of its account keys with the one it is compared with (under 15 %, both sides at least 20 accounts) now raises a notice on every page — “this looks like another tenant” — because the trend, the diff and the KPI movement would compare two customers as one. The notice offers a move to a new workspace (the data point goes there and the app reopens in it), a delete, or “keep together”, which silences that pair for good. The check runs on every start, so an earlier mistake surfaces too; the import toast says it as well.'
+      ]
+    },
+    {
       version: '2026.9.80', date: '2026-09-16',
       changes: [
         'Ring values stay inside the band: a value of five, six or seven characters (“98,7%”, “100,0%”, “€ 1.234”) steps down in size instead of touching the arc.',
