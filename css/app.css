@@ -120,6 +120,9 @@ em { font-style: normal; color: var(--text-primary); font-weight: 600; }
 .btn.sm { padding: 3px 8px; font-size: 12px; }
 a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .btn.danger { color: var(--critical); border-color: var(--critical); background: transparent; }
+.btn:disabled, .btn[disabled] { opacity: .45; cursor: not-allowed; filter: none; }
+.btn:disabled:hover { background: var(--surface-2); }
+.btn.primary:disabled:hover { background: var(--series-1); }
 select, input[type=text], input[type=number], input[type=search] {
   font-family: inherit; font-size: 13px; padding: 5px 8px; border-radius: 8px;
   border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text-primary);
@@ -718,7 +721,7 @@ select.cw-auto { color: var(--muted); }
 .nowrap-cell .pill { flex: 0 0 auto; }
 
 /* A view running on partial evidence says so, without shouting. */
-.notice.tenant { border-left-color: var(--warning); }
+.notice.tenant, .notice.vocab { border-left-color: var(--warning); }
 .notice { border: 1px solid var(--border-strong); border-left: 4px solid var(--series-1);
   background: var(--surface-1); border-radius: var(--radius); padding: 10px 14px;
   font-size: 13px; color: var(--text-secondary); margin-bottom: 14px; }

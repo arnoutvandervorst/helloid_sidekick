@@ -212,6 +212,20 @@
       ISSUE_ACCOUNT, ISSUE_PERM_UNMANAGED, ISSUE_PERM_MISSING
     };
 
+    /* An upgraded recognition vocabulary changes answers under the reader's feet: while
+       the upgrade is unacknowledged, say which names it moved (js/config.js keeps the
+       vocabulary from before in vocabPrev). */
+    if (cfg.vocabPrev) {
+      const prevPerm = Object.assign({}, clsCtx.perm, { rows: cfg.vocabPrev.categories || [] });
+      const prevAcc = Object.assign({}, clsCtx.acc, { rows: cfg.vocabPrev.classes || [] });
+      model.vocabChanges = {
+        perms: model.permissionList.map(p => ({ item: p, from: HR.classify.permission(p, prevPerm).id, to: p.category }))
+          .filter(x => x.from !== x.to),
+        accs: model.accountList.map(a => ({ item: a, from: HR.classify.account(a, prevAcc).id, to: a.cls }))
+          .filter(x => x.from !== x.to)
+      };
+    }
+
     if (HR.sod) HR.sod.evaluate(model);   // toxic combinations feed the account risk below
     HR.risk.score(model);         // adds risk fields to accounts/permissions + model.risk
     HR.cost.compute(model);       // adds model.cost

@@ -294,10 +294,20 @@ says in plain language how its words match a name — *starts with*, *contains*,
 with*, *is a word* (split on separators and case changes, so `adm` hits `GG_ADM_SQL` but
 not `admissions`), *is exactly* — and which category that means; the first row that hits
 wins, a wizard answer beats every row, and every row shows how many names in the loaded
-import it hits. The built-in table covers privileged, server, security, licence, business
-role, file share (`fs`, `shr`, `share`…), application, mailbox, project / workspace,
-distribution list, team and device. Account-type rows match an account's first or last
-word exactly.
+import it hits. The built-in table (vocabulary v2) matches **whole words** — split on
+separators and case changes, digits after the word allowed — so `log` catches
+`LOG-Eventcollector` and `srv` catches `SRV01-Backup`, while `LOGISTIEK`, `BEHANDELAAR`,
+`PRIVACY`, `SECRETARIAAT`, `NASCHOLING` and `SharePoint` (for file shares) no longer
+count. It opens with the directory's own privileged groups by exact name (Domain /
+Enterprise / Schema Admins, Administrators, the Operators groups, the Entra administrator
+roles), then privileged, server, security, business role, SharePoint/OneDrive, file share,
+application (incl. Citrix, RDS/VDI, SAP, AFAS, D365, ECD), mailbox, project, distribution
+list, team, device (incl. Intune, WLAN) and licence (incl. Entra SKUs such as `SPE_E5`,
+`ENTERPRISEPACK`). Account-type rows match an account's cohort word exactly; `a`, `sa` and
+`gen` are gone (they made `a.jansen` an admin). A workspace that stored the older table is
+upgraded row by row — untouched built-in rows become the new ones, edited and added rows
+stay — and the first build after the upgrade lists every name that moved, with what it was,
+until **Keep the update** is pressed. New rows default to *is a word*.
 
 **One resolver.** Every category and account type is decided in `js/classify.js` — the
 model build, the workbench preview and the findings all call it, so what the workbench

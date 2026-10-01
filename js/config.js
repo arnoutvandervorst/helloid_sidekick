@@ -309,8 +309,29 @@
       });
       current.migrations.cat2 = true;
     }
+    /* Recognition vocabulary v2 (js/hints.js): a stored copy of the v1 table is upgraded
+       row by row, edits kept; the vocabulary from before is kept in vocabPrev so the
+       next build can say which names moved, until the reader acknowledges it. A fresh
+       install has nothing to compare and starts on v2 quietly. */
+    let persist = false;
+    if (!current.migrations.hints2) {
+      if (stored && HR.hints && HR.hints.upgradeRows) {
+        const h = current.hints || {};
+        const own = k => Array.isArray(h[k]) && h[k].length ? h[k] : null;
+        current.vocabPrev = {
+          categories: clone(own('categories') || HR.hints.DEFAULTS_V1.categories),
+          classes: clone(own('classes') || HR.hints.DEFAULTS_V1.classes)
+        };
+        if (own('categories')) h.categories = HR.hints.upgradeRows(h.categories, 'categories');
+        if (own('classes')) h.classes = HR.hints.upgradeRows(h.classes, 'classes');
+        if (current.hints) current.hints = h;
+        persist = true;
+      }
+      current.migrations.hints2 = true;
+    }
     adoptKeys(current);
     compile(current);
+    if (persist) save(current);
     return current;
   }
 

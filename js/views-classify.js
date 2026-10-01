@@ -136,7 +136,7 @@
     t.appendChild(tb);
     body.appendChild(el('div', { class: 'tbl-wrap' }, t));
     body.appendChild(el('div', { class: 'slot-actions', style: 'margin-top:8px' }, [
-      el('button', { class: 'btn sm', text: T('st.addRow'), onclick: () => { rows.push(kind === 'categories' ? { op: 'contains', t: '', id: fallbackCat(cfg).id, _new: true } : { t: '', id: HR.classify.FALLBACK.cls, _new: true }); touch('hints'); onChange(); } }),
+      el('button', { class: 'btn sm', text: T('st.addRow'), onclick: () => { rows.push(kind === 'categories' ? { op: 'word', t: '', id: fallbackCat(cfg).id, _new: true } : { t: '', id: HR.classify.FALLBACK.cls, _new: true }); touch('hints'); onChange(); } }),
       el('span', { class: 'note', text: T('cw.orderNote') })
     ]));
     return card(T(kind === 'categories' ? 'st.hintsCat' : 'st.hintsCls'), T('cw.rulesNote'), body);
@@ -158,6 +158,8 @@
       results.forEach(r => { if (r.res.source === 'default' && r.res.cohort) { const k = r.item.system + '|' + r.res.cohort; size.set(k, (size.get(k) || 0) + 1); } });
       results.forEach(r => { if (r.res.source === 'default') r.res.source = r.res.cohort && size.get(r.item.system + '|' + r.res.cohort) >= floor ? 'unknown' : 'plain'; });
     }
+    /* Names the vocabulary update moved, while it is unacknowledged: key → old answer. */
+    const vc = m.vocabChanges ? new Map((isPerm ? m.vocabChanges.perms : m.vocabChanges.accs).map(x => [x.item.key, x.from])) : null;
     const rows = d.hints[kind];
     const wrap = el('div', {});
     const redraw = () => HR.app.render();
@@ -175,6 +177,7 @@
       seg(T('cw.kManual'), cnt('manual'), 'manual', undefined),
       seg(T('cw.kFamily'), cnt('family'), 'family', undefined),
       cnt('signal') ? seg(T('cw.kSignal'), cnt('signal'), 'signal', 'good') : null,
+      vc && vc.size ? seg(T('cw.kVocab'), vc.size, 'vocab', 'medium') : null,
       isPerm ? tile(T('cw.kTotal'), U.fmtInt(items.length), T('cw.kTotalFoot'), { small: true }) : seg(T('cw.kMembership'), cnt('membership'), 'membership', undefined),
       isPerm ? null : seg(T('cw.kPlain'), cnt('plain'), 'plain', undefined)
     ].filter(Boolean)));
@@ -184,6 +187,7 @@
     /* The table: every name, the draft's answer, and a dropdown that overrules it. */
     let shown = results;
     if (filter === 'unclassified') shown = results.filter(r => r.res.source === 'default' || r.res.source === 'unknown');
+    else if (filter === 'vocab') shown = vc ? results.filter(r => vc.has(r.item.key)) : [];
     else if (filter.startsWith('rule:')) { const i = +filter.slice(5); shown = results.filter(r => r.res.source === 'auto' && r.res.rule === i); }
     else if (filter) shown = results.filter(r => r.res.source === filter);
     const overrides = isPerm ? d.catOverrides : d.clsOverrides;
@@ -211,6 +215,7 @@
       } },
       { key: 'by', label: T('cw.cDecidedBy'), value: r => r.res.source + ':' + (r.res.rule == null ? '' : r.res.rule), render: r => {
         const bits = [el('span', { class: 'note', text: decidedBy(r.res, rows) })];
+        if (vc && vc.has(r.item.key)) bits.push(el('span', { class: 'pill', title: T('cw.wasTip'), text: T('cw.was', { what: HR.config.labelOf(targets.find(c => c.id === vc.get(r.item.key)) || { label: vc.get(r.item.key) }) }) }));
         if (r.res.source === 'family') {
           const famKey = HR.classify.famStoreKey(r.item.system, isPerm ? r.res.fam : r.res.cohort);
           const famField = isPerm ? 'catFamilies' : 'clsFamilies';
@@ -257,6 +262,8 @@
     f.appendChild(el('div', { class: 'view-head' }, [
       el('div', {}, [el('h1', { text: T('cw.title') }), el('p', { text: T('cw.lead') })]),
       el('div', { class: 'row' }, [
+        m && m.vocabChanges && (m.vocabChanges.perms.length + m.vocabChanges.accs.length)
+          ? el('button', { class: 'btn', text: T('vc.keep'), title: T('vc.keepTip'), onclick: () => HR.app.vocabAck() }) : null,
         d.dirty ? el('span', { class: 'pill warn', text: T('cw.unsaved') }) : null,
         el('button', { class: 'btn', text: T('cw.discard'), disabled: !d.dirty, onclick: discard }),
         el('button', { class: 'btn primary', text: T('cw.save'), disabled: !d.dirty, onclick: save }),

@@ -120,6 +120,24 @@
     ]);
   }
 
+  /** The built-in recognition vocabulary was upgraded: name what moved, once. */
+  function vocabNotice(vc) {
+    const label = (kind, id) => {
+      const list = kind === 'p' ? HR.config.get().categories : HR.config.get().accountClasses;
+      return HR.config.labelOf(list.find(c => c.id === id) || { label: id });
+    };
+    const ex = vc.perms[0] ? vc.perms[0].item.name + ': ' + label('p', vc.perms[0].from) + ' \u2192 ' + label('p', vc.perms[0].to)
+      : vc.accs[0] ? vc.accs[0].item.userName + ': ' + label('a', vc.accs[0].from) + ' \u2192 ' + label('a', vc.accs[0].to) : '';
+    return el('div', { class: 'notice vocab' }, [
+      el('strong', { text: T('vc.title') }),
+      el('span', { text: ' ' + T('vc.text', { p: U.fmtInt(vc.perms.length), a: U.fmtInt(vc.accs.length), ex }) + ' ' }),
+      el('span', { class: 'slot-actions', style: 'display:inline-flex;margin-left:6px' }, [
+        el('button', { class: 'btn sm primary', text: T('vc.review'), onclick: () => HR.app.go('classify', { tab: vc.perms.length ? 'perms' : 'accounts', filter: 'vocab' }) }),
+        el('button', { class: 'btn ghost sm', text: T('vc.keep'), onclick: () => HR.app.vocabAck() })
+      ])
+    ]);
+  }
+
   /** Two tenants in one workspace: say so, and offer the ways out. */
   function tenantNotice(st) {
     const t = st.tenant;
@@ -2853,7 +2871,7 @@
          { key: 't', label: T('st.hintWords'), width: '260px' },
          { key: 'id', label: T('c.category'), options: () =>
             cfg.categories.map(c => ({ value: c.id, label: HR.config.labelOf(c) })) }],
-        () => ({ op: 'contains', t: '', id: 'other' }),
+        () => ({ op: 'word', t: '', id: HR.classify.FALLBACK.category }),
         { matchFn: hintCatCount }),
       editableList(T('st.hintsCls'), T('st.hintsClsNote'),
         cfg.hints.classes,
@@ -4479,6 +4497,6 @@
     card, tile, ring, ringCard, scoreBar, dl, partialNotice, syntheticVaultNotice, personRow, peopleIndex, entitlementTable,
     openDrawer, closeDrawer, drawerAccount, drawerPermission, drawerVaultPerson, drawerSystem,
     drawerChangelog, STATE_SEV, stateLabel, offsetText, sourcesCard, tabbed,
-    lead, info, explain, collapseNotes, fitNotice, tenantNotice, ringSpark
+    lead, info, explain, collapseNotes, fitNotice, tenantNotice, vocabNotice, ringSpark
   };
 })(window.HR);

@@ -3,6 +3,12 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.10.3] — 2026-10-01
+
+- Recognition vocabulary v2. Built-in words now match whole words (digits after them allowed) instead of the start of a name: LOG-Eventcollector and SRV01-Backup still land where they did, but LOGISTIEK is no longer a server group, BEHANDELAAR and PRIVACY no longer privileged — and with that their holders no longer become admin accounts — SECRETARIAAT is no longer security, NASCHOLING no longer a file share, SharePoint no longer a file share.
+- The directory’s own privileged groups are recognised by exact name: Domain, Enterprise and Schema Admins, Administrators, the Operators groups, Group Policy Creator Owners, DnsAdmins and the Entra administrator roles. They used to land in Uncategorised, which kept every privileged finding and control quiet. More coverage: Citrix/RDS/VDI, SAP, AFAS, D365, ECD, Intune, WLAN, Entra licence SKUs (SPE_E5, ENTERPRISEPACK), Dutch words (schijf, gedeeld, verdeellijst, beheerders). Account types: a, sa and gen are gone (a.jansen was an admin account); gmsa, bot, rpa, sync, gast, room, kiosk added.
+- Existing workspaces upgrade row by row: untouched built-in rows become the new ones, rows you edited or added stay as written. The first build afterwards names every entitlement and account that moved and what it was, on every page and as a filter in the workbench, until you press Keep the update. New rules default to “is a word”. Disabled buttons now look disabled.
+
 ## [2026.10.2] — 2026-10-01
 
 - One classification engine. Categories and account types are decided in one place (js/classify.js) that the model build, the classification workbench and the findings all call — before, three copies disagreed, and the build skipped every rule for a name without a family prefix, so a “contains admin” rule the workbench showed catching FinanceAdmins left it Uncategorised after Save. Rules now apply to every name; a rule pointing at a deleted category is skipped instead of swallowing names; the fallback is Uncategorised / User by name, not whichever row is last; one definition of “unclassified” everywhere.

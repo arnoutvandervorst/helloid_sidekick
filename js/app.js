@@ -89,6 +89,11 @@
       root.appendChild(HR.viewkit.fitNotice(state.fit));
     }
     if (tenantForeign() && HR.viewkit.tenantNotice) root.appendChild(HR.viewkit.tenantNotice(state));
+    if (state.model && state.model.vocabChanges && HR.viewkit.vocabNotice) {
+      const vc = state.model.vocabChanges;
+      if (vc.perms.length + vc.accs.length) { if (state.view !== 'classify') root.appendChild(HR.viewkit.vocabNotice(vc)); }
+      else vocabAck(true);
+    }
     try {
       root.appendChild(missing.length ? HR.views.gatePage(state.view, missing) : fn(state.model, state.params));
     } catch (err) {
@@ -825,6 +830,14 @@
     updateTopbar();
   }
 
+  /** The reader has seen what the vocabulary upgrade moved: stop comparing. */
+  function vocabAck(quiet) {
+    const cfg = HR.config.get();
+    if (cfg.vocabPrev) { delete cfg.vocabPrev; HR.config.save(cfg); }
+    if (state.model) state.model.vocabChanges = null;
+    if (!quiet) render();
+  }
+
   const tenantForeign = () => !!(state.tenant && state.tenant.level === 'foreign' && !state.tenant.dismissed);
 
   /** The three ways out of two tenants in one workspace. */
@@ -1407,7 +1420,7 @@
   const REPO_URL = 'https://github.com/arnoutvandervorst/helloid_sidekick';
 
   HR.app = {
-    tenantKeep, tenantDelete, tenantMove, deleteDataPoint, REPO_URL, state, go, rebuild, rebuildBusy, batch, loadSnapshot, setBaseline, refreshSnapshots, rescoreDataPoints, importText, render, applyChrome, updateTopbar,
+    tenantKeep, tenantDelete, tenantMove, deleteDataPoint, vocabAck, REPO_URL, state, go, rebuild, rebuildBusy, batch, loadSnapshot, setBaseline, refreshSnapshots, rescoreDataPoints, importText, render, applyChrome, updateTopbar,
     importFileAs, clearSource, clearRecon, detectKind, loadSample, findSample, sampleName: () => sampleFile || null,
     demoAvailable: () => demoManifest };
   document.addEventListener('DOMContentLoaded', init);
