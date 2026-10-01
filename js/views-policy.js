@@ -408,9 +408,10 @@
     const s = ev.summary;
     const score = s.score;
     /* Thin classification makes every category-based KPI weak: say so before the score. */
-    if (m.summary.classified < 0.7) {
+    const placed = m.summary.classifiedAccess != null ? m.summary.classifiedAccess : m.summary.classified;
+    if (placed < 0.8) {
       f.appendChild(el('div', { class: 'notice' }, [
-        el('span', { text: T('st.classifiedWeak', { pct: U.fmtPctFloor(m.summary.classified), p: U.fmtInt(m.summary.unclassifiedPermissions), a: U.fmtInt(m.summary.unclassifiedAccounts) }) + ' ' }),
+        el('span', { text: T('st.classifiedWeak', { pct: U.fmtPctFloor(placed), p: U.fmtInt(m.summary.unclassifiedPermissions), a: U.fmtInt(m.summary.unclassifiedAccounts) }) + ' ' }),
         el('a', { href: '#', text: T('wz.stOpen'), onclick: e => { e.preventDefault(); HR.app.go('classify'); } })
       ]));
     }

@@ -75,11 +75,10 @@
 
   /* --------------------------------------------------------------- matching */
 
-  /** How sure a rule hit is: an exact or whole-word match, or a token of four
-      characters and up, is strong; a short "starts with" token is a guess. */
+  /** How sure a rule hit is: an exact name, or a token of four characters and up, is
+      strong; a short token (adm, beh, srv) is right more often than not, but a guess. */
   function ruleConfidence(row, tok) {
-    const op = row.op || 'starts';
-    if (op === 'equals' || op === 'word') return 'strong';
+    if ((row.op || 'starts') === 'equals') return 'strong';
     return String(tok || '').length >= 4 ? 'strong' : 'weak';
   }
 

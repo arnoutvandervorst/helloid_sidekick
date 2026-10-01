@@ -18,6 +18,14 @@
 
   const ENTRIES = [
     {
+      version: '2026.10.5', date: '2026-10-01',
+      changes: [
+        'The Classified ring tells the truth: it weighs by access — the share of all assignments whose entitlement has a category and whose account a known type — so an unplaced Domain Admins with forty holders weighs forty instead of one name in thousands. The count by name sits under it. Compliance warns when less than 80 % of the access is placed.',
+        'Confidence: a privileged or server answer that rests on a short word alone (ADM-Finance by adm) is marked weak and listed under its own filter in the workbench, so false positives get a review queue. The unclassified backlog opens sorted by holders.',
+        'Make a rule picks the word that separates the selection from everything else, says how many selected and how many other names it catches, and lands just above the first rule that claims one of them — it used to pick the most common word, claim full coverage and jump to the top. Save shows every entitlement and account whose answer changes before it writes; Undo last save puts back what it replaced. Rules export and import (rows and family answers, not this tenant\u2019s per-name answers) to reuse a rule set in another workspace.'
+      ]
+    },
+    {
       version: '2026.10.4', date: '2026-10-01',
       changes: [
         'Classification reads more than the name. With a directory export loaded, hard facts outrank a name rule: an Entra licence SKU is a licence, a group the directory calls Distribution is a distribution list (so an AGDLP DL_ security group no longer is, and a distribution group named like a file share no longer looks like access), and a group nested at any depth in a privileged group — Domain Admins, an ADMIN- group — is privileged, because it hands out what its parent has. Soft hints place what no rule did: a Microsoft 365 group is a team, a price-book licence row that names a group makes it a licence. Accounts in a service-account OU are service accounts, in an admin or beheer OU admin accounts.',

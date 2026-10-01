@@ -47,6 +47,10 @@
     const d = draft(), cfg = HR.config.get();
     const clashed = Array.from(d.touched).filter(f => sig(savedField(cfg, f)) !== d.base[f]);
     if (clashed.length && !confirm(T('cw.clash'))) return;
+    /* One step back: what each touched part held before this save. */
+    const prev = {};
+    d.touched.forEach(f => { prev[f] = cfg[f] === undefined ? null : HR.config.clone(cfg[f]); });
+    cfg.classifyUndo = { at: Date.now(), fields: prev };
     d.touched.forEach(f => { cfg[f] = HR.config.clone(d[f]); });
     if (d.touched.has('hints')) ['categories', 'classes'].forEach(k => (cfg.hints[k] || []).forEach(r => { delete r._new; }));
     HR.config.save(cfg);
@@ -56,6 +60,74 @@
     HR.app.render();
   }
   function discard() { DRAFT = null; HR.app.render(); }
+
+  /** Put back what the last save replaced. */
+  async function undo() {
+    const cfg = HR.config.get(), u = cfg.classifyUndo;
+    if (!u) return;
+    Object.keys(u.fields).forEach(f => { if (u.fields[f] === null) delete cfg[f]; else cfg[f] = u.fields[f]; });
+    delete cfg.classifyUndo;
+    HR.config.save(cfg);
+    DRAFT = null;
+    await HR.app.rebuildBusy();
+    U.toast(T('cw.undone'), 3000);
+    HR.app.render();
+  }
+
+  /** What Save would move, against the saved answers in the loaded model. */
+  function pendingChanges(m) {
+    const d = draft(), cfg = HR.config.get();
+    const label = (list, id) => HR.config.labelOf(list.find(c => c.id === id) || { label: id });
+    const perms = m.permissionList.map(p => ({ name: p.name, from: p.category, to: classifyPerm(p, d, cfg).id }))
+      .filter(x => x.from !== x.to).map(x => Object.assign(x, { fromL: label(cfg.categories, x.from), toL: label(cfg.categories, x.to) }));
+    const accs = m.accountList.map(a => ({ name: a.userName, from: a.cls, to: classifyAcc(a, d, cfg).id }))
+      .filter(x => x.from !== x.to).map(x => Object.assign(x, { fromL: label(cfg.accountClasses, x.from), toL: label(cfg.accountClasses, x.to) }));
+    return { perms, accs };
+  }
+  /** Save, after showing what moves. Nothing moving saves straight away. */
+  function saveWithPreview(m) {
+    const ch = pendingChanges(m);
+    if (!ch.perms.length && !ch.accs.length) return save();
+    const list = (title, xs) => xs.length ? el('div', {}, [
+      el('h3', { text: title + ' · ' + U.fmtInt(xs.length) }),
+      el('ul', { class: 'clean' }, xs.slice(0, 40).map(x => el('li', {}, [
+        el('span', { class: 'mono', text: x.name }), document.createTextNode('  ' + x.fromL + ' \u2192 '), el('b', { text: x.toL })])).concat(
+        xs.length > 40 ? [el('li', { class: 'note', text: T('cw.andMore', { n: U.fmtInt(xs.length - 40) }) })] : []))
+    ]) : null;
+    openDrawer(el('div', {}, [el('h2', { text: T('cw.previewTitle') }),
+      el('p', { class: 'note', text: T('cw.previewNote', { p: U.fmtInt(ch.perms.length), a: U.fmtInt(ch.accs.length) }) })]),
+      el('div', { class: 'stack' }, [
+        list(T('cw.tabPerms'), ch.perms), list(T('cw.tabAccounts'), ch.accs),
+        el('div', { class: 'row', style: 'gap:8px' }, [
+          el('button', { class: 'btn primary', text: T('cw.save'), onclick: () => { closeDrawer(); save(); } }),
+          el('button', { class: 'btn', text: T('cw.keepEditing'), onclick: () => closeDrawer() })
+        ])
+      ].filter(Boolean)));
+  }
+
+  /* ---- a rule set travels without the tenant's own answers ------------------------ */
+  const EXPORT_KIND = 'sidekick-recognition';
+  function exportRules() {
+    const d = draft();
+    const strip = rows => rows.map(r => { const c = Object.assign({}, r); delete c._new; return c; });
+    U.download('recognition-rules.json', JSON.stringify({
+      kind: EXPORT_KIND, version: HR.hints.VERSION, exportedAt: new Date().toISOString(),
+      hints: { categories: strip(d.hints.categories), classes: strip(d.hints.classes) },
+      catFamilies: d.catFamilies, clsFamilies: d.clsFamilies
+    }, null, 2), 'application/json');
+  }
+  async function importRules(file) {
+    let data;
+    try { data = JSON.parse(await file.text()); } catch (e) { U.toast(T('cw.importBad'), 5000); return; }
+    if (!data || data.kind !== EXPORT_KIND || !data.hints || !Array.isArray(data.hints.categories)) { U.toast(T('cw.importBad'), 5000); return; }
+    const d = draft();
+    d.hints = { categories: data.hints.categories, classes: Array.isArray(data.hints.classes) ? data.hints.classes : d.hints.classes };
+    touch('hints');
+    if (data.catFamilies) { Object.assign(d.catFamilies, data.catFamilies); touch('catFamilies'); }
+    if (data.clsFamilies) { Object.assign(d.clsFamilies, data.clsFamilies); touch('clsFamilies'); }
+    U.toast(T('cw.imported', { n: U.fmtInt(d.hints.categories.length + d.hints.classes.length) }), 5000);
+    HR.app.render();
+  }
   /* Leaving the page with unsaved rule edits asks first. */
   window.addEventListener('beforeunload', e => { if (DRAFT && DRAFT.dirty) { e.preventDefault(); e.returnValue = ''; } });
 
@@ -76,18 +148,42 @@
     : r.source === 'signal' ? T('cw.bySignal', { what: T('cw.sig.' + r.signal, { via: r.via || '' }) })
     : T('cw.by.' + r.source);
 
-  /** The word most of the selected names share — the seed of a new rule. */
-  function proposeRule(names, kind) {
-    const counts = new Map();
-    names.forEach(n => U.uniq(HR.hints.wordsOf(n)).forEach(w => { if (w.length >= 2) counts.set(w, (counts.get(w) || 0) + 1); }));
-    const best = Array.from(counts.entries()).sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0];
-    if (best && best[1] >= Math.max(2, Math.ceil(names.length * 0.6))) return { op: 'word', t: best[0], covers: best[1] };
-    /* No common word: the common prefix of the first words, if there is one. */
-    const firsts = names.map(n => (HR.hints.wordsOf(n)[0] || '').toLowerCase()).filter(Boolean);
-    let prefix = firsts[0] || '';
-    firsts.forEach(f => { while (prefix && !f.startsWith(prefix)) prefix = prefix.slice(0, -1); });
-    if (prefix.length >= 2) return { op: kind === 'classes' ? 'edge' : 'starts', t: prefix, covers: firsts.length };
-    return null;
+  /**
+   * A rule for a selection: the word that best separates the selected names from the
+   * rest — most of the selection, as few others as possible — not merely the most
+   * common one (in a GG_* scheme every name shares `gg`). Reports how many selected
+   * names it really catches and how many others it would also catch.
+   * @param sel  the selected result rows   @param all  every result row on the tab
+   */
+  function proposeRule(sel, all, kind) {
+    const n = sel.length, selKeys = new Set(sel.map(r => r.item.key));
+    const others = all.filter(r => !selKeys.has(r.item.key));
+    if (kind === 'classes') {
+      const counts = new Map();
+      sel.forEach(r => { if (r.res.token) counts.set(r.res.token, (counts.get(r.res.token) || 0) + 1); });
+      const best = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0];
+      if (!best) return null;
+      return { op: 'edge', t: best[0], covers: best[1], of: n, outside: others.filter(r => r.res.token === best[0]).length };
+    }
+    const nameOf = r => r.item.name;
+    const wordsIn = name => U.uniq(HR.hints.wordsOf(name).concat(String(name).toLowerCase().split(/[^a-z0-9]+/))).filter(w => w.length >= 2 && !/^\d+$/.test(w));
+    const cands = new Set(); sel.forEach(r => wordsIn(nameOf(r)).forEach(w => cands.add(w)));
+    let best = null;
+    cands.forEach(w => {
+      const row = { op: 'word', t: w };
+      const covers = sel.filter(r => HR.hints.matchesRow(row, nameOf(r))).length;
+      if (covers < Math.max(1, Math.ceil(n * 0.6))) return;
+      const outside = others.filter(r => HR.hints.matchesRow(row, nameOf(r))).length;
+      const score = (covers / n) * (covers / (covers + outside)) + w.length / 1000;
+      if (!best || score > best.score) best = { op: 'word', t: w, covers, of: n, outside, score };
+    });
+    if (best) return best;
+    /* No shared word: the common start of the names, if there is one. */
+    let prefix = String(nameOf(sel[0]) || '').toLowerCase();
+    sel.forEach(r => { const f = String(nameOf(r)).toLowerCase(); while (prefix && !f.startsWith(prefix)) prefix = prefix.slice(0, -1); });
+    if (prefix.length < 2) return null;
+    const row = { op: 'starts', t: prefix };
+    return { op: 'starts', t: prefix, covers: n, of: n, outside: others.filter(r => HR.hints.matchesRow(row, nameOf(r))).length };
   }
 
   /* The rules card: live rows, hit/win counts against the draft, order controls. */
@@ -167,6 +263,8 @@
       const all = Array.from(r.item.holders).map(k => m.accounts.get(k)).filter(Boolean);
       if (all.length >= 2 && all.every(a => a.cls === 'admin' || a.cls === 'service')) suggest.add(r.item.key);
     });
+    /* Privileged or server answers that rest on a short word alone: a review queue. */
+    const weak = new Set(isPerm ? results.filter(r => r.res.source === 'auto' && r.res.confidence === 'weak' && (r.res.id === 'privileged' || r.res.id === 'server')).map(r => r.item.key) : []);
     /* Names the vocabulary update moved, while it is unacknowledged: key → old answer. */
     const vc = m.vocabChanges ? new Map((isPerm ? m.vocabChanges.perms : m.vocabChanges.accs).map(x => [x.item.key, x.from])) : null;
     const rows = d.hints[kind];
@@ -188,6 +286,7 @@
       cnt('signal') ? seg(T('cw.kSignal'), cnt('signal'), 'signal', 'good') : null,
       vc && vc.size ? seg(T('cw.kVocab'), vc.size, 'vocab', 'medium') : null,
       suggest.size ? seg(T('cw.kSuggest'), suggest.size, 'suggest', 'high') : null,
+      weak.size ? seg(T('cw.kWeak'), weak.size, 'weak', 'medium') : null,
       isPerm ? tile(T('cw.kTotal'), U.fmtInt(items.length), T('cw.kTotalFoot'), { small: true }) : seg(T('cw.kMembership'), cnt('membership'), 'membership', undefined),
       isPerm ? null : seg(T('cw.kPlain'), cnt('plain'), 'plain', undefined)
     ].filter(Boolean)));
@@ -199,6 +298,7 @@
     if (filter === 'unclassified') shown = results.filter(r => r.res.source === 'default' || r.res.source === 'unknown');
     else if (filter === 'vocab') shown = vc ? results.filter(r => vc.has(r.item.key)) : [];
     else if (filter === 'suggest') shown = results.filter(r => suggest.has(r.item.key));
+    else if (filter === 'weak') shown = results.filter(r => weak.has(r.item.key));
     else if (filter.startsWith('rule:')) { const i = +filter.slice(5); shown = results.filter(r => r.res.source === 'auto' && r.res.rule === i); }
     else if (filter) shown = results.filter(r => r.res.source === filter);
     const overrides = isPerm ? d.catOverrides : d.clsOverrides;
@@ -253,16 +353,28 @@
     };
     wrap.appendChild(el('div', { style: 'margin-top:14px' }, card(T(isPerm ? 'cw.tablePerms' : 'cw.tableAccounts'), T('cw.tableNote', { n: U.fmtInt(shown.length), of: U.fmtInt(results.length) }), HR.table.make({
       columns, rows: shown, pageSize: 25, exportName: 'classification-' + tabId,
-      initialSort: { key: 'by', dir: 1 },
+      /* The backlog leads with what weighs most: the names held by the most accounts. */
+      initialSort: isPerm && (filter === 'unclassified' || filter === 'suggest') ? { key: 'holders', dir: -1 } : { key: 'by', dir: 1 },
       search: (r, q) => (nameOf(r.item) + ' ' + r.item.system).toLowerCase().includes(q),
       bulkActions: [
         { label: n => T('cw.bulkSet', { n }), run: sel => askTarget(T('cw.bulkSetTitle', { n: U.fmtInt(sel.length) }), T('cw.bulkSetNote'), id => { sel.forEach(r => setOverride(r, id)); redraw(); }) },
         { label: n => T('cw.bulkRule', { n }), run: sel => {
-          const prop = proposeRule(sel.map(r => nameOf(r.item)), kind);
+          const prop = proposeRule(sel, results, kind);
           if (!prop) { U.toast(T('cw.noCommonWord'), 5000); return; }
-          askTarget(T('cw.bulkRuleTitle', { op: T('st.hintOp.' + prop.op), word: prop.t }), T('cw.ruleProposed', { op: T('st.hintOp.' + prop.op), word: prop.t, covers: U.fmtInt(prop.covers), of: U.fmtInt(sel.length) }), id => {
-            rows.unshift(isPerm ? { op: prop.op, t: prop.t, id, _new: true } : { t: prop.t, id, _new: true });
-            touch('hints'); redraw();
+          askTarget(T('cw.bulkRuleTitle', { op: T('st.hintOp.' + prop.op), word: prop.t }),
+            T('cw.ruleProposed2', { op: T('st.hintOp.' + prop.op), word: prop.t, covers: U.fmtInt(prop.covers), of: U.fmtInt(prop.of), outside: U.fmtInt(prop.outside) }), id => {
+            /* Just above the first rule that now claims one of the selected names, so the
+               new rule catches them without reaching over every rule above. */
+            const claim = sel.filter(r => r.res.source === 'auto').map(r => r.res.rule);
+            const at = claim.length ? Math.min(...claim) : rows.length;
+            rows.splice(at, 0, isPerm ? { op: prop.op, t: prop.t, id, _new: true } : { t: prop.t, id, _new: true });
+            touch('hints');
+            const after = results.filter(r => {
+              const res = isPerm ? classifyPerm(r.item, d, cfg) : classifyAcc(r.item, d, cfg);
+              return res.id !== r.res.id;
+            }).length;
+            U.toast(T('cw.ruleAdded', { at: U.fmtInt(at + 1), n: U.fmtInt(after) }), 6000);
+            redraw();
           });
         } },
         { label: n => T('cw.bulkClear', { n }), run: sel => { sel.forEach(r => setOverride(r, '')); redraw(); } }
@@ -280,8 +392,12 @@
         m && m.vocabChanges && (m.vocabChanges.perms.length + m.vocabChanges.accs.length)
           ? el('button', { class: 'btn', text: T('vc.keep'), title: T('vc.keepTip'), onclick: () => HR.app.vocabAck() }) : null,
         d.dirty ? el('span', { class: 'pill warn', text: T('cw.unsaved') }) : null,
+        !d.dirty && HR.config.get().classifyUndo ? el('button', { class: 'btn', text: T('cw.undo'), title: T('cw.undoTip'), onclick: undo }) : null,
         el('button', { class: 'btn', text: T('cw.discard'), disabled: !d.dirty, onclick: discard }),
-        el('button', { class: 'btn primary', text: T('cw.save'), disabled: !d.dirty, onclick: save }),
+        el('button', { class: 'btn primary', text: T('cw.save'), disabled: !d.dirty, onclick: () => m && m.summary ? saveWithPreview(m) : save() }),
+        el('button', { class: 'btn ghost', text: T('cw.export'), title: T('cw.exportTip'), onclick: exportRules }),
+        el('label', { class: 'btn ghost', title: T('cw.importTip') }, [document.createTextNode(T('cw.import')),
+          el('input', { type: 'file', accept: '.json', hidden: true, onchange: e => { const f = e.target.files[0]; if (f) importRules(f); e.target.value = ''; } })]),
         el('button', { class: 'btn ghost', text: T('cw.toSettings'), onclick: () => HR.app.go('settings', { tab: 'recognition' }) })
       ].filter(Boolean))
     ]));
@@ -297,5 +413,5 @@
   }
 
   HR.views.classify = classifyView;
-  HR.classifyBench = { draft, save, discard, classifyPerm, classifyAcc, proposeRule };
+  HR.classifyBench = { draft, save, discard, undo, pendingChanges, classifyPerm, classifyAcc, proposeRule, exportRules, importRules };
 })(window.HR);

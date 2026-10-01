@@ -525,6 +525,25 @@
       classified: (m.permissionList.length + accs.length)
         ? 1 - (unclassifiedPerms.length + unclassifiedAccs.length) / (m.permissionList.length + accs.length)
         : 1,
+      /* The same question weighted by access rather than names: of every assignment
+         (an account holding an entitlement), the share whose entitlement has a category
+         and whose account a known type. Domain Admins unplaced with forty holders weighs
+         forty, not one in three thousand. */
+      classifiedAccess: (() => {
+        const unknownAcc = new Set(unclassifiedAccs.map(a => a.key));
+        let all = 0, placed = 0;
+        for (const p of m.permissionList) {
+          const n = p.holders ? p.holders.size : 0;
+          if (!n) continue;
+          all += n;
+          if (HR.classify.isUnclassified(p)) continue;
+          for (const k of p.holders) if (!unknownAcc.has(k)) placed++;
+        }
+        return all ? placed / all : 1;
+      })(),
+      /* Privileged or server answers that rest on a short word alone (ADM-Finance by
+         `adm`): right more often than not, but worth a look. */
+      weakPrivileged: m.permissionList.filter(p => (p.category === 'privileged' || p.category === 'server') && p.categoryConfidence === 'weak').length,
       riskScore: m.risk.overall,
       riskBand: HR.config.severityOf(m.risk.overall),
       monthlyCost: m.cost.totalMonthly,

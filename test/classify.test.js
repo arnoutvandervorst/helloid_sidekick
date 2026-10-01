@@ -203,6 +203,13 @@ const sa = userName => HR.classify.account({ key: 'AD|' + userName, system: 'AD'
 eq('signal: service-account OU', sa('jdoe').id, 'service');
 eq('signal: beheer OU', sa('piet').id, 'admin');
 
+/* ---------- confidence ---------- */
+eq('confidence: ADM-Finance rests on a short word', perm('ADM-Finance').confidence, 'weak');
+eq('confidence: Domain Admins by exact name', perm('Domain Admins').confidence, 'strong');
+eq('confidence: ADMIN-Beheer by a long word', perm('ADMIN-Beheer').confidence, 'strong');
+eq('confidence: an item answer is decided', perm('X', { overrides: { ['AD' + sep + 'X']: 'team' } }).confidence, 'decided');
+eq('confidence: fallback has none', perm('zzz').confidence, 'none');
+
 console.log(failures.join('\n'));
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -333,6 +333,22 @@ an admin/beheer OU admin accounts. A rule can also read **where a group lives** 
 workbench, an unplaced entitlement held only by admin and service accounts is marked
 *probably privileged* with a one-click confirm — a suggestion, never a silent decision.
 
+**How much is really placed.** The Overview's Classified ring weighs by access: of every
+assignment (an account holding an entitlement), the share whose entitlement has a category
+and whose account a known type — an unplaced group with forty holders weighs forty, not one
+name in three thousand. The count by name stays under it. Compliance warns below 80 %. A
+privileged or server answer that rests on a short word alone (`ADM-Finance` by `adm`) is
+marked weak and gets its own review filter in the workbench; the unclassified backlog
+opens sorted by holders.
+
+**Workbench feedback.** *Make a rule* picks the word that best separates the selection from
+everything else (not the most common one — in a `GG_*` scheme every name shares `gg`), says
+how many selected names it catches and how many others, and inserts the rule just above the
+first rule that claims one of them. **Save** first lists every entitlement and account
+whose answer changes; **Undo last save** puts back what the save replaced. **Export
+rules** writes the recognition rows and family answers — not this tenant's per-name
+answers — to a file another workspace can **import** into its draft.
+
 Tests: `NODE_OPTIONS= node test/classify.test.js` runs the golden list against the real
 modules (no dependencies).
 

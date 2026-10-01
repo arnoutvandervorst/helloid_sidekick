@@ -816,11 +816,14 @@
       ringCard({ title: T('ov.coverage'), kicker: T('ov.coverageFoot'), score: s.coverage, value: U.fmtPct(s.coverage, 0),
         sub: U.fmtInt(s.orphanAccounts) + ' ' + T('c.unowned').toLowerCase(), band: s.coverage >= .9 ? 'good' : s.coverage >= .75 ? 'medium' : 'high', min: 0.03,
         delta: bDelta('orphanAccounts'), foot: T('ov.stillEnabled', { n: s.orphanEnabled }), onClick: () => HR.app.go('accounts', { filter: 'orphan' }) }),
-      ringCard({ title: T('ov.classified'), kicker: T('ov.classifiedKicker'), score: s.classified, value: U.fmtPctFloor(s.classified),
+      /* Weighted by access: an unplaced group with forty holders weighs forty. Older
+         data points carry only the name count. */
+      (() => { const acc = s.classifiedAccess != null ? s.classifiedAccess : s.classified;
+        return ringCard({ title: T('ov.classified'), kicker: T('ov.classifiedAccessKicker'), score: acc, value: U.fmtPctFloor(acc),
         sub: U.fmtInt(s.unclassifiedPermissions + s.unclassifiedAccounts) + ' ' + T('ov.openShort'),
-        band: s.classified >= .9 ? 'good' : s.classified >= .7 ? 'medium' : 'high', min: 0.03,
-        foot: T('ov.classifiedFoot', { p: U.fmtInt(s.unclassifiedPermissions), a: U.fmtInt(s.unclassifiedAccounts) }),
-        onClick: () => HR.app.go('classify', { tab: s.unclassifiedPermissions ? 'perms' : 'accounts', filter: 'unclassified' }) })
+        band: acc >= .95 ? 'good' : acc >= .8 ? 'medium' : 'high', min: 0.03,
+        foot: T('ov.classifiedAccessFoot', { names: U.fmtPctFloor(s.classified), p: U.fmtInt(s.unclassifiedPermissions), a: U.fmtInt(s.unclassifiedAccounts) }),
+        onClick: () => HR.app.go('classify', { tab: s.unclassifiedPermissions ? 'perms' : 'accounts', filter: 'unclassified' }) }); })()
     ].filter(Boolean));
     f.appendChild(rings);
     const kpis = el('div', { class: 'grid g4' });
