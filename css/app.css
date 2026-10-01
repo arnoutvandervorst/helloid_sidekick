@@ -509,6 +509,7 @@ code.inline { background: var(--hover); padding: 1px 5px; border-radius: 5px; fo
 .sheet .num { text-align: right; font-variant-numeric: tabular-nums; }
 .sheet td.tone-good { color: #006300; font-weight: 600; }
 .sheet td.tone-bad { color: #b02c2c; font-weight: 600; }
+.sheet td.tone-watch { color: #9a6200; font-weight: 600; }
 .sheet .sev.medium { color: #7a5300; }
 .sheet .sev.low { color: #52514e; }
 
@@ -651,7 +652,8 @@ details.finding.finding-target { animation: finding-flash 2.4s ease-out 1; scrol
 .sc-kicker { font-size: 12px; color: var(--muted); }
 .sc-card h2 { margin: 0; font-size: 15px; }
 .sc-card h2 a { color: var(--series-1); text-decoration: none; }
-.sc-kicker, .sc-card h2, .sc-meta { grid-column: 1; }
+.sc-kicker, .sc-card h2, .sc-meta, .sc-evid { grid-column: 1; }
+.sc-evid { margin: 0; font-size: 11.5px; }
 .sc-ringwrap { grid-column: 2; grid-row: 1 / span 3; align-self: start; text-align: center; }
 .sc-cap { font-size: 10.5px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-bottom: 4px; }
 .sc-ringwrap .k-ring { --ring: 100px; margin: 0 auto; }

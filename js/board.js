@@ -22,27 +22,32 @@
     const gapRule = F('security-control-gap');
     const overEnt = cnt('over-entitled');
     const external = cnt('external-accounts');
+    /* A theme's status is its KPI's status when it has one — the limit the organisation
+       set itself — and otherwise the severity of the finding behind it. */
+    const pol = HR.policy && m.hasRecon ? HR.policy.evaluate(m) : null;
+    const ctl = id => pol ? HR.bands.controlTone(pol.rows.find(r => r.def.id === id)) : null;
+    const byFinding = id => { const f = F(id); return !f ? 'good' : f.accepted ? 'watch' : (f.severity === 'critical' || f.severity === 'high') ? 'bad' : 'watch'; };
 
     return [
       { id: 'ownership', name: T('bd.th.ownership'), meaning: T('bd.th.ownership.m'),
-        status: orphanEnabled > 20 ? 'bad' : orphanEnabled ? 'watch' : 'good',
+        status: ctl('unowned-enabled') || (orphanEnabled ? 'watch' : 'good'),
         scale: accounts(orphanEnabled) },
       { id: 'privileged', name: T('bd.th.privileged'), meaning: T('bd.th.privileged.m'),
-        status: privOrphan ? 'bad' : 'good', scale: accounts(privOrphan) },
+        status: ctl('privileged-unowned') || byFinding('privileged-orphan'), scale: accounts(privOrphan) },
       { id: 'leavers', name: T('bd.th.leavers'), meaning: T('bd.th.leavers.m'),
-        status: disabledLicensed > 10 ? 'bad' : disabledLicensed ? 'watch' : 'good',
+        status: ctl('disabled-licensed') || byFinding('disabled-licensed'),
         scale: accounts(disabledLicensed) + ' · ' + U.fmtMoney(c.disabledWaste) + ' ' + T('bd.perMonth') },
       { id: 'doublelic', name: T('bd.th.doublelic'), meaning: T('bd.th.doublelic.m'),
-        status: stacked > 10 ? 'bad' : stacked ? 'watch' : 'good',
+        status: byFinding('stacked-licences'),
         scale: accounts(stacked) + ' · ' + U.fmtMoney(c.stackedWasteNet) + ' ' + T('bd.perMonth') },
       { id: 'rules', name: T('bd.th.rules'), meaning: T('bd.th.rules.m'),
-        status: s.unmanagedPermissionRows > 500 ? 'bad' : s.unmanagedPermissionRows ? 'watch' : 'good',
+        status: ctl('unmanaged-share') || (s.unmanagedPermissionRows ? 'watch' : 'good'),
         scale: T('bd.th.rules.scale', { n: U.fmtInt(s.unmanagedPermissionRows) }) },
       { id: 'baseline', name: T('bd.th.baseline'), meaning: T('bd.th.baseline.m'),
-        status: gapRule ? 'bad' : 'good',
+        status: byFinding('security-control-gap'),
         scale: gapRule ? T('bd.th.baseline.scale', { n: gapRule.entities.length }) : T('bd.th.baseline.ok') },
       { id: 'accumulation', name: T('bd.th.accumulation'), meaning: T('bd.th.accumulation.m'),
-        status: overEnt ? 'watch' : 'good', scale: accounts(overEnt) },
+        status: ctl('wide-membership') || (overEnt ? 'watch' : 'good'), scale: accounts(overEnt) },
       { id: 'external', name: T('bd.th.external'), meaning: T('bd.th.external.m'),
         status: external ? 'watch' : 'good', scale: accounts(external) }
     ].concat(ruleTheme(m));
@@ -57,7 +62,8 @@
       id: 'rules',
       name: T('bd.th.rules2'),
       meaning: T('bd.th.rules2.m'),
-      status: s.coverage > 0.75 ? 'good' : s.coverage > 0.4 ? 'watch' : 'bad',
+      status: (HR.policy && m.hasRecon ? HR.bands.controlTone(HR.policy.evaluate(m).rows.find(r => r.def.id === 'rule-coverage')) : null)
+        || (s.coverage > 0.75 ? 'good' : s.coverage > 0.4 ? 'watch' : 'bad'),
       scale: T('bd.th.rules2.scale', {
         pct: U.fmtPct(s.coverage, 0), live: s.live, rules: s.rules
       })
@@ -156,7 +162,7 @@
 
   /* An action's owner is the owner of the control that measures the same thing. */
   const ACTION_CONTROL = { leavers: 'disabled-licensed', priv: 'privileged-unowned', orphans: 'unowned-enabled',
-    rules: 'unmanaged-share', overent: 'over-provisioned', baseline: 'rule-coverage', stacked: 'disabled-licensed' };
+    rules: 'unmanaged-share', overent: 'wide-membership' };
 
   function verdict(m) {
     return T('bd.verdict.' + (m.summary.governanceBand || 'watch'));
@@ -253,11 +259,11 @@
               ' · ' + T('bd.records', { n: U.fmtInt(s.rows) }) + ' · ' + m.systemList.map(x => x.name).join(', ')
           })
         ]),
-        el('div', { class: 'verdict tone-' + ({ good: 'good', watch: 'watch', poor: 'bad' }[s.governanceBand] || 'watch') }, [
+        el('div', { class: 'verdict tone-' + HR.bands.tone('governance', s.governanceScore) }, [
           el('div', { class: 'verdict-label', text: T('gs.title') }),
           el('div', { class: 'verdict-score' }, [
             HR.viewkit.ring(s.governanceScore == null ? null : s.governanceScore / 100, String(s.governanceScore), '/ 100',
-              { band: { good: 'good', watch: 'medium', poor: 'critical' }[s.governanceBand] || 'medium', min: 0.03, size: 'lg' })
+              { band: HR.bands.band('governance', s.governanceScore), min: 0.03, size: 'lg' })
           ]),
           el('div', { class: 'verdict-parts', text: s.governancePartial
             ? T('gs.partsPartial', { risk: s.riskScore })
@@ -268,7 +274,7 @@
         el('div', { class: 'bignums' }, [
           bigNumber(U.fmtInt(s.accounts), T('bd.kpiAccounts'), T('bd.kpiAccountsSub', { n: U.fmtInt(s.persons) })),
           bigNumber(U.fmtPct(s.coverage, 0), T('bd.kpiOwner'), T('bd.kpiOwnerSub', { n: s.orphanAccounts }),
-            s.coverage > 0.9 ? 'good' : s.coverage > 0.7 ? 'watch' : 'bad'),
+            HR.bands.tone('coverage', s.coverage)),
           bigNumber(U.fmtMoney(c.totalAnnual, { compact: true }), T('bd.kpiCost'),
             U.fmtMoney(c.totalMonthly) + ' ' + T('bd.perMonth')),
           bigNumber(U.fmtMoney(c.wasteAnnual, { compact: true }), T('bd.kpiRecoverable'),
@@ -475,7 +481,7 @@
           /* The largest departments as rings: how much of their access the model explains. */
           const dr = el('div', { class: 'sc-rings' }, rows.slice(0, 5).map(r => el('div', {}, [
             HR.viewkit.ring(r.managedShare, r.managedShare == null ? '\u2014' : U.fmtPct(r.managedShare, 0), T('sc.cardRingSub', { n: U.fmtInt(r.driftRows) }),
-              { band: r.managedShare == null ? 'wait' : r.managedShare >= .8 ? 'good' : r.managedShare >= .5 ? 'medium' : 'critical', min: 0.03 }),
+              { band: r.managedShare == null ? 'wait' : HR.bands.band('managed', r.managedShare), min: 0.03 }),
             el('div', { class: 'lbl', text: r.name || r.key }), el('div', { class: 'sub', text: T('sc.cardKicker', { people: U.fmtInt(r.people), accounts: U.fmtInt(r.accounts) }) })
           ])));
           paper.appendChild(page([
@@ -598,14 +604,17 @@
         ft.appendChild(el('tbody', {}, h.failures.groups.slice(0, 8).map(g => el('tr', {}, [
           el('td', { text: g.system }), el('td', { class: 'nowrap', text: g.action }), el('td', { text: g.message }),
           el('td', { class: 'num', text: U.fmtInt(g.count) }), el('td', { class: 'num', text: U.fmtInt(g.people.length) })]))));
+        const polOps = HR.policy.evaluate(m);
+        const opsTone = id => HR.bands.controlTone(polOps.rows.find(r => r.def.id === id));
         paper.appendChild(page([
           el('h2', { class: 'sheet-h', text: T('bd.secOps') }),
           el('div', { class: 'bignums' }, [
+            /* Coloured by the organisation's own limits — the same verdict Compliance gives. */
             bigNumber(U.fmtPct(h.failures.recentRate, 1), T('bd.opsFailRate'), T('bd.opsFailRateSub', { n: U.fmtInt(h.failures.recentFailed) }),
-              h.failures.recentRate > 0.05 ? 'bad' : h.failures.recentRate > 0.02 ? 'watch' : 'good'),
+              opsTone('failed-actions-rate') || (h.failures.recentRate > 0.05 ? 'bad' : h.failures.recentRate > 0.02 ? 'watch' : 'good')),
             bigNumber(h.evaluations.ageDays == null ? '—' : String(h.evaluations.ageDays), T('bd.opsEvalAge'), T('bd.opsEvalAgeSub', { n: U.fmtInt(h.evaluations.starts) }),
-              h.evaluations.ageDays == null || h.evaluations.ageDays > 7 ? 'bad' : h.evaluations.ageDays > 1 ? 'watch' : 'good'),
-            bigNumber(U.fmtInt(h.imports.failedRecent), T('bd.opsImportFail'), T('bd.opsImportFailSub', { n: U.fmtInt(h.imports.runs) }), h.imports.failedRecent ? 'bad' : 'good'),
+              opsTone('evaluation-age') || (h.evaluations.ageDays == null ? 'bad' : 'watch')),
+            bigNumber(U.fmtInt(h.imports.failedRecent), T('bd.opsImportFail'), T('bd.opsImportFailSub', { n: U.fmtInt(h.imports.runs) }), opsTone('import-failures') || (h.imports.failedRecent ? 'bad' : 'good')),
             bigNumber(U.fmtInt(h.incidents.open.length), T('bd.opsIncidents'), T('bd.opsIncidentsSub', { n: U.fmtInt(h.incidents.distinct) }), h.incidents.agentDown ? 'bad' : h.incidents.open.length ? 'watch' : 'good')
           ]),
           el('p', { class: 'lead', text: T('bd.opsLead', { from: A.meta.first ? U.fmtDate(A.meta.first).split(',')[0] : '—', to: A.meta.last ? U.fmtDate(A.meta.last).split(',')[0] : '—',

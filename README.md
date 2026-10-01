@@ -410,6 +410,17 @@ An empty limit means the default. "Recalculate trends" keeps the values a data p
 controls measured from companion files (audit log, directory, rules, decisions) instead of
 rewriting them with today's files. Tests: `NODE_OPTIONS= node test/policy.test.js`.
 
+**One colour for one number.** `js/bands.js` decides how the governance score, the
+compliance score, identity coverage, the managed share, the classified share and a risk
+score are coloured, and every page — Overview, Compliance, scorecards, the board, the
+department cards, a person — asks it, so 85 % reads the same everywhere. The compliance ring
+is called *Compliance score* and says "8 of 22 met · 2 accepted"; *critical controls failing*
+(Compliance) and *critical findings* (Risk) are named apart. The board's "What we found"
+themes take the status of the KPI that measures them, and its operations numbers the
+verdict Compliance gives. A framework card says which of its controls the KPIs evidence —
+ISO 27001 and BIO 2.0 cite a control for every KPI, so their score equals All KPIs, and the
+card says so.
+
 ## Business rules
 
 Drop a HelloID business-rule export (`Name,EntitlementCount,PersonsLatestEvaluation,Categories,Status,Conditions,Entitlements`) on the same page — it routes by header, no second import button — and it is joined against the reconciliation export on distinguished path, falling back to system + name for systems that export none (Exchange Online, TOPdesk, Azure).

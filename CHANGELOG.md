@@ -3,6 +3,14 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.10.9] — 2026-10-01
+
+- One colour for one number. The governance score, the compliance score, identity coverage, the managed share and the classified share were coloured by their own copy of a threshold on every page — 85 % compliance was amber on the Overview and green on Compliance, 65 % red on one and amber on the other. Every page now asks one place (js/bands.js), and a person’s risk tile follows the editable risk bands.
+- The compliance ring is called Compliance score and says “11 of 31 met · 2 accepted” — it showed the weighted percentage above an unweighted count, with accepted ones counted as met. “Critical controls failing” (Compliance) and “critical findings” (Risk) are named apart, and the critical tile names a critical control, not the worst open one of any severity.
+- The board’s “What we found” themes take the status of the KPI that measures them, against the limit the organisation set, and otherwise the severity of the finding — they used hard-coded counts (more than 20, more than 500) under a footnote that claimed otherwise. Its operations figures are coloured by the same verdict Compliance gives. Board actions link to the right owner.
+- Framework cards say what they are: which controls of the framework the KPIs evidence — and for ISO 27001 and BIO 2.0, where every KPI cites one, that the score therefore equals All KPIs.
+- More clicks lead somewhere: Compliance’s critical, accepted and waiting tiles; each engine-health ring on Evidence opens its own control; Organisation’s leavers-with-access tile opens the leavers. Plainer words: the Overview’s issue chart says “Accounts nobody manages”, “Access outside the model”, “Access people should have but lack” instead of HelloID’s issue names; the Risk lead, the scorecard footnote and the “no person behind it” finding are rewritten. A failing low-severity control shows amber, not neutral grey.
+
 ## [2026.10.8] — 2026-10-01
 
 - KPIs that can be met and that cannot fail by accident. Wide group membership allows 5 % (was 0 %: one account over the limit failed it); empty groups are a share of all groups, at most 10 % (was zero empty groups, which no directory has); sign-ins past the identity provider count people, two break-glass accounts allowed (was any single one); days since the last evaluation are measured to the moment the audit log was exported, at most two (a two-day-old export failed a critical control by the wall clock). Limits you set yourself stay; the two whose unit changed fall back to the new default.

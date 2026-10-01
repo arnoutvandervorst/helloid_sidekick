@@ -174,7 +174,8 @@
         el('div', { class: 'rc-body' }, [el('div', { class: 'sc-kicker', text: kicker }), el('h3', { text: title }), el('div', { class: 'note rc-foot', text: foot })])
       ]);
     };
-    const toKpi = id => () => HR.app.go('policies', { tab: 'kpis', fw: 'theme:operations' });
+    /* Each ring opens its own control, not the whole operations theme. */
+    const toKpi = id => () => HR.app.go('policies', { tab: 'kpis', fw: 'theme:operations', ctl: id });
     const inc = h.incidents.open.length;
     wrap.appendChild(el('div', { class: 'grid g4', style: 'margin-bottom:14px' }, [
       kpiCard('failed-actions-rate', T('au.kFailRate'), T('au.kFailRateK'), T('au.kFailRateFoot', { failed: U.fmtInt(h.failures.recentFailed), n: U.fmtInt(h.failures.recentActions), until: day(h.failures.recentUntil), all: U.fmtPct(h.failures.rate, 1) }), toKpi('failed-actions-rate')),

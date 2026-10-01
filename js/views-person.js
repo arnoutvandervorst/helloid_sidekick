@@ -76,7 +76,7 @@
     const cells = [
       tile(T('p3.kAccounts'), U.fmtInt(s.accounts), T('p3.kAccountsFoot', { n: U.fmtInt(s.enabled) }), { small: true, severity: s.accounts && !s.enabled && d.life.state !== 'past' ? 'medium' : undefined, onClick: open('access') }),
       tile(T('p3.kEnts'), U.fmtInt(s.entitlements), T('p3.kEntsFoot', { nobody: U.fmtInt(d.access.counts.nobody) }), { small: true, severity: d.access.counts.nobody ? 'medium' : 'good', onClick: open('access', d.access.counts.nobody ? { prov: 'nobody' } : {}) }),
-      tile(T('c.risk'), String(s.maxRisk), T('p3.kRiskFoot'), { small: true, facet: 'risk', severity: s.maxRisk >= 70 ? 'critical' : s.maxRisk >= 45 ? 'high' : s.maxRisk >= 20 ? 'medium' : 'good', onClick: open('governance') }),
+      tile(T('c.risk'), String(s.maxRisk), T('p3.kRiskFoot'), { small: true, facet: 'risk', severity: HR.bands.band('risk', s.maxRisk) === 'low' ? 'good' : HR.bands.band('risk', s.maxRisk), onClick: open('governance') }),
       tile(T('p3.kCost'), U.fmtMoney(s.monthly), T('p3.kCostFoot'), { small: true, facet: 'money', onClick: open('cost') }),
       tile(T('ol.score'), s.outlier == null ? '—' : String(s.outlier), T('p3.kOutlierFoot'), { small: true, facet: 'risk', severity: s.outlier == null ? undefined : s.outlier >= HR.outlier.HIGH ? 'high' : 'good', onClick: open('governance') }),
       tile(T('p3.kFindings'), U.fmtInt(s.findings), T('p3.kFindingsFoot', { sod: U.fmtInt(s.sod) }), { small: true, facet: 'governance', severity: s.findings ? (d.findings.some(f => f.severity === 'critical') ? 'critical' : 'medium') : 'good', onClick: open('governance') })

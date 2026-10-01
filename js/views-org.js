@@ -748,14 +748,14 @@
       tile(T('sc.kDrift'), U.fmtInt(s.driftRows), T('sc.kDriftFoot')),
       tile(T('sc.kLeavers'), U.fmtInt(s.leaversWithAccess),
         noMoney ? T('sc.kLeaversFootPlain') : T('sc.kLeaversFoot', { cost: U.fmtMoney(s.leaverCost) }),
-        { severity: s.leaversWithAccess ? 'critical' : 'good' })
+        { severity: s.leaversWithAccess ? 'critical' : 'good', onClick: () => HR.app.go('org', { tab: 'leavers' }) })
     ].filter(Boolean)));
 
     /* One card per department: the ring is the share of its access the model explains,
        the bars what a department owner acts on. */
     const depts = sc.rows.filter(r => r.people > 0 && r.key !== sc.UNASSIGNED && r.key !== sc.UNOWNED).sort((a, b) => b.people - a.people);
     if (depts.length) {
-      const band = v => v == null ? 'wait' : v >= .8 ? 'good' : v >= .5 ? 'medium' : 'critical';
+      const band = v => v == null ? 'wait' : HR.bands.band('managed', v);
       const bar = (label, n, of, tone) => el('div', { class: 'sc-bar' }, [
         el('div', { class: 'sc-row' }, [el('b', { text: label }), el('span', { class: 'mono note' }, [el('strong', { text: U.fmtInt(n) }), document.createTextNode(' ' + T('po.sc.of', { of: U.fmtInt(of) }))])]),
         el('div', { class: 'sc-track' }, el('i', { class: tone || '', style: 'width:' + (of ? Math.min(100, 100 * n / of) : 0).toFixed(1) + '%' }))

@@ -788,6 +788,9 @@
       : T('gs.footShort', { risk: s.riskScore, pct: U.fmtPct(s.policyScore || 0, 0) });
   }
 
+  /** "8 of 22 met · 2 accepted": met counts what is met, not what is accepted. */
+  const scoreSub = (passed, of, accepted) => T(accepted ? 'po.kScoreSubAcc' : 'po.kScoreSub', { met: U.fmtInt(Math.max(0, (passed || 0) - (accepted || 0))), n: U.fmtInt(of), acc: U.fmtInt(accepted || 0) });
+
   function overview(m) {
     const f = document.createDocumentFragment();
     const s = m.summary;
@@ -800,7 +803,7 @@
 
     f.appendChild(sourcesCard(m, { compact: true }));
 
-    const gsSev = { good: 'good', watch: 'medium', poor: 'critical' }[s.governanceBand] || 'medium';
+    const gsSev = HR.bands.band('governance', s.governanceScore);
     /* The four shares a reader recognises at a glance, as rings; the counts stay tiles. */
     const pScore = bDelta('policyScore');
     const rings = el('div', { class: 'grid g4', style: 'margin-bottom:14px' });
@@ -808,20 +811,20 @@
       ringCard({ title: T('gs.title'), kicker: T('gs.higherBetter'), score: s.governanceScore == null ? null : s.governanceScore / 100,
         value: s.governanceScore == null ? '\u2014' : String(s.governanceScore), sub: '/ 100', band: gsSev, min: 0.03,
         delta: bDelta('governanceScore'), inverse: true, foot: governanceFootShort(s), spark: ringSpark(m, 'governanceScore'), facet: 'governance', onClick: () => HR.app.go('policies') }),
-      ringCard({ title: T('po.kScore'), kicker: T('po.title'), score: s.policyEvaluated ? s.policyScore : null,
-        value: s.policyEvaluated ? U.fmtPct(s.policyScore, 0) : '\u2014', sub: s.policyEvaluated ? s.policyPassed + ' / ' + s.policyEvaluated : T('po.needs'),
-        band: s.policyScore >= .9 ? 'good' : s.policyScore >= .6 ? 'medium' : 'critical', min: 0.03,
+      ringCard({ title: T('po.kScore'), kicker: T('gs.higherBetter'), score: s.policyEvaluated ? s.policyScore : null,
+        value: s.policyEvaluated ? U.fmtPct(s.policyScore, 0) : '\u2014', sub: s.policyEvaluated ? scoreSub(s.policyPassed, s.policyEvaluated, s.policyAccepted) : T('po.needs'),
+        band: HR.bands.band('compliance', s.policyScore), min: 0.03,
         delta: pScore ? { change: Math.round(100 * pScore.change) } : undefined, deltaFormat: v => v + 'pp', inverse: true,
         foot: T('gs.halfOfShort'), spark: ringSpark(m, 'policyScore'), facet: 'governance', onClick: () => HR.app.go('policies', { tab: 'scorecards' }) }),
       ringCard({ title: T('ov.coverage'), kicker: T('ov.coverageFoot'), score: s.coverage, value: U.fmtPct(s.coverage, 0),
-        sub: U.fmtInt(s.orphanAccounts) + ' ' + T('c.unowned').toLowerCase(), band: s.coverage >= .9 ? 'good' : s.coverage >= .75 ? 'medium' : 'high', min: 0.03,
+        sub: U.fmtInt(s.orphanAccounts) + ' ' + T('c.unowned').toLowerCase(), band: HR.bands.band('coverage', s.coverage), min: 0.03,
         delta: bDelta('orphanAccounts'), foot: T('ov.stillEnabled', { n: s.orphanEnabled }), onClick: () => HR.app.go('accounts', { filter: 'orphan' }) }),
       /* Weighted by access: an unplaced group with forty holders weighs forty. Older
          data points carry only the name count. */
       (() => { const acc = s.classifiedAccess != null ? s.classifiedAccess : s.classified;
         return ringCard({ title: T('ov.classified'), kicker: T('ov.classifiedAccessKicker'), score: acc, value: U.fmtPctFloor(acc),
         sub: U.fmtInt(s.unclassifiedPermissions + s.unclassifiedAccounts) + ' ' + T('ov.openShort'),
-        band: acc >= .95 ? 'good' : acc >= .8 ? 'medium' : 'high', min: 0.03,
+        band: HR.bands.band('classified', acc), min: 0.03,
         foot: T('ov.classifiedAccessFoot', { names: U.fmtPctFloor(s.classified), p: U.fmtInt(s.unclassifiedPermissions), a: U.fmtInt(s.unclassifiedAccounts) }),
         onClick: () => HR.app.go('classify', { tab: s.unclassifiedPermissions ? 'perms' : 'accounts', filter: 'unclassified' }) }); })()
     ].filter(Boolean));
@@ -856,8 +859,12 @@
 
     /* issue mix */
     const issueColors = { 'Account unmanaged': C.STATUS.critical, 'Permission unmanaged': C.slot(1), 'Permission missing': C.STATUS.warning };
+    /* What each HelloID issue means for the business, in words; the raw type stays the
+       filter key. */
+    const issueLabel = k => ({ 'Account unmanaged': T('ov.iss.accountUnmanaged'), 'Permission unmanaged': T('ov.iss.permUnmanaged'),
+      'Permission missing': T('ov.iss.permMissing'), 'Permission not managed': T('ov.iss.permNotManaged') })[k] || k;
     const issueData = Object.entries(s.issueCounts).map(([k, v]) => ({
-      label: k, value: v, color: issueColors[k] || C.slot(7),
+      label: issueLabel(k), value: v, color: issueColors[k] || C.slot(7),
       onClick: () => HR.app.go('accounts', { issue: k })
     }));
     g.appendChild(card(T('ov.issueMix'), U.fmtInt(s.rows) + ' ' + T('app.rows'), C.stackedBar(issueData)));
@@ -4610,6 +4617,6 @@
     card, tile, ring, ringCard, scoreBar, dl, partialNotice, syntheticVaultNotice, personRow, peopleIndex, entitlementTable,
     openDrawer, closeDrawer, drawerAccount, drawerPermission, drawerVaultPerson, drawerSystem,
     drawerChangelog, STATE_SEV, stateLabel, offsetText, sourcesCard, tabbed,
-    lead, info, explain, collapseNotes, fitNotice, tenantNotice, vocabNotice, ringSpark
+    lead, info, explain, collapseNotes, fitNotice, tenantNotice, vocabNotice, ringSpark, scoreSub
   };
 })(window.HR);

@@ -25,7 +25,8 @@
   /** The control as a ring: today's value inside, the limit under it, colour by what is open. */
   function kpiRing(row) {
     const sc = kpiScore(row);
-    const tone = sc === null ? null : row.status === 'met' ? 'good' : row.status === 'accepted' ? 'warn' : (row.def.severity || 'medium');
+    /* A failing low control is still failing: amber, not the grey that reads as neutral. */
+    const tone = sc === null ? null : row.status === 'met' ? 'good' : row.status === 'accepted' ? 'warn' : row.def.severity === 'low' ? 'warn' : (row.def.severity || 'medium');
     const s = HR.viewkit.ring(sc, row.applicable ? fmtVal(row) : '\u2014', T('po.limitIs', { limit: fmtLimit(row) }), { band: tone, min: row.status === 'notMet' ? 0.04 : 0 });
     s.setAttribute('title', row.applicable ? T('po.ringTip', { pct: U.fmtPct(sc, 0) }) : T('po.needs'));
     return s;
@@ -354,7 +355,7 @@
   }
 
   /* ---- scorecards: the ring, the bars, one card per framework ---------------- */
-  const bandOf = score => score >= 0.9 ? 'good' : score >= 0.6 ? 'medium' : 'critical';
+  const bandOf = score => HR.bands.band('compliance', score);
   /** The score as a ring: the weighted share met, the points under it. */
   const ring = (score, points, total, size) => HR.viewkit.ring(score, U.fmtPct(score, 0), T('po.sc.pts', { n: U.fmtNum(points, 0), of: U.fmtNum(total, 0) }), { band: bandOf(score), size });
   function bar(label, n, of, tone) {
@@ -393,6 +394,11 @@
           : st.critical ? el('span', { class: 'pill ok', text: T('po.sc.criticalAllMet') }) : null
       ]),
       el('div', { class: 'sc-ringwrap' }, [el('div', { class: 'sc-cap', text: T('po.sc.score') }), ring(st.score, st.points, st.total, opts && opts.detail ? 'lg' : '')]),
+      /* A framework card is a view on the same KPIs, not a separate measurement: say
+         which of the framework's controls they evidence, and when the set is the whole
+         catalogue, that its score is the All-KPIs score. */
+      fw && !st.theme ? el('p', { class: 'note sc-evid', text: T(st.cites.length === 1 ? 'po.sc.evidences1' : 'po.sc.evidences', { n: U.fmtInt(st.cites.length), fw: st.meta.name })
+        + (st.rows.length === HR.policy.CATALOG.length ? ' ' + T('po.sc.sameSet') : '') }) : null,
       el('div', { class: 'sc-meta' }, [
         el('span', {}, [document.createTextNode(st.theme ? T('po.sc.frameworks') : fw ? T('po.sc.cited') : T('gs.title')),
           el('b', { text: st.theme ? (U.uniq(st.rows.flatMap(r => Object.keys(r.def.refs || {}))).map(k => fwLabel[k]).join(' \u00b7 ') || '\u2014') : fw ? (st.cites.join(' \u00b7 ') || '\u2014') : (gs.governanceScore == null ? '\u2014' : gs.governanceScore + ' / 100') })]),
@@ -408,7 +414,7 @@
         st.worst.length ? el('span', { text: T('po.sc.worst', { list: st.worst.map(r => T('po.p.' + r.def.id)).join(', ') }) }) : el('span', { text: T('po.sc.nothingOpen') }),
         opts && opts.detail ? null : el('a', { href: '#', text: T('po.sc.open'), onclick: e => { e.preventDefault(); e.stopPropagation(); open(); } })
       ])
-    ]);
+    ].filter(Boolean));
     return c;
   }
   function scorecardsTab(m) {
@@ -456,7 +462,7 @@
     }
     /* The same headline as everywhere else leads; the controls share is its second half. */
     const gs = m.summary;
-    const gsSev = { good: 'good', watch: 'medium', poor: 'critical' }[gs.governanceBand] || 'medium';
+    const gsSev = HR.bands.band('governance', gs.governanceScore);
     const diffGs = HR.app.state.diff && HR.app.state.diff.summary.governanceScore;
     const diffPs = HR.app.state.diff && HR.app.state.diff.summary.policyScore;
     f.appendChild(el('div', { class: 'grid g5 rings2', style: 'margin-bottom:14px' }, [
@@ -465,18 +471,18 @@
         delta: diffGs, inverse: true, foot: gs.governancePartial ? T('gs.footPartial', { risk: gs.riskScore }) : T('gs.footShort', { risk: gs.riskScore, pct: U.fmtPct(score, 0) }),
         spark: HR.viewkit.ringSpark(m, 'governanceScore'), onClick: () => HR.app.go('overview') }),
       ringCard({ title: T('po.kScore'), kicker: T('gs.halfOfShort'), score: s.evaluated ? score : null,
-        value: s.evaluated ? U.fmtPct(score, 0) : '\u2014', sub: s.evaluated ? s.passed + ' / ' + s.evaluated : T('po.needs'),
-        band: score >= 1 ? 'good' : score >= 0.7 ? 'medium' : 'high', min: 0.03,
+        value: s.evaluated ? U.fmtPct(score, 0) : '\u2014', sub: s.evaluated ? HR.viewkit.scoreSub(s.passed, s.evaluated, s.accepted) : T('po.needs'),
+        band: HR.bands.band('compliance', score), min: 0.03,
         delta: diffPs ? { change: Math.round(100 * diffPs.change) } : undefined, deltaFormat: v => v + 'pp', inverse: true,
         foot: T('po.kScoreWeightedShort'), spark: HR.viewkit.ringSpark(m, 'policyScore') }),
       tile(T('po.kCritical'), U.fmtInt(s.criticalOpen),
-        s.worstOpen ? T('po.kCriticalFoot', { control: T('po.p.' + s.worstOpen.def.id) }) : T('po.kCriticalNone'),
-        { severity: s.criticalOpen ? 'critical' : 'good', small: true }),
+        (wc => wc ? T('po.kCriticalFoot', { control: T('po.p.' + wc.def.id) }) : T('po.kCriticalNone'))(ev.rows.find(r => r.applicable && r.on && !r.pass && r.severity === 'critical')),
+        { severity: s.criticalOpen ? 'critical' : 'good', small: true, onClick: () => HR.app.go('policies', { tab: 'kpis' }) }),
       tile(T('po.kAccepted'), U.fmtInt(s.accepted),
         s.nextExpiry ? T('po.kAcceptedFoot', { until: s.nextExpiry }) : T('po.kAcceptedNone'),
-        { severity: s.accepted ? 'medium' : 'good', small: true }),
-      tile(T('po.kWaiting'), U.fmtInt(ev.rows.filter(r => !r.applicable).length),
-        T('po.kWaitingFoot'), { small: true })
+        { severity: s.accepted ? 'medium' : 'good', small: true, onClick: () => HR.app.go('policies', { tab: 'kpis' }) }),
+      tile(T('po.kWaiting'), U.fmtInt(ev.rows.filter(r => !r.applicable && r.on).length),
+        T('po.kWaitingFoot'), { small: true, onClick: () => HR.app.go('sources') })
     ]));
 
     /* Two tabs: the scorecards, and the KPI list — which, filtered to a framework,
