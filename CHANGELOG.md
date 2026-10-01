@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.10.1] — 2026-10-01
+
+- Deleting a data point on the Data points page leaves nothing pointing at it. Deleting the loaded one loads the point dated before it (else the newest left, else an empty workspace); deleting the compared one compares with the point before the loaded one; deleting any other refreshes the diff and the findings’ first-seen dates. Before, the app kept showing the deleted point’s numbers and the Trend and Diff kept comparing against it until a reload.
+
 ## [2026.9.81] — 2026-09-21
 
 - Tenant guard. A workspace is one tenant; a data point that shares almost none of its account keys with the one it is compared with (under 15 %, both sides at least 20 accounts) now raises a notice on every page — “this looks like another tenant” — because the trend, the diff and the KPI movement would compare two customers as one. The notice offers a move to a new workspace (the data point goes there and the app reopens in it), a delete, or “keep together”, which silences that pair for good. The check runs on every start, so an earlier mistake surfaces too; the import toast says it as well.

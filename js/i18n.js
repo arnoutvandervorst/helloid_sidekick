@@ -2123,6 +2123,7 @@ window.HR = window.HR || {};
     'sn.delete': 'Delete',
     'sn.renamePrompt': 'Snapshot name',
     'sn.deleteConfirm': 'Delete snapshot "{name}"? This cannot be undone.',
+    'sn.deleted': 'Deleted data point “{name}”.',
 
     /* ---- settings ---- */
     'st.title': 'Settings',
@@ -6016,6 +6017,7 @@ window.HR = window.HR || {};
     'sn.delete': 'Verwijderen',
     'sn.renamePrompt': 'Naam van de momentopname',
     'sn.deleteConfirm': 'Momentopname "{name}" verwijderen? Dit kan niet ongedaan worden gemaakt.',
+    'sn.deleted': 'Meetpunt “{name}” verwijderd.',
 
     'st.title': 'Instellingen',
     'st.tab.classification': 'Classification',

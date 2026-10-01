@@ -2623,10 +2623,8 @@
             const name = prompt(T('sn.renamePrompt'), r.name); if (!name) return;
             const full = await HR.store.get(r.id); full.name = name; await HR.store.put(full); HR.app.refreshSnapshots();
           } }),
-          el('button', { class: 'btn sm danger', text: T('sn.delete'), onclick: async e => {
-            e.stopPropagation();
-            if (!confirm(T('sn.deleteConfirm', { name: r.name }))) return;
-            await HR.store.remove(r.id); HR.app.refreshSnapshots();
+          el('button', { class: 'btn sm danger', text: T('sn.delete'), onclick: e => {
+            e.stopPropagation(); HR.app.deleteDataPoint(r.id);
           } })
         ]) }
       ],

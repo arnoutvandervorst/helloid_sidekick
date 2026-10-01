@@ -835,14 +835,41 @@
     state.tenant.dismissed = true;
     render();
   }
-  async function tenantDelete() {
-    const cur = state.snapshots.find(s => s.id === state.currentSnapshotId);
-    if (!cur || !confirm(T('sn.deleteConfirm', { name: cur.name }))) return;
-    const prevId = state.baselineId;
-    await HR.store.remove(cur.id);
-    await refreshSnapshots();
-    if (prevId) await loadSnapshot(prevId);
-    else { state.tenant = null; render(); }
+  async function tenantDelete() { return deleteDataPoint(state.currentSnapshotId); }
+
+  /**
+   * Delete a data point and leave nothing pointing at it. The loaded point gives way to
+   * the one dated before it (else the newest left, else nothing); a deleted baseline gives
+   * way to the point before the loaded one; any other point only changes the history the
+   * diff and the findings' first-seen dates are read from.
+   */
+  async function deleteDataPoint(id) {
+    const snap = state.snapshots.find(s => s.id === id);
+    if (!snap || !confirm(T('sn.deleteConfirm', { name: snap.name }))) return;
+    const wasLoaded = id === state.currentSnapshotId, wasBaseline = id === state.baselineId;
+    const before = previousDataPoint(id);
+    await HR.store.remove(id);
+    state.snapshots = await HR.store.list();
+    if (wasBaseline) { state.baselineId = null; state.baselineModel = null; state.baselineSnapshot = null; state.diff = null; }
+    if (wasLoaded) {
+      const byDate = (a, b) => (b.dataDate - a.dataDate) || (b.importedAt - a.importedAt);
+      const next = before || state.snapshots.slice().sort(byDate)[0];
+      if (next) await loadSnapshot(next.id);
+      else {
+        /* Nothing left: back to an empty workspace, but a later import may auto-load again. */
+        state.parsed = null; state.currentSnapshotId = null; state.tenant = null;
+        await setBaseline(null);
+        await withBusy(T('busy.recalc'), () => rebuild());
+      }
+    } else if (wasBaseline) {
+      const prev = previousDataPoint(state.currentSnapshotId);
+      await setBaseline(prev ? prev.id : null, true);
+    } else {
+      await recomputeDiff();
+    }
+    updateTopbar();
+    U.toast(T('sn.deleted', { name: snap.name }), 4000);
+    render();
   }
   async function tenantMove() {
     const cur = state.snapshots.find(s => s.id === state.currentSnapshotId);
@@ -1380,7 +1407,7 @@
   const REPO_URL = 'https://github.com/arnoutvandervorst/helloid_sidekick';
 
   HR.app = {
-    tenantKeep, tenantDelete, tenantMove, REPO_URL, state, go, rebuild, rebuildBusy, batch, loadSnapshot, setBaseline, refreshSnapshots, rescoreDataPoints, importText, render, applyChrome, updateTopbar,
+    tenantKeep, tenantDelete, tenantMove, deleteDataPoint, REPO_URL, state, go, rebuild, rebuildBusy, batch, loadSnapshot, setBaseline, refreshSnapshots, rescoreDataPoints, importText, render, applyChrome, updateTopbar,
     importFileAs, clearSource, clearRecon, detectKind, loadSample, findSample, sampleName: () => sampleFile || null,
     demoAvailable: () => demoManifest };
   document.addEventListener('DOMContentLoaded', init);
