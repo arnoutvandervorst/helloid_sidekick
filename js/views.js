@@ -1011,9 +1011,13 @@
         band: m.summary.riskBand, min: 0.03, delta: bDelta('riskScore'),
         foot: T('c.' + m.summary.riskBand) + ' \u00b7 ' + T(m.summary.governancePartial ? 'gs.allOfShort' : 'gs.halfOfShort'),
         onClick: () => HR.app.go('risk', { tab: 'score' }) }),
-      tile(T('rk.criticalFindings'), String(m.summary.criticalFindings), T('rk.actWeek'), { severity: 'critical' }),
-      tile(T('rk.highFindings'), String(m.summary.highFindings), T('rk.actQuarter'), { severity: 'high' }),
-      tile(T('rk.atHigh'), String((m.risk.bands.critical || 0) + (m.risk.bands.high || 0)), T('rk.ofN', { n: m.summary.accounts }), { severity: 'high' })
+      tile(T('rk.criticalFindings'), String(m.summary.criticalFindings),
+        m.summary.criticalAccounts ? T('rk.critAccounts', { n: U.fmtInt(m.summary.criticalAccounts) }) : T('rk.noneOpen'),
+        { severity: m.summary.criticalFindings ? 'critical' : 'good', onClick: () => HR.app.go('risk', { tab: 'findings', kind: 'risk', sev: 'critical' }) }),
+      tile(T('rk.highFindings'), String(m.summary.highFindings), T('rk.riskOnly'),
+        { severity: m.summary.highFindings ? 'high' : 'good', onClick: () => HR.app.go('risk', { tab: 'findings', kind: 'risk', sev: 'high' }) }),
+      tile(T('rk.atHigh'), String(m.risk.highLive != null ? m.risk.highLive : (m.risk.bands.critical || 0) + (m.risk.bands.high || 0)), T('rk.ofNEnabled', { n: U.fmtInt(m.summary.enabledAccounts) }),
+        { severity: m.risk.highLive ? 'high' : 'good', onClick: () => HR.app.go('accounts', { band: 'critical,high', enabled: '1' }) })
     );
     f.appendChild(top);
 
@@ -1041,18 +1045,31 @@
       tile(T('sod.kPeople'), U.fmtInt(s.people), T('sod.kPeopleFoot'), { small: true }),
       tile(T('sod.kRules'), U.fmtInt(s.rules), T('sod.kRulesFoot', { hit: U.fmtInt(sod.byRule.filter(r => r.count).length) }), { small: true })
     ]));
+    /* Pairs held on purpose: listed, with their reason and end date, so they stay visible. */
+    const acc = (sod.all || []).filter(v => v.accepted);
+    if (acc.length) wrap.appendChild(card(T('sod.acceptedTitle', { n: U.fmtInt(acc.length) }), T('sod.acceptedNote'), HR.table.make({
+      columns: [
+        { key: 'rule', label: T('sod.cRule'), value: v => HR.sod.labelOf(v.rule) },
+        { key: 'account', label: T('c.account'), value: v => v.account.userName },
+        { key: 'until', label: T('rk.acceptUntil'), value: v => v.accepted.until },
+        { key: 'why', label: T('rk.acceptWhy'), value: v => v.accepted.why },
+        { key: 'act', label: '', sortable: false, render: v => el('button', { class: 'btn sm ghost', text: T('rk.unaccept'),
+          onclick: e => { e.stopPropagation(); HR.sod.setAccepted(v.rule, v.account, null); HR.app.rebuildBusy(); } }) }
+      ], rows: acc, pageSize: 10, exportName: 'toxic-accepted'
+    })));
     wrap.appendChild(card(T('sod.rulesTitle'), T('sod.rulesNote'), [
-      C.barList(sod.byRule.map(r => ({ label: r.rule.label, value: r.count, sev: r.rule.severity })), { format: v => U.fmtInt(v) }),
+      C.barList(sod.byRule.map(r => ({ label: HR.sod.labelOf(r.rule), value: r.count, sev: r.rule.severity })), { format: v => U.fmtInt(v) }),
       el('dl', { class: 'sod-why' }, sod.byRule.flatMap(r => [
-        el('dt', { text: r.rule.label }),
+        el('dt', { text: HR.sod.labelOf(r.rule) }),
         el('dd', { text: HR.sod.whyOf(r.rule) || T('sod.whyNone') })
       ])),
       el('p', { class: 'note' }, [document.createTextNode(T('sod.editNote') + ' '),
         el('a', { href: '#', text: T('sod.editLink'), onclick: e => { e.preventDefault(); HR.app.go('settings', { tab: 'classification' }); } })])
     ]));
-    const sideText = (v, side) => v[side] ? v[side].name : T('sod.accountType', { cls: T('cls.' + v.account.cls) || v.account.cls });
+    const clsName = id => HR.config.labelOf((HR.config.get().accountClasses || []).find(c => c.id === id) || { label: id });
+    const sideText = (v, side) => v[side] ? v[side].name : T('sod.accountType', { cls: clsName(v.account.cls) });
     /* What made the side match: "privileged category", "name contains FIN", "external account". */
-    const matchText = w => w.kind === 'class' ? T('sod.whyClass', { cls: T('cls.' + w.value) || w.value })
+    const matchText = w => w.kind === 'class' ? T('sod.whyClass', { cls: clsName(w.value) })
       : w.kind === 'category' ? T('sod.whyCategory', { cat: HR.config.labelOf(HR.config.get().categories.find(c => c.id === w.value)) || w.value })
       : T('sod.whyName', { word: w.value.toUpperCase() });
     const sideCell = (v, side) => el('div', {}, [
@@ -1063,15 +1080,17 @@
       columns: [
         { key: 'severity', label: T('c.sev'), value: v => ({ critical: 0, high: 1, medium: 2 })[v.severity],
           render: v => el('span', { class: 'sev ' + v.severity, text: T('c.' + v.severity) }) },
-        { key: 'rule', label: T('sod.cRule'), value: v => v.rule.label },
+        { key: 'rule', label: T('sod.cRule'), value: v => HR.sod.labelOf(v.rule) },
         { key: 'account', label: T('c.account'), value: v => v.account.userName },
         { key: 'person', label: T('c.person'), value: v => v.person || '', render: v => v.person ? el('span', { text: v.person }) : el('span', { class: 'note', text: T('c.unowned') }) },
         { key: 'a', label: T('sod.cA'), value: v => sideText(v, 'a'), render: v => sideCell(v, 'a') },
-        { key: 'b', label: T('sod.cB'), value: v => sideText(v, 'b'), render: v => sideCell(v, 'b') }
+        { key: 'b', label: T('sod.cB'), value: v => sideText(v, 'b'), render: v => sideCell(v, 'b') },
+        { key: 'act', label: '', sortable: false, render: v => el('button', { class: 'btn sm ghost', text: T('rk.accept'), title: T('sod.acceptTip'),
+          onclick: e => { e.stopPropagation(); acceptDrawer(T('sod.acceptTitle'), HR.sod.labelOf(v.rule) + ' \u00b7 ' + v.account.userName, st => HR.sod.setAccepted(v.rule, v.account, st)); } }) }
       ],
       rows: sod.violations, pageSize: 25, exportName: 'toxic-combinations',
       initialSort: { key: 'severity', dir: 1 },
-      search: (v, q) => (v.account.userName + ' ' + v.person + ' ' + v.rule.label).toLowerCase().includes(q),
+      search: (v, q) => (v.account.userName + ' ' + v.person + ' ' + HR.sod.labelOf(v.rule)).toLowerCase().includes(q),
       onRowClick: v => drawerAccount(v.account)
     })));
     return wrap;
@@ -1164,29 +1183,47 @@
       el('button', {
         class: 'btn sm', text: T('rk.exportFindings'), onclick: () => {
           U.download('findings.csv', U.toCSV(m.findings.map(x => ({
-            severity: x.severity, category: x.category, title: x.title, affected: x.count,
+            severity: x.severity, kind: x.kind, category: x.category, title: x.title, affected: x.count,
+            accepted_until: x.accepted ? x.accepted.until : '', accepted_why: x.accepted ? x.accepted.why : '',
             monthlyImpact: Math.round(x.impactMonthly || 0), annualImpact: Math.round(x.annualImpact || 0),
             what: x.what, why: x.why, remediation: x.fix
           }))), 'text/csv;charset=utf-8');
         }
       })
     ]));
-    /* The areas as filter chips — a reader who owns one area reads only that. */
-    const cat = (params && params.cat) || '';
-    const cats = U.uniq(m.findings.map(f => f.category));
-    if (cats.length > 1) list.appendChild(el('div', { class: 'slot-actions' }, [['', T('c.all')]].concat(cats.map(c => [c, c])).map(([k, label]) =>
-      el('button', { class: 'btn sm' + (cat === k ? ' primary' : ''), text: label + (k ? ' ' + m.findings.filter(f => f.category === k).length : ''),
-        onclick: () => HR.app.go('risk', { tab: 'findings', cat: k }) }))));
+    /* What kind of finding: risk first; cost, data quality and operations have their own
+       readers. Stable ids in the URL, so a link survives a language switch. */
+    const kind = (params && params.kind) || '';
+    const sevF = (params && params.sev) || '';
+    const kinds = HR.findings.KINDS.filter(k => m.findings.some(f => f.kind === k));
+    if (kinds.length > 1) list.appendChild(el('div', { class: 'slot-actions' }, [['', T('c.all')]].concat(kinds.map(k => [k, T('rk.kind.' + k)])).map(([k, label]) =>
+      el('button', { class: 'btn sm' + (kind === k ? ' primary' : ''), text: label + (k ? ' ' + m.findings.filter(f => f.kind === k).length : ''),
+        onclick: () => HR.app.go('risk', { tab: 'findings', kind: k }) }))));
+    /* What moved since the compared data point. */
+    const df = HR.app.state.diff && HR.app.state.diff.findings;
+    if (df) {
+      const nw = df.filter(x => x.isNew), gone = df.filter(x => x.resolved);
+      if (nw.length || gone.length) list.appendChild(el('div', { class: 'note' }, [
+        document.createTextNode(T('rk.sinceBase') + ' '),
+        nw.length ? el('span', { class: 'pill removed', title: nw.map(x => x.title || x.id).join('\n'), text: T('rk.nNew', { n: nw.length }) }) : null,
+        gone.length ? el('span', { class: 'pill ok', title: gone.map(x => x.title || x.id).join('\n'), text: T('rk.nResolved', { n: gone.length }) }) : null
+      ].filter(Boolean)));
+    }
     /* "Open n days" on every row says the same thing 36 times when all findings date from
        one data point: then it is one line above the list, and the chip only when it differs. */
     const seen = HR.app.state.findingsSeen || {};
     const firsts = U.uniq(m.findings.map(f => seen[f.id] ? U.fmtDate(seen[f.id].first).split(',')[0] : null).filter(Boolean));
     const sameDay = firsts.length === 1;
     if (sameDay) list.appendChild(el('div', { class: 'note', text: T('rk.allOpenSince', { date: firsts[0] }) }));
-    const shown = cat ? m.findings.filter(f => f.category === cat) : m.findings;
-    /* Grouped by severity, each group headed by its count. */
-    ['critical', 'high', 'medium', 'low', 'info'].forEach(sev => {
-      const group = shown.filter(f => f.severity === sev);
+    const shown = m.findings.filter(f => (!kind || f.kind === kind) && (!sevF || f.severity === sevF));
+    /* Grouped by severity, each group headed by its count; accepted findings last. */
+    ['critical', 'high', 'medium', 'low', 'info', 'accepted'].forEach(sev => {
+      const group = sev === 'accepted' ? shown.filter(f => f.accepted) : shown.filter(f => f.severity === sev && !f.accepted);
+      if (sev === 'accepted' && group.length) {
+        list.appendChild(el('div', { class: 'f-group' }, [el('span', { class: 'pill', text: T('rk.acceptedGroup') }), el('span', { class: 'note', text: T(group.length === 1 ? 'rk.finding1' : 'rk.findingN', { n: group.length }) })]));
+        group.forEach(fd => list.appendChild(findingCard(fd, m, { ageChip: !sameDay })));
+        return;
+      }
       if (!group.length) return;
       list.appendChild(el('div', { class: 'f-group' }, [el('span', { class: 'sev ' + sev, text: T('c.' + sev) }), el('span', { class: 'note', text: T(group.length === 1 ? 'rk.finding1' : 'rk.findingN', { n: group.length }) })]));
       group.forEach(fd => {
@@ -1222,6 +1259,34 @@
     })));
   }
 
+  /** "12 accounts", "3 entitlements", "8 people" — what the finding counts, not "items". */
+  function countText(fd) {
+    const t = fd.entities[0] && fd.entities[0].type;
+    const key = { account: 'rk.nAccounts', permission: 'rk.nPermissions', person: 'rk.nPeople' }[t];
+    return key ? T(key, { n: U.fmtInt(fd.count) }) : T(fd.count === 1 ? 'rk.item' : 'rk.items', { n: fd.count });
+  }
+  /** Accept something for a while: a date in the future and a reason are required. */
+  function acceptDrawer(title, subject, save) {
+    const until = el('input', { type: 'date', min: new Date(Date.now() + 86400000).toISOString().slice(0, 10) });
+    const why = el('input', { type: 'text', placeholder: T('rk.acceptWhyPh'), style: 'width:100%' });
+    const by = el('input', { type: 'text', placeholder: T('rk.acceptByPh') });
+    const msg = el('p', { class: 'note' });
+    openDrawer(el('div', {}, [el('h2', { text: title }), el('p', { class: 'note', text: subject })]),
+      el('div', { class: 'stack' }, [
+        el('label', { class: 'inline' }, [document.createTextNode(T('rk.acceptUntil') + ' '), until]),
+        el('label', {}, [document.createTextNode(T('rk.acceptWhy')), why]),
+        el('label', { class: 'inline' }, [document.createTextNode(T('rk.acceptBy') + ' '), by]),
+        msg,
+        el('div', { class: 'row' }, [el('button', { class: 'btn primary', text: T('rk.accept'), onclick: () => {
+          if (!until.value || until.value <= new Date().toISOString().slice(0, 10)) { msg.textContent = T('rk.acceptNeedDate'); return; }
+          if (!why.value.trim()) { msg.textContent = T('rk.acceptNeedWhy'); return; }
+          save({ until: until.value, why: why.value.trim(), by: by.value.trim() });
+          closeDrawer(); HR.app.rebuildBusy();
+        } })])
+      ]));
+  }
+  const acceptFinding = fd => acceptDrawer(T('rk.acceptTitle'), fd.title, st => HR.findings.setStatus(fd.id, st));
+
   function findingCard(fd, m, opts) {
     opts = opts || {};
     const d = el('details', { class: 'finding' });
@@ -1231,7 +1296,9 @@
       el('span', { class: 'sev ' + fd.severity, text: T('c.' + fd.severity) }),
       el('span', { class: 'f-title', text: fd.title }),
       el('span', { class: 'pill', text: fd.category }),
-      el('span', { class: 'pill solid', text: T(fd.count === 1 ? 'rk.item' : 'rk.items', { n: fd.count }) }),
+      fd.entities.length ? el('span', { class: 'pill solid', text: countText(fd) }) : null,
+      fd.accepted ? el('span', { class: 'pill', title: fd.accepted.why || '', text: T('rk.acceptedUntil', { date: U.fmtDate(fd.accepted.until).split(',')[0] }) }) : null,
+      fd.acceptExpired ? el('span', { class: 'pill warn', text: T('rk.acceptExpired', { date: U.fmtDate(fd.acceptExpired).split(',')[0] }) }) : null,
       fd.impactMonthly ? el('span', { class: 'pill', text: U.fmtMoney(fd.impactMonthly) + '/mo · ' + T(fd.recoverable ? 'rk.recoverable' : 'rk.atStake') }) : null,
       (() => {
         const seen = HR.app.state.findingsSeen && HR.app.state.findingsSeen[fd.id];
@@ -1249,11 +1316,24 @@
       [T('rk.fix'), fd.fix],
       fd.impactMonthly ? [T('rk.impact'), T('rk.impactVal', { m: U.fmtMoney(fd.impactMonthly), y: U.fmtMoney(fd.annualImpact) })] : null
     ].filter(Boolean)));
+    /* The KPI that measures this finding: its owner, due date and a way there. */
+    const ctl = HR.policy && HR.policy.CATALOG.find(c => c.finding === fd.id);
+    const ctlSt = ctl ? HR.policy.settingsFor(ctl) : null;
+    body.appendChild(el('div', { class: 'f-actions row', style: 'margin-top:8px' }, [
+      ctl ? el('span', { class: 'note' }, [document.createTextNode(T('rk.measuredBy') + ' '),
+        el('a', { href: '#', text: T('po.p.' + ctl.id), onclick: e => { e.preventDefault(); HR.app.go('policies', { tab: 'kpis', ctl: ctl.id }); } }),
+        document.createTextNode(' \u00b7 ' + T('po.owner') + ' ' + (ctlSt.owner || '\u2014') + ' \u00b7 ' + T('po.due') + ' ' + (ctlSt.due || '\u2014'))]) : null,
+      el('span', { class: 'spacer' }),
+      fd.accepted
+        ? el('button', { class: 'btn sm', text: T('rk.unaccept'), onclick: () => { HR.findings.setStatus(fd.id, null); HR.app.rebuildBusy(); } })
+        : el('button', { class: 'btn sm', text: T('rk.accept'), title: T('rk.acceptTip'), onclick: () => acceptFinding(fd) })
+    ].filter(Boolean)));
     if (fd.entities.length) {
       const rows = fd.entities;
+      const typeLabel = { account: 'c.account', permission: 'c.permission', person: 'c.person', system: 'c.system' }[fd.entities[0].type] || 'rk.cItem';
       body.appendChild(el('div', { style: 'margin-top:10px' }, HR.table.make({
         columns: [
-          { key: 'label', label: T(fd.entities[0].type === 'permission' ? 'c.permission' : 'c.account') },
+          { key: 'label', label: T(typeLabel) },
           { key: 'detail', label: T('rk.detail') }
         ],
         rows, pageSize: 15, exportName: 'finding-' + fd.id,
@@ -1261,6 +1341,7 @@
         onRowClick: r => {
           if (r.type === 'account') { const a = m.accounts.get(r.key); if (a) drawerAccount(a); }
           else if (r.type === 'person') { const vp = m.vault && HR.person360 ? HR.person360.find(m, r.key) : null; if (vp) HR.app.go('people', { id: vp.externalId || vp.personId }); }
+          else if (r.type === 'system') { const sy = m.systems.get(r.key); if (sy) drawerSystem(sy, m); }
           else { const p = m.permissions.get(r.key); if (p) drawerPermission(p, m); }
         }
       })));
@@ -1583,7 +1664,11 @@
     if (params.issue) { rows = rows.filter(a => a.issues[params.issue]); notes.push(T('ac.fIssue', { v: params.issue })); }
     if (params.cls) { rows = rows.filter(a => a.clsLabel === params.cls); notes.push(T('ac.fClass', { v: params.cls })); }
     if (params.ecat) { rows = rows.filter(a => a.ecatLabel === params.ecat); notes.push(T('ac.fEcat', { v: params.ecat })); }
-    if (params.band) { rows = rows.filter(a => a.riskBand === params.band); notes.push(T('ac.fBand', { v: T('c.' + params.band) })); }
+    if (params.band) {
+      const bands = String(params.band).split(',');
+      rows = rows.filter(a => bands.includes(a.riskBand) && (params.enabled !== '1' || a.enabled !== false));
+      notes.push(T('ac.fBand', { v: bands.map(b => T('c.' + b)).join(' / ') }));
+    }
     if (params.riskMin != null) { rows = rows.filter(a => a.riskScore >= params.riskMin && a.riskScore <= params.riskMax); notes.push(T('ac.fRisk', { a: params.riskMin, b: params.riskMax })); }
     if (params.permKey) { rows = rows.filter(a => a.permKeys.has(params.permKey)); notes.push(T('ac.fHolders')); }
 
@@ -4261,7 +4346,7 @@
       const name = (v, side) => v[side] ? v[side].name : T('sod.accountType', { cls: T('cls.' + v.account.cls) || v.account.cls });
       body.appendChild(card(T('sod.tab'), T('dr.toxicNote'), el('ul', { class: 'clean' }, toxic.map(v => el('li', {}, [
         el('span', { class: 'sev ' + v.severity, text: T('c.' + v.severity) }), document.createTextNode(' '),
-        el('strong', { text: v.rule.label }), document.createTextNode(': ' + name(v, 'a') + ' + ' + name(v, 'b')),
+        el('strong', { text: HR.sod.labelOf(v.rule) }), document.createTextNode(': ' + name(v, 'a') + ' + ' + name(v, 'b')),
         HR.sod.whyOf(v.rule) ? el('div', { class: 'note', text: HR.sod.whyOf(v.rule) }) : null
       ].filter(Boolean))))));
     }

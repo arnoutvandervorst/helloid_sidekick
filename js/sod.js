@@ -34,16 +34,19 @@
     if (!vals.length) return [];
     if (kind === 'class') return vals.includes(String(account.cls || '').toLowerCase()) ? true : [];
     if (kind === 'category') return account.perms.filter(p => vals.includes(String(p.category || '').toLowerCase()));
-    /* name: any of the words appears in the permission name */
-    return account.perms.filter(p => { const n = String(p.name || '').toLowerCase(); return vals.some(v => n.includes(v)); });
+    /* name: one of the words is a whole word in the permission name — FIN matches
+       FIN-Crediteuren and GG_FIN_Read, not "Link" or "Finale" */
+    return account.perms.filter(p => nameWord(value, p.name) != null);
   }
+  const nameWord = (value, name) => HR.hints && HR.hints.matchToken
+    ? HR.hints.matchToken({ op: 'word', t: value }, name)
+    : values(value).find(v => String(name || '').toLowerCase().includes(v)) || null;
 
   /** What a side matched on: the category, the word in the name, or the account type. */
   function sideWhy(kind, value, perm, account) {
     if (kind === 'class') return { kind, value: String(account.cls || '') };
     if (kind === 'category') return { kind, value: perm ? String(perm.category || '') : '' };
-    const n = perm ? String(perm.name || '').toLowerCase() : '';
-    return { kind, value: values(value).find(v => n.includes(v)) || '' };
+    return { kind, value: (perm && nameWord(value, perm.name)) || '' };
   }
 
   /** The reason a pair is toxic: the rule's own text, or the shipped one for a default. */
@@ -53,9 +56,31 @@
     return HR.i18n.has(key) ? HR.i18n.t(key) : '';
   }
 
+  /* An empty stored list means the reader removed every pair: it stays empty. */
   function rules() {
     const stored = HR.config.get().sod;
-    return Array.isArray(stored) && stored.length ? stored : DEFAULTS;
+    return Array.isArray(stored) ? stored : DEFAULTS;
+  }
+
+  /** A pair's name: the shipped translation for a default, the reader's own text otherwise. */
+  function labelOf(rule) {
+    const key = 'sod.label.' + rule.id;
+    const isDefault = DEFAULTS.some(d => d.id === rule.id && d.label === rule.label);
+    return isDefault && HR.i18n.has(key) ? HR.i18n.t(key) : rule.label;
+  }
+
+  /* One account may hold a pair on purpose: accepted with a reason until a date. */
+  const acceptKey = (rule, account) => rule.id + '|' + account.key;
+  function acceptance(rule, account, today) {
+    const st = (HR.config.get().sodAccepted || {})[acceptKey(rule, account)];
+    return st && st.until && st.until >= today ? st : null;
+  }
+  function setAccepted(rule, account, st) {
+    const cfg = HR.config.get();
+    cfg.sodAccepted = cfg.sodAccepted || {};
+    if (st && st.until) cfg.sodAccepted[acceptKey(rule, account)] = { until: st.until, why: st.why || '', at: new Date().toISOString().slice(0, 10) };
+    else delete cfg.sodAccepted[acceptKey(rule, account)];
+    HR.config.save(cfg);
   }
 
   /** Every account against every pair; one violation per account per pair. */
@@ -64,6 +89,7 @@
     const list = rules();
     const violations = [];
     const perAccount = new Map();
+    const today = new Date(model.asOf || Date.now()).toISOString().slice(0, 10);
     for (const a of model.accountList) {
       for (const r of list) {
         const A = sideMatch(r.aKind, r.aValue, a);
@@ -82,21 +108,24 @@
         const v = { rule: r, account: a, person: a.personName || '', a: hit.a, b: hit.b, severity: r.severity || 'medium',
           /* Which part of each side actually matched, so the row can say what makes it toxic. */
           aWhy: sideWhy(r.aKind, r.aValue, hit.a, a), bWhy: sideWhy(r.bKind, r.bValue, hit.b, a) };
+        v.accepted = acceptance(r, a, today);
         violations.push(v);
+        if (v.accepted) continue;                                   // a decision, not an open violation
         if (!perAccount.has(a.key)) perAccount.set(a.key, []);
         perAccount.get(a.key).push(v);
       }
     }
     const order = { critical: 0, high: 1, medium: 2 };
     violations.sort((x, y) => order[x.severity] - order[y.severity] || x.account.userName.localeCompare(y.account.userName));
-    const byRule = list.map(r => ({ rule: r, count: violations.filter(v => v.rule === r).length }));
+    const open = violations.filter(v => !v.accepted);
+    const byRule = list.map(r => ({ rule: r, count: open.filter(v => v.rule === r).length }));
     const bySeverity = {};
-    SEVERITIES.forEach(s => { bySeverity[s] = violations.filter(v => v.severity === s).length; });
+    SEVERITIES.forEach(s => { bySeverity[s] = open.filter(v => v.severity === s).length; });
     model._sod = {
-      violations, perAccount, byRule, rules: list,
-      summary: { rules: list.length, violations: violations.length, accounts: perAccount.size,
-        people: new Set(violations.map(v => v.person).filter(Boolean)).size, bySeverity,
-        worst: violations.length ? violations[0].severity : null }
+      violations: open, all: violations, perAccount, byRule, rules: list,
+      summary: { rules: list.length, violations: open.length, accepted: violations.length - open.length, accounts: perAccount.size,
+        people: new Set(open.map(v => v.person).filter(Boolean)).size, bySeverity,
+        worst: open.length ? open[0].severity : null }
     };
     return model._sod;
   }
@@ -109,5 +138,5 @@
     return Math.max.apply(null, list.map(v => severityWeight[v.severity] || 0.4));
   }
 
-  HR.sod = { evaluate, weightOf, rules, whyOf, DEFAULTS, KINDS, SEVERITIES };
+  HR.sod = { evaluate, weightOf, rules, whyOf, labelOf, setAccepted, DEFAULTS, KINDS, SEVERITIES };
 })(window.HR);

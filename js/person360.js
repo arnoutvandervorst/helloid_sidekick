@@ -214,7 +214,7 @@
       products: d.products.map(a => ({ product: a.productName, userName: a.userName, requestedAt: a.requestedAt, approvedAt: a.approvedAt, approvedBy: a.approvedBy, comment: a.approvalComment, returnDate: a.returnDate, source: a.source })),
       timeline: d.timeline.map(e => ({ at: e.at, kind: e.kind, title: e.title, detail: e.detail })),
       findings: d.findings.map(f => ({ id: f.id, severity: f.severity, title: f.title })),
-      sod: d.sod.map(v => ({ rule: v.rule.label, account: v.account.userName, a: v.a && v.a.name, b: v.b && v.b.name, severity: v.severity })),
+      sod: d.sod.map(v => ({ rule: HR.sod.labelOf(v.rule), account: v.account.userName, a: v.a && v.a.name, b: v.b && v.b.name, severity: v.severity })),
       exclusions: d.exclusions.map(x => ({ account: x.accountUserName, permission: x.permission, issue: x.issue, by: x.userName, at: x.at, until: x.until, comment: x.comment })),
       attestation: d.attest.filter(x => x.decision).map(x => ({ entitlement: x.perm.name, decision: x.decision.decision, by: x.decision.by, at: x.decision.at })),
       cost: { monthly: d.cost.monthly, priced: d.cost.priced.map(x => ({ entitlement: x.perm.name, monthly: x.monthly })),

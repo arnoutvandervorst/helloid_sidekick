@@ -18,6 +18,15 @@
 
   const ENTRIES = [
     {
+      version: '2026.10.7', date: '2026-10-01',
+      changes: [
+        'Findings count everything they find. Lists were silently cut at 40, 50, 60 or 80, so the count pill, the CSV, the trend and the diff all under-reported; now the table pages and the CSV carries all of it. The pill says what it counts — 33 accounts, 12 entitlements, 8 people — instead of “items”.',
+        'Risk findings, separately: every finding is risk, cost, data quality or operations, with chips to filter by kind. The Risk head row counts open risk findings only (cost, Nedap and audit findings had inflated it), names how many accounts sit behind the critical and high ones — each counted once — and the three tiles click through to the filtered list and to the accounts at high or critical.',
+        'Accept a finding for now: until a date in the future and with a reason. Accepted findings move to their own group, leave the counts, and return flagged “acceptance expired” when the date passes. A finding measured by a KPI shows the KPI, its owner and due date, and opens the control. The list says what is new and what was resolved since the compared data point; “open since” reads the data date and only the data points up to the loaded one.',
+        'Toxic combinations: names match as whole words (FIN no longer hits “Link”), the default pairs are translated, a medium pair gives a medium finding, one account can hold a pair on purpose with a reason until a date, and deleting every pair keeps the list empty instead of bringing the defaults back. The toxic-combinations KPI counts accounts, once each, and waits until a pair exists. Fixed: unmanaged grants and granted-but-absent rows keyed to the wrong system on multi-system tenants; disabled-but-licensed lists the priced groups; the security baseline finding lists who is missing it.'
+      ]
+    },
+    {
       version: '2026.10.6', date: '2026-10-01',
       changes: [
         'Risk exposure follows the worst accounts, not the average one. It was a population average: twenty unowned domain admins among five thousand clean users read as risk 1 and governance 99. Now it is 45 % the riskiest 0.5 % of enabled accounts, 35 % how many enabled accounts sit at high or critical (an absolute count on a saturating curve) and 20 % the share nobody owns. Expect your risk number to rise and the governance score to fall where a handful of accounts carry real exposure — the demo goes from 24 to 82. Older data points keep their stored score until you recalculate the trends.',

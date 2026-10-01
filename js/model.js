@@ -357,6 +357,7 @@
     if (model.audit && HR.findings.runAudit) {
       try { model.findings = model.findings.concat(HR.findings.runAudit(model)); } catch (e) { console.error(e); }
     }
+    if (HR.findings.finalise) HR.findings.finalise(model);
     model.summary = summarise(model);
     /* The compliance score travels with the summary, so every snapshot keeps it and
        the trend can be drawn. policy.js loads later, so this is a runtime lookup. */
@@ -557,8 +558,17 @@
       monthlyCost: m.cost.totalMonthly,
       wasteMonthly: m.cost.wasteMonthly,
       remediationCost: m.cost.remediationCost,
-      criticalFindings: m.findings.filter(f => f.severity === 'critical').length,
-      highFindings: m.findings.filter(f => f.severity === 'high').length
+      /* Risk findings that are open: cost, data-quality and operations findings have
+         their own pages, and an accepted finding is a decision, not an open risk. */
+      criticalFindings: m.findings.filter(f => f.severity === 'critical' && (f.kind || 'risk') === 'risk' && !f.accepted).length,
+      highFindings: m.findings.filter(f => f.severity === 'high' && (f.kind || 'risk') === 'risk' && !f.accepted).length,
+      /* The accounts behind them, each once — findings overlap. */
+      criticalAccounts: (() => {
+        const keys = new Set();
+        m.findings.filter(f => (f.severity === 'critical' || f.severity === 'high') && (f.kind || 'risk') === 'risk' && !f.accepted)
+          .forEach(f => (f.entities || []).forEach(e => { if (e.type === 'account') keys.add(e.key); }));
+        return keys.size;
+      })()
     };
   }
 

@@ -374,6 +374,18 @@ unowned domain admins weigh about the same among fifty users as among five thous
 average used to hide them. Risk › Score build-up lists the riskiest accounts with the parts
 of their score. Tests: `NODE_OPTIONS= node test/risk.test.js`.
 
+**Findings.** Every finding counts everything it found (lists are no longer cut at 40–80;
+the table pages and the CSV has all of it) and says what it counts — accounts,
+entitlements, people. Findings come in four kinds — risk, cost, data quality, operations —
+and the Risk head row counts open *risk* findings only, with the accounts behind the
+critical and high ones counted once. A finding can be **accepted for now**, until a date and
+with a reason; accepted findings move to their own group and come back flagged when the
+date passes. A finding measured by a KPI shows that KPI's owner and due date and opens it.
+"Open since" reads the data date and only the data points up to the loaded one; the list
+says what is new and what was resolved since the compared data point. Toxic pairs match
+whole words in names (`FIN` no longer hits "Link"), a pair can be held on purpose by one
+account (accepted with a reason until a date), and removing every pair keeps it empty.
+
 ## Compliance scorecards
 
 Compliance opens on **scorecards**: one card for all KPIs and one per framework — NIS2

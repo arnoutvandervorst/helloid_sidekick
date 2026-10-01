@@ -389,8 +389,14 @@
     return wrap;
   }
 
+  let DEEP_CTL = null;
   function policiesView(m, params) {
     params = params || {};
+    /* Arriving from a finding: open that control's drawer once, not on every re-render. */
+    if (params.ctl && params.ctl !== DEEP_CTL && m && m.summary) {
+      DEEP_CTL = params.ctl;
+      setTimeout(() => openControl(m, params.ctl), 0);
+    } else if (!params.ctl) DEEP_CTL = null;
     const f = document.createDocumentFragment();
     f.appendChild(el('div', { class: 'view-head' }, el('div', {}, [
       el('h1', { text: T('po.title') }),

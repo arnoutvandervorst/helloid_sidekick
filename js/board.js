@@ -144,11 +144,13 @@
 
   const percentile = (sorted, p) => sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] : null;
 
-  /** Findings the snapshots have carried for longer than `days`. */
+  /** Findings first seen more than `days` before the loaded data point (risk findings
+      still open; an accepted one is a decision, not an old problem). */
   function agedFindings(m, days) {
-    const seen = HR.app.state.findingsSeen || {};
-    const now = Date.now();
-    return m.findings.filter(f => seen[f.id] && (now - seen[f.id].first) / 86400000 > days)
+    const st = HR.app.state, seen = st.findingsSeen || {};
+    const cur = (st.snapshots || []).find(sn => sn.id === st.currentSnapshotId);
+    const now = cur ? (cur.dataDate || cur.importedAt) : Date.now();
+    return m.findings.filter(f => !f.accepted && seen[f.id] && (now - seen[f.id].first) / 86400000 > days)
       .map(f => ({ finding: f, days: Math.round((now - seen[f.id].first) / 86400000) }));
   }
 

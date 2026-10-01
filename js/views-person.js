@@ -319,7 +319,7 @@
     wrap.appendChild(card(T('sod.tab'), T('dr.toxicNote'), d.sod.length
       ? el('ul', { class: 'clean' }, d.sod.map(v => el('li', {}, [
           el('span', { class: 'sev ' + v.severity, text: T('c.' + v.severity) }), document.createTextNode(' '),
-          el('strong', { text: v.rule.label }), document.createTextNode(': ' + (v.a ? v.a.name : v.account.clsLabel) + ' + ' + (v.b ? v.b.name : v.account.clsLabel) + ' · ' + v.account.userName),
+          el('strong', { text: HR.sod.labelOf(v.rule) }), document.createTextNode(': ' + (v.a ? v.a.name : v.account.clsLabel) + ' + ' + (v.b ? v.b.name : v.account.clsLabel) + ' · ' + v.account.userName),
           HR.sod.whyOf(v.rule) ? el('div', { class: 'note', text: HR.sod.whyOf(v.rule) }) : null
         ].filter(Boolean))))
       : el('p', { class: 'note', text: T('p3.noSod') })));

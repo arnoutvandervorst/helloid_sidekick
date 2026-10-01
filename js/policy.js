@@ -294,9 +294,13 @@
       measure: m => ({ value: HR.audit.adminAccess(m.audit).logins.failedUsersRecent.length, affected: [] }) },
     { id: 'sod-violations', goto: { view: 'risk', params: { tab: 'toxic' } }, unit: 'count', dir: 'max', def: 0, needs: [], severity: 'critical',
       refs: { nis2: '21(2)(i)', iso27001: 'A.5.3', bio: '5.3' }, finding: 'sod-violation',
+      /* Accounts that hold a pair, each once — one account breaking two pairs is one
+         account to fix. Waits until at least one pair is defined. */
       measure: m => {
-        const sod = HR.sod ? HR.sod.evaluate(m) : { violations: [] };
-        return { value: sod.violations.length, affected: sod.violations.map(v => ({ kind: 'account', a: v.account })) };
+        if (!HR.sod || !HR.sod.rules().length) return { applicable: false, missing: ['sodPairs'] };
+        const sod = HR.sod.evaluate(m);
+        const accs = U.uniq(sod.violations.map(v => v.account));
+        return { value: accs.length, affected: accs.map(a => ({ kind: 'account', a })) };
       } },
     { id: 'dormant-accounts', goto: { view: 'accounts' }, severity: 'high', refs: { iso27001: 'A.5.18', bio: '5.18' }, unit: 'pct', dir: 'max', def: 5, paramDef: 90, needs: ['directory', 'lastlogon'],
       measure: (m, param) => {
@@ -372,6 +376,12 @@
         continue;
       }
       const r = def.measure(m, st.param);
+      /* A measure can say it has nothing to judge yet (no pairs defined, nothing
+         privileged to review): waiting, like a missing import — not a failure. */
+      if (r && r.applicable === false) {
+        rows.push({ def, on: st.on, threshold: st.threshold, param: st.param, applicable: false, missing: r.missing || ['data'] });
+        continue;
+      }
       const met = def.dir === 'max'
         ? r.value <= st.threshold + 1e-9
         : r.value >= st.threshold - 1e-9;

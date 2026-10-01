@@ -1023,9 +1023,13 @@
       state.tenant.dismissed = !!(ctx && (ctx.tenantOk || []).includes(state.tenant.pairId));
     }
     /* When each finding was first and last seen, read off the snapshots that carried it. */
+    /* By the date the data is about, and only up to the loaded data point: a finding is
+       not "open since" a month the reader is looking back from. */
     const seen = {};
-    (state.snapshots || []).forEach(sn => (sn.summary && sn.summary.findingIds || []).forEach(id => {
-      const at = sn.importedAt;
+    const curSnap = (state.snapshots || []).find(sn => sn.id === state.currentSnapshotId);
+    const upTo = curSnap ? (curSnap.dataDate || curSnap.importedAt) : Infinity;
+    (state.snapshots || []).filter(sn => (sn.dataDate || sn.importedAt) <= upTo).forEach(sn => (sn.summary && sn.summary.findingIds || []).forEach(id => {
+      const at = sn.dataDate || sn.importedAt;
       if (!seen[id]) seen[id] = { first: at, last: at };
       else { seen[id].first = Math.min(seen[id].first, at); seen[id].last = Math.max(seen[id].last, at); }
     }));

@@ -81,7 +81,8 @@
       return Object.assign({
         id: 'disabled-licensed', severity: 'high', category: T('fi.cat.cost'),
         entities: hits.map(a => ({ type: 'account', key: a.key, label: a.userName,
-          detail: T('fi.detailLicences', { list: a.licences.map(l => l.name).join(', '), amount: U.fmtMoney(a.monthlyCost) }) })),
+          /* What costs money on it — priced groups, not only the licence category. */
+          detail: T('fi.detailLicences', { list: a.perms.filter(p => p.monthlyPrice > 0).map(p => p.name).join(', '), amount: U.fmtMoney(a.monthlyCost) }) })),
         impactMonthly: U.sum(hits, a => a.monthlyCost),
         recoverable: true
       }, prose('disabled-licensed', { n: hits.length }));
@@ -130,8 +131,9 @@
       gaps.sort((a, b) => b.coverage - a.coverage);
       return Object.assign({
         id: 'security-control-gap', severity: 'high', category: T('fi.cat.entitlements'),
-        entities: gaps.map(g => ({ type: 'permission', key: g.perm.key, label: g.perm.name,
-          detail: T('fi.security-control-gap.detail', { cov: U.fmtPct(g.coverage, 0), n: g.missing.length }) })),
+        /* Who is missing the control — the list to act on; the groups are in the detail. */
+        entities: gaps.flatMap(g => g.missing.map(a => ({ type: 'account', key: a.key, label: a.userName,
+          detail: T('fi.security-control-gap.detailAcc', { perm: g.perm.name, cov: U.fmtPct(g.coverage, 0) }) }))),
         impactMonthly: 0,
         extra: { gaps }
       }, prose('security-control-gap', { n: gaps.length }));
@@ -175,7 +177,7 @@
     function peerOutliers(m) {
       const hits = m.accountList
         .filter(a => a.permCount >= 3 && a.outlier > 0.65 && a.uniquePerms.length)
-        .sort((a, b) => b.outlier - a.outlier).slice(0, 60);
+        .sort((a, b) => b.outlier - a.outlier);
       if (!hits.length) return null;
       return Object.assign({
         id: 'peer-outlier', severity: 'medium', category: T('fi.cat.entitlements'),
@@ -190,9 +192,9 @@
       const sod = HR.sod.evaluate(m);
       if (!sod.violations.length) return null;
       return Object.assign({
-        id: 'sod-violation', severity: sod.summary.worst === 'critical' ? 'critical' : 'high', category: T('fi.cat.identity'),
-        entities: sod.violations.slice(0, 60).map(v => ({ type: 'account', key: v.account.key, label: v.account.userName,
-          detail: v.rule.label + ': ' + [v.a && v.a.name, v.b && v.b.name, !v.a || !v.b ? T('fi.sod-violation.cls', { cls: v.account.cls }) : ''].filter(Boolean).join(' + ') })),
+        id: 'sod-violation', severity: sod.summary.worst || 'medium', category: T('fi.cat.identity'),
+        entities: sod.violations.map(v => ({ type: 'account', key: v.account.key, label: v.account.userName,
+          detail: HR.sod.labelOf(v.rule) + ': ' + [v.a && v.a.name, v.b && v.b.name, !v.a || !v.b ? T('fi.sod-violation.cls', { cls: v.account.clsLabel || v.account.cls }) : ''].filter(Boolean).join(' + ') })),
         impactMonthly: 0
       }, prose('sod-violation', { n: sod.violations.length, accounts: sod.summary.accounts, rules: sod.byRule.filter(r => r.count).length }));
     },
@@ -225,7 +227,7 @@
       if (m.cost.unmanagedSpend <= 0) return null;
       return Object.assign({
         id: 'unmanaged-spend', severity: 'medium', category: T('fi.cat.cost'),
-        entities: m.cost.bySku.filter(s => s.monthly > 0).slice(0, 20).map(s => ({
+        entities: m.cost.bySku.filter(s => s.monthly > 0).map(s => ({
           type: 'permission', key: s.key, label: s.name,
           detail: T('fi.unmanaged-spend.detail', { n: s.holders, amount: U.fmtMoney(s.monthly) })
         })),
@@ -247,7 +249,7 @@
       const byRes = U.counts(rows, r => r.resolution);
       return Object.assign({
         id: 'excluded', severity: 'info', category: T('fi.cat.dataQuality'),
-        entities: rows.slice(0, 50).map(r => ({ type: 'account', key: HR.model.accountKey(r.system, r.userName),
+        entities: rows.map(r => ({ type: 'account', key: HR.model.accountKey(r.system, r.userName),
           label: r.userName, detail: r.resolution + ' · ' + (r.permission || r.issue) })),
         impactMonthly: 0
       }, prose('excluded', {
@@ -265,19 +267,19 @@
     const out = [];
     if (h.leavers.rows.length) out.push(Object.assign({
       id: 'leaver-burn', severity: 'high', category: T('fi.cat.cost'),
-      entities: h.leavers.rows.slice(0, 40).map(r => ({ type: 'person', key: r.person.personId, label: r.person.displayName,
+      entities: h.leavers.rows.map(r => ({ type: 'person', key: r.person.personId, label: r.person.displayName,
         detail: T('fi.leaver-burn.detail', { days: r.days, monthly: U.fmtMoney(r.monthly), toDate: U.fmtMoney(r.toDate) }) })),
       impactMonthly: h.leavers.monthly
     }, prose('leaver-burn', { n: h.leavers.rows.length, toDate: U.fmtMoney(h.leavers.toDate), monthly: U.fmtMoney(h.leavers.monthly) })));
     if (h.dormant.rows.length) out.push(Object.assign({
       id: 'dormant-licensed', severity: 'medium', category: T('fi.cat.cost'),
-      entities: h.dormant.rows.slice(0, 40).map(r => ({ type: 'account', key: r.account.key, label: r.account.userName,
+      entities: h.dormant.rows.map(r => ({ type: 'account', key: r.account.key, label: r.account.userName,
         detail: T('fi.dormant-licensed.detail', { days: r.days, monthly: U.fmtMoney(r.monthly) }) })),
       impactMonthly: h.dormant.monthly
     }, prose('dormant-licensed', { n: h.dormant.rows.length, days: h.dormant.days, monthly: U.fmtMoney(h.dormant.monthly) })));
     if (h.duplicates.rows.length) out.push(Object.assign({
       id: 'duplicate-accounts-cost', severity: 'low', category: T('fi.cat.cost'),
-      entities: h.duplicates.rows.slice(0, 40).map(r => ({ type: 'person', key: r.person.personId, label: r.person.displayName,
+      entities: h.duplicates.rows.map(r => ({ type: 'person', key: r.person.personId, label: r.person.displayName,
         detail: r.accounts.map(a => a.userName).join(', ') + ' \u00b7 ' + U.fmtMoney(r.monthly) })),
       impactMonthly: h.duplicates.monthly
     }, prose('duplicate-accounts-cost', { n: h.duplicates.rows.length, monthly: U.fmtMoney(h.duplicates.monthly) })));
@@ -310,7 +312,7 @@
       const h = HR.audit.health(a);
       if (h.failures.groups.length) out.push(Object.assign({
         id: 'audit-failed-actions', severity: h.failures.recentRate > 0.02 ? 'high' : 'medium', category: T('fi.cat.provisioning'),
-        entities: h.failures.groups.slice(0, 25).map(g => ({ type: 'failure', key: g.system + '|' + g.action, label: g.system + ' \u00b7 ' + g.action,
+        entities: h.failures.groups.map(g => ({ type: 'failure', key: g.system + '|' + g.action, label: g.system + ' \u00b7 ' + g.action,
           detail: T('fi.audit-failed-actions.detail', { n: U.fmtInt(g.count), people: U.fmtInt(g.people.length), message: g.message, last: g.last ? U.fmtDate(g.last).split(',')[0] : '\u2014' }) })),
         count: h.failures.failed
       }, prose('audit-failed-actions', { n: U.fmtInt(h.failures.failed), pct: U.fmtNum(100 * h.failures.rate, 1), recent: U.fmtInt(h.failures.recentFailed), recentPct: U.fmtNum(100 * h.failures.recentRate, 1) })));
@@ -329,7 +331,7 @@
       }, prose('audit-exclusions-no-reason', { n: U.fmtInt(noReason.length), of: U.fmtInt(a.exclusions.length) })));
       if (h.incidents.open.length) out.push(Object.assign({
         id: 'audit-open-incidents', severity: h.incidents.agentDown ? 'high' : 'medium', category: T('fi.cat.provisioning'),
-        entities: h.incidents.open.slice(0, 25).map(r => ({ type: 'incident', key: r.identifier || r.title, label: r.title || '',
+        entities: h.incidents.open.map(r => ({ type: 'incident', key: r.identifier || r.title, label: r.title || '',
           detail: (r.description || '') + (r.at ? ' \u00b7 ' + U.fmtDate(r.at).split(',')[0] : '') })),
         count: h.incidents.open.length
       }, prose('audit-open-incidents', { n: U.fmtInt(h.incidents.open.length), agents: U.fmtInt(h.incidents.agentDown) })));
@@ -437,7 +439,7 @@
       if (!hits.length) return null;
       return Object.assign({
         id: 'rule-unmodelled', severity: 'high', category: T('fi.cat.rules'),
-        entities: hits.slice(0, 60).map(u => ({
+        entities: hits.map(u => ({
           type: 'permission', key: u.perm.key, label: u.perm.name,
           detail: T('fi.rule-unmodelled.detail', {
             rows: u.unmanagedRows, holders: u.perm.holderCount,
@@ -458,7 +460,7 @@
       return Object.assign({
         id: 'rule-grant-not-delivered', severity: 'high', category: T('fi.cat.rules'),
         entities: hits.map(x => ({
-          type: 'account', key: HR.model.accountKey(m.systemList[0] ? m.systemList[0].name : '', x.userName),
+          type: 'account', key: HR.model.accountKey(x.system || (m.systemList[0] ? m.systemList[0].name : ''), x.userName),
           label: x.userName,
           detail: T('fi.rule-grant-not-delivered.detail', {
             perm: x.permission, rule: x.rules.map(r => r.name).join(', ')
@@ -489,7 +491,7 @@
     function identityOutliers(m) {
       if (!HR.outlier) return null;
       const o = HR.outlier.build(m);
-      const hits = o.rows.filter(r => r.score >= HR.outlier.HIGH).slice(0, 60);
+      const hits = o.rows.filter(r => r.score >= HR.outlier.HIGH);
       if (!hits.length) return null;
       return Object.assign({
         id: 'identity-outlier', severity: 'medium', category: T('fi.cat.entitlements'),
@@ -555,7 +557,7 @@
       const thin = coverage < 0.5;
       return Object.assign({
         id: 'vault-over-provisioned', severity: thin ? 'medium' : 'high', category: T('fi.cat.entitlements'),
-        entities: rows.slice(0, 80).map(r => ({
+        entities: rows.map(r => ({
           type: 'account', key: r.accounts[0] ? r.accounts[0].key : r.person.personId,
           label: r.person.displayName,
           detail: T('fi.vault-over-provisioned.detail', {
@@ -574,7 +576,7 @@
       if (!rows.length) return null;
       return Object.assign({
         id: 'vault-under-provisioned', severity: 'medium', category: T('fi.cat.service'),
-        entities: rows.slice(0, 80).map(r => ({
+        entities: rows.map(r => ({
           type: 'account', key: r.accounts[0] ? r.accounts[0].key : r.person.personId,
           label: r.person.displayName,
           detail: T('fi.vault-under-provisioned.detail', {
@@ -621,7 +623,7 @@
       if (!rows.length) return null;
       return Object.assign({
         id: 'vault-no-account', severity: 'medium', category: T('fi.cat.service'),
-        entities: rows.slice(0, 80).map(p => ({
+        entities: rows.map(p => ({
           type: 'person', key: p.personId, label: p.displayName,
           detail: T('fi.vault-no-account.detail', {
             dept: p.primaryContract ? (p.primaryContract.department.name || p.primaryContract.department.externalId || '—') : '—'
@@ -735,7 +737,7 @@
       return Object.assign({
         id: 'activity-blocked', severity: 'medium', category: T('fi.cat.provisioning'),
         entities: Array.from(byPerson.entries())
-          .sort((a, b) => b[1].length - a[1].length).slice(0, 60)
+          .sort((a, b) => b[1].length - a[1].length)
           .map(([person, list]) => ({
             type: 'person', key: person, label: person || '—',
             detail: T('fi.activity-blocked.detail', {
@@ -751,7 +753,7 @@
       if (!h || !h.churn.length) return null;
       return Object.assign({
         id: 'activity-churn', severity: 'medium', category: T('fi.cat.rules'),
-        entities: h.churn.slice(0, 60).map(c => ({
+        entities: h.churn.map(c => ({
           type: 'permission',
           key: HR.model.permissionKey(c.sample.system, c.sample.entitlement),
           label: c.sample.entitlement,
@@ -765,10 +767,12 @@
       const g = m.granted;
       if (!g || g.empty) return null;
       const missing = [];
-      const byPersonRaw = new Map();
-      for (const a of m.accountList) if (!byPersonRaw.has(a.personRaw)) byPersonRaw.set(a.personRaw, a);
+      /* The person's account in the system the grant was for — not their first account
+         anywhere. */
+      const byPersonSys = new Map();
+      for (const a of m.accountList) { const k = a.personRaw + '\u001f' + a.system; if (!byPersonSys.has(k)) byPersonSys.set(k, a); }
       for (const r of g.rows) {
-        const account = byPersonRaw.get(r.personRaw);
+        const account = byPersonSys.get(r.personRaw + '\u001f' + r.system);
         if (!account) continue;
         const perm = m.permissions.get(HR.model.permissionKey(r.system, r.entitlement));
         if (!perm || !account.permKeys.has(perm.key)) missing.push({ row: r, account: account });
@@ -776,7 +780,7 @@
       if (!missing.length) return null;
       return Object.assign({
         id: 'activity-granted-absent', severity: 'high', category: T('fi.cat.provisioning'),
-        entities: missing.slice(0, 60).map(x => ({
+        entities: missing.map(x => ({
           type: 'account', key: x.account.key, label: x.account.userName,
           detail: T('fi.activity-granted-absent.detail', { ent: x.row.entitlement })
         })),
@@ -794,7 +798,7 @@
       if (!hits.length) return null;
       return Object.assign({
         id: 'product-self-approved', severity: 'high', category: T('fi.cat.process'),
-        entities: hits.slice(0, 80).map(a => ({
+        entities: hits.map(a => ({
           type: 'product', key: a.id, label: a.productName,
           detail: T('fi.product-self-approved.detail', {
             user: a.userName, date: a.approvedAt ? U.fmtDate(a.approvedAt).split(',')[0] : '\u2014' })
@@ -824,7 +828,7 @@
       hits.sort((x, y) => y.days - x.days);
       return Object.assign({
         id: 'product-past-duration', severity: 'high', category: T('fi.cat.process'),
-        entities: hits.slice(0, 80).map(h => ({
+        entities: hits.map(h => ({
           type: 'product', key: h.a.id, label: h.a.productName,
           detail: T('fi.product-past-duration.detail', {
             user: h.a.userName, days: U.fmtInt(h.days), limit: U.fmtInt(h.p.ownershipDays) })
@@ -850,7 +854,7 @@
       }, 0);
       return Object.assign({
         id: 'product-long-held', severity: 'medium', category: T('fi.cat.hygiene'),
-        entities: hits.slice(0, 80).map(a => ({
+        entities: hits.map(a => ({
           type: 'product', key: a.id, label: a.productName,
           detail: T('fi.product-long-held.detail', {
             user: a.userName,
@@ -875,7 +879,7 @@
       const products = U.uniq(hits.map(a => a.productName));
       return Object.assign({
         id: 'product-no-return-on-disable', severity: 'medium', category: T('fi.cat.process'),
-        entities: products.slice(0, 80).map(name => ({
+        entities: products.map(name => ({
           type: 'product', key: name, label: name,
           detail: T('fi.product-no-return-on-disable.detail', {
             n: hits.filter(a => a.productName === name).length })
@@ -896,7 +900,7 @@
       if (!hits.length) return null;
       return Object.assign({
         id: 'product-high-risk', severity: 'high', category: T('fi.cat.access'),
-        entities: hits.slice(0, 80).map(a => {
+        entities: hits.map(a => {
           const p = m.products.byName.get(a.productName.toLowerCase());
           return {
             type: 'product', key: a.id, label: a.productName,
@@ -923,7 +927,7 @@
       if (!hits.length) return null;
       return Object.assign({
         id: 'product-holder-left', severity: 'critical', category: T('fi.cat.access'),
-        entities: hits.slice(0, 80).map(h => ({
+        entities: hits.map(h => ({
           type: 'product', key: h.a.id, label: h.a.productName,
           detail: T('fi.product-holder-left.detail', {
             person: h.person.displayName, days: U.fmtInt(h.days) })
@@ -944,7 +948,7 @@
         .filter(u => !m.productHolders.byUser.has(u));
       return Object.assign({
         id: 'product-unlinked-holder', severity: 'low', category: T('fi.cat.dataQuality'),
-        entities: unlinked.slice(0, 80).map(u => ({
+        entities: unlinked.map(u => ({
           type: 'product', key: u, label: u,
           detail: T('fi.product-unlinked-holder.detail', {
             n: (m.assignments.byUser.get(u) || []).length })
@@ -960,7 +964,7 @@
       if (!hits.length || hits.length === m.assignments.rows.length && m.assignments.rows.length < 5) return null;
       return Object.assign({
         id: 'product-approval-unrecorded', severity: 'info', category: T('fi.cat.dataQuality'),
-        entities: U.uniq(hits.map(a => a.productName)).slice(0, 80).map(name => ({
+        entities: U.uniq(hits.map(a => a.productName)).map(name => ({
           type: 'product', key: name, label: name,
           detail: T('fi.product-approval-unrecorded.detail', {
             n: hits.filter(a => a.productName === name).length })
@@ -983,7 +987,7 @@
       if (!hits || !hits.length) return null;
       return Object.assign({
         id: 'vault-import-blockers', severity: 'high', category: T('fi.cat.dataQuality'),
-        entities: hits.slice(0, 80).map(b => ({
+        entities: hits.map(b => ({
           type: 'person', key: (b.person.personId || b.name) + ':' + b.reason, label: b.name,
           detail: T('oq.blk.' + b.reason) + (b.detail ? ' · ' + b.detail : '')
         })),
@@ -996,13 +1000,13 @@
       const facets = m.orgQuality.anomalousFacets;
       if (!facets.length) return null;
       const entities = [];
-      facets.forEach(f => f.missing.slice(0, 20).forEach(person => entities.push({
+      facets.forEach(f => f.missing.forEach(person => entities.push({
         type: 'person', key: person.personId, label: person.displayName,
         detail: T('fi.vault-attribute-gap.detail', { facet: f.label, fill: U.fmtPct(f.fill, 0) })
       })));
       return Object.assign({
         id: 'vault-attribute-gap', severity: 'high', category: T('fi.cat.dataQuality'),
-        entities: entities.slice(0, 80), count: U.sum(facets, f => f.missing.length), impactMonthly: 0
+        entities: entities, count: U.sum(facets, f => f.missing.length), impactMonthly: 0
       }, prose('vault-attribute-gap', {
         n: U.sum(facets, f => f.missing.length),
         facets: facets.map(f => f.label + ' (' + U.fmtPct(f.fill, 0) + ')').join(', ')
@@ -1015,7 +1019,7 @@
       if (!hits.length) return null;
       return Object.assign({
         id: 'vault-dead-title', severity: 'medium', category: T('fi.cat.dataQuality'),
-        entities: hits.slice(0, 80).map(t => ({
+        entities: hits.map(t => ({
           type: 'title', key: t.name, label: t.name,
           detail: T('fi.vault-dead-title.detail', {
             n: t.ended, date: t.lastEnd ? U.fmtDate(t.lastEnd).split(',')[0] : '\u2014' })
@@ -1031,7 +1035,7 @@
       const total = m.orgQuality.structure.meta.departments;
       return Object.assign({
         id: 'vault-no-manager', severity: 'medium', category: T('fi.cat.process'),
-        entities: hits.slice(0, 80).map(n => ({
+        entities: hits.map(n => ({
           type: 'department', key: n.id, label: n.name,
           detail: T('fi.vault-no-manager.detail', { n: n.people.length })
         })),
@@ -1046,7 +1050,7 @@
       if (!hits.length) return null;
       return Object.assign({
         id: 'vault-undeclared-department', severity: 'high', category: T('fi.cat.dataQuality'),
-        entities: hits.slice(0, 80).map(n => ({
+        entities: hits.map(n => ({
           type: 'department', key: n.id, label: n.name || n.id,
           detail: T('fi.vault-undeclared-department.detail', { n: n.people.length })
         })),
@@ -1061,7 +1065,7 @@
       if (!hits.length) return null;
       return Object.assign({
         id: 'vault-no-contract', severity: 'high', category: T('fi.cat.dataQuality'),
-        entities: hits.slice(0, 80).map(p => ({
+        entities: hits.map(p => ({
           type: 'person', key: p.personId, label: p.displayName,
           detail: T('fi.vault-no-contract.detail')
         })),
@@ -1074,7 +1078,7 @@
       if (!hits.length) return null;
       return Object.assign({
         id: 'vault-contract-backwards', severity: 'medium', category: T('fi.cat.dataQuality'),
-        entities: hits.slice(0, 80).map(h => ({
+        entities: hits.map(h => ({
           type: 'person', key: h.person.personId, label: h.person.displayName,
           detail: T('fi.vault-contract-backwards.detail', {
             start: U.fmtDate(h.contract.startDate).split(',')[0],
@@ -1089,7 +1093,7 @@
       if (!hits.length) return null;
       return Object.assign({
         id: 'vault-duplicate-id', severity: 'critical', category: T('fi.cat.dataQuality'),
-        entities: hits.slice(0, 80).map(d => ({
+        entities: hits.map(d => ({
           type: 'person', key: d.externalId, label: d.externalId,
           detail: d.persons.map(p => p.displayName).join(' / ')
         })),
@@ -1104,7 +1108,7 @@
       if (!mg || !mg.stale.length) return null;
       return Object.assign({
         id: 'vault-stale-manager', severity: 'high', category: T('fi.cat.process'),
-        entities: mg.stale.slice(0, 80).map(r => ({
+        entities: mg.stale.map(r => ({
           type: 'person', key: r.name, label: r.name,
           detail: T('fi.vault-stale-manager.detail', { n: r.span })
         })),
@@ -1121,7 +1125,7 @@
       if (!hits.length) return null;
       return Object.assign({
         id: 'vault-contract-ending', severity: 'medium', category: T('fi.cat.process'),
-        entities: hits.slice(0, 80).map(h => ({
+        entities: hits.map(h => ({
           type: 'person', key: h.person.personId, label: h.person.displayName,
           detail: T('fi.vault-contract-ending.detail', {
             days: h.days, date: U.fmtDate(h.contract.endDate).split(',')[0],
@@ -1139,7 +1143,7 @@
       if (!hits.length) return null;
       return Object.assign({
         id: 'vault-contract-starting', severity: 'info', category: T('fi.cat.process'),
-        entities: hits.slice(0, 80).map(h => ({
+        entities: hits.map(h => ({
           type: 'person', key: h.person.personId, label: h.person.displayName,
           detail: T('fi.vault-contract-starting.detail', {
             days: h.days, date: U.fmtDate(h.contract.startDate).split(',')[0],
@@ -1163,7 +1167,7 @@
       ].filter(Boolean).join(', ');
       return Object.assign({
         id: 'vault-flagged-person', severity: 'medium', category: T('fi.cat.process'),
-        entities: hits.slice(0, 80).map(p => ({
+        entities: hits.map(p => ({
           type: 'person', key: p.personId, label: p.displayName, detail: label(p)
         })),
         impactMonthly: 0
@@ -1179,7 +1183,7 @@
       if (!hits.length) return null;
       return Object.assign({
         id: 'vault-multi-contract', severity: 'low', category: T('fi.cat.dataQuality'),
-        entities: hits.slice(0, 80).map(p => ({
+        entities: hits.map(p => ({
           type: 'person', key: p.personId, label: p.displayName,
           detail: T('fi.vault-multi-contract.detail', {
             n: p.activeContracts.length,
@@ -1205,7 +1209,7 @@
       if (!hits.length) return null;
       return Object.assign({
         id: 'vault-person-no-account', severity: 'high', category: T('fi.cat.access'),
-        entities: hits.slice(0, 80).map(p => {
+        entities: hits.map(p => {
           const c = p.primaryContract || p.contracts[0];
           return {
             type: 'person', key: p.personId, label: p.displayName,
@@ -1268,7 +1272,7 @@
       const groups = e.residueByAccount;
       return Object.assign({
         id: 'explain-residue', severity: 'medium', category: T('fi.cat.dataQuality'),
-        entities: groups.slice(0, 80).map(g => ({
+        entities: groups.map(g => ({
           type: 'account', key: g.account.key, label: g.account.userName,
           detail: T('fi.explain-residue.detail', {
             n: g.rows.length,
@@ -1321,7 +1325,7 @@
       if (!cov.uncovered.length) return null;
       return Object.assign({
         id: 'nedap-uncovered', severity: 'high', category: T('fi.cat.nedap'),
-        entities: cov.uncovered.slice(0, 80).map(u => ({
+        entities: cov.uncovered.map(u => ({
           type: 'person', key: u.person.personId, label: u.person.displayName,
           detail: u.contracts.map(c => (c.department || c.departmentId) + (c.title ? ' · ' + c.title : '')).join('; ')
         })),
@@ -1336,7 +1340,7 @@
       if (!issues.length) return null;
       return Object.assign({
         id: 'nedap-unresolved', severity: 'high', category: T('fi.cat.nedap'),
-        entities: issues.slice(0, 80).map(i => ({
+        entities: issues.map(i => ({
           type: 'mapping', key: i.area + ':' + i.row, label: (i.dept || '—') + ' / ' + (i.title || T('no.allTitles')),
           detail: T('no.area.' + i.area) + ' · ' + T(i.msgKey, i.msgArgs)
         })),
@@ -1352,7 +1356,7 @@
       if (!issues.length) return null;
       return Object.assign({
         id: 'nedap-lint', severity: 'medium', category: T('fi.cat.nedap'),
-        entities: issues.slice(0, 80).map(i => ({
+        entities: issues.map(i => ({
           type: 'mapping', key: i.area + ':' + i.row + ':' + i.rule,
           label: (i.dept || '—') + ' / ' + (i.title || T('no.allTitles')),
           detail: T('no.area.' + i.area) + ' · ' + T(i.msgKey, i.msgArgs)
@@ -1389,7 +1393,43 @@
     return out;
   }
 
-  HR.findings = { runHidden, runAudit, run, runComparison, runVault, runCorrelation, runExplanation, runActivity, runProducts,
+  /* ---------------------------------------------------------------------------
+     After every rule set ran: what kind of finding each is, whether someone accepted it,
+     and one order for the lot (rule sets appended late used to land unsorted). */
+  const CAT_KIND = {
+    identity: 'risk', access: 'risk', entitlements: 'risk',
+    cost: 'cost',
+    hygiene: 'quality', nedap: 'quality',
+    provisioning: 'ops', process: 'ops', rules: 'ops', service: 'ops'
+  };
+  const KINDS = ['risk', 'cost', 'quality', 'ops'];
+  function finalise(model) {
+    const byLabel = {};
+    Object.keys(CAT_KIND).forEach(id => { byLabel[T('fi.cat.' + id)] = id; });
+    const status = (HR.config.get().findingStatus) || {};
+    const today = new Date(model.asOf || Date.now()).toISOString().slice(0, 10);
+    for (const f of model.findings) {
+      f.catId = byLabel[f.category] || 'process';
+      f.kind = CAT_KIND[f.catId] || 'ops';
+      const st = status[f.id];
+      f.accepted = st && st.until && st.until >= today ? st : null;
+      f.acceptExpired = st && st.until && st.until < today ? st.until : null;
+    }
+    model.findings.sort((a, b) => (a.accepted ? 1 : 0) - (b.accepted ? 1 : 0) ||
+      U.severityRank(a.severity) - U.severityRank(b.severity) ||
+      (b.impactMonthly || 0) - (a.impactMonthly || 0) || b.count - a.count);
+    return model.findings;
+  }
+  /** Accept a finding until a date, with a reason — or clear it (until = null). */
+  function setStatus(id, st) {
+    const cfg = HR.config.get();
+    cfg.findingStatus = cfg.findingStatus || {};
+    if (st && st.until) cfg.findingStatus[id] = { until: st.until, why: st.why || '', by: st.by || '', at: new Date().toISOString().slice(0, 10) };
+    else delete cfg.findingStatus[id];
+    HR.config.save(cfg);
+  }
+
+  HR.findings = { finalise, setStatus, KINDS, CAT_KIND, runHidden, runAudit, run, runComparison, runVault, runCorrelation, runExplanation, runActivity, runProducts,
     runVaultQuality, runNedap,
     RULES, COMPARISON_RULES, VAULT_RULES, CORRELATION_RULES, EXPLANATION_RULES,
     ACTIVITY_RULES, PRODUCT_RULES, VAULT_QUALITY_RULES, NEDAP_RULES };
