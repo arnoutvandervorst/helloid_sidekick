@@ -64,8 +64,36 @@
   const SEVERITY_WEIGHT = { critical: 3, high: 2, medium: 1, low: 1 };
   const SEVERITIES = ['critical', 'high', 'medium', 'low'];
   /* The frameworks a control can be mapped to: NIS2 article, ISO 27001:2022 Annex A
-     control, BIO (Baseline Informatiebeveiliging Overheid, ISO 27002:2013 numbering). */
+     control, BIO 2.0 (Baseline Informatiebeveiliging Overheid, ISO 27002:2022 numbering). */
   const FRAMEWORKS = ['nis2', 'iso27001', 'bio'];
+
+  /* Controls that measure one problem from different sides count once in a score: a
+     leaver with an enabled account would otherwise cost three critical failures. The
+     group counts at its worst member's state and its heaviest weight. */
+  const GROUPS = {
+    leavers: ['leavers-enabled', 'leaver-revoke-sla', 'former-accounts'],
+    unowned: ['unowned-share', 'unowned-enabled']
+  };
+  const groupOf = id => Object.keys(GROUPS).find(g => GROUPS[g].includes(id)) || null;
+  /** Scored rows → scoring units: a grouped set of rows becomes one unit. */
+  function units(scored) {
+    const out = [], seen = new Map();
+    for (const r of scored) {
+      const g = groupOf(r.def.id);
+      if (!g) { out.push({ rows: [r], weight: r.weight, pass: r.pass, severity: r.severity }); continue; }
+      let u = seen.get(g);
+      if (!u) { u = { group: g, rows: [], weight: 0, pass: true, severity: 'low' }; seen.set(g, u); out.push(u); }
+      u.rows.push(r);
+      u.weight = Math.max(u.weight, r.weight);
+      u.pass = u.pass && r.pass;
+      if (SEVERITIES.indexOf(r.severity) < SEVERITIES.indexOf(u.severity)) u.severity = r.severity;
+    }
+    return out;
+  }
+  const scoreOf = us => { const w = U.sum(us, u => u.weight); return w ? U.sum(us.filter(u => u.pass), u => u.weight) / w : null; };
+  /** The day "now" means for a model: the data point's data date, not the wall clock. */
+  const asOf = m => new Date(m && m.asOf ? m.asOf : Date.now());
+  const todayIso = m => asOf(m).toISOString().slice(0, 10);
 
   /**
    * The control catalog. dir 'max': the value must stay at or under the
@@ -83,7 +111,7 @@
       } },
     { id: 'admin-share', goto: { view: 'accounts' }, severity: 'high', refs: { nis2: '21(2)(i)', iso27001: 'A.8.2', bio: '8.2' }, unit: 'pct', dir: 'max', def: 2, needs: [],
       measure: m => clsShare(m, 'admin') },
-    { id: 'wide-membership', goto: { view: 'accounts' }, severity: 'medium', refs: { iso27001: 'A.5.18', bio: '5.18' }, unit: 'pct', dir: 'max', def: 0, paramDef: 25, needs: [],
+    { id: 'wide-membership', goto: { view: 'accounts' }, severity: 'medium', refs: { iso27001: 'A.5.18', bio: '5.18' }, unit: 'pct', dir: 'max', def: 5, paramDef: 25, needs: [],
       measure: (m, param) => {
         const affected = m.accountList.filter(a => a.permCount > param)
           .map(a => ({ kind: 'account', a }));
@@ -104,7 +132,10 @@
     { id: 'unmanaged-share', goto: { view: 'permissions' }, severity: 'high', refs: { nis2: '21(2)(i)', iso27001: 'A.5.15', bio: '5.18' }, unit: 'pct', dir: 'max', def: 25, needs: [],
       measure: m => {
         const open = m.records.filter(r => r.issue === 'Permission unmanaged' && !resolved(r)).length;
-        return { value: m.summary.rows ? 100 * open / m.summary.rows : 0, affected: [] };
+        /* Who holds them: the accounts with at least one, most first. */
+        const affected = m.accountList.filter(a => a.unmanagedPermCount > 0)
+          .sort((x, y) => y.unmanagedPermCount - x.unmanagedPermCount).map(a => ({ kind: 'account', a }));
+        return { value: m.summary.rows ? 100 * open / m.summary.rows : 0, affected };
       } },
     { id: 'rule-coverage', goto: { view: 'rules' }, severity: 'medium', refs: { nis2: '21(2)(i)', iso27001: 'A.5.15', bio: '5.18' }, unit: 'pct', dir: 'min', def: 60, needs: ['rules'],
       measure: m => ({
@@ -154,7 +185,8 @@
         const q = m.orgQuality || HR.org.quality(m.vault);
         const affected = [];
         q.duplicateIds.forEach(d => d.persons.forEach(person => affected.push({ kind: 'person', person })));
-        return { value: q.duplicateIds.length, affected };
+        /* The people sharing an id — what the list shows and what has to be fixed. */
+        return { value: affected.length, affected };
       } },
 
     /* ---- timely revocation ---- */
@@ -202,7 +234,7 @@
     { id: 'no-account-employees', goto: { view: 'people' }, severity: 'medium', refs: { iso27001: 'A.5.16', bio: '5.18' }, unit: 'pct', dir: 'max', def: 5, needs: ['vault'],
       measure: m => {
         const index = HR.correlate.personAccountIndex(m, m.vault, m.correlation);
-        const now = new Date();
+        const now = asOf(m);
         const current = m.vault.persons.filter(p => p.contracts.length &&
           HR.vault.lifecycle(p, now).state === 'current');
         const affected = current.filter(p => {
@@ -219,17 +251,20 @@
       } },
 
     /* ---- directory hygiene ---- */
-    { id: 'empty-groups', goto: { view: 'permissions' }, severity: 'low', refs: { iso27001: 'A.5.9', bio: '5.9' }, unit: 'count', dir: 'max', def: 0, needs: ['directory'],
+    /* Every directory has a few empty groups; the share says whether it is tidied. */
+    { id: 'empty-groups', goto: { view: 'permissions' }, severity: 'low', refs: { iso27001: 'A.5.9', bio: '5.9' }, unit: 'pct', dir: 'max', def: 10, needs: ['directory'],
       measure: m => {
-        const empty = m.directory.groups.filter(g =>
-          !(g.memberUsers || []).length && !(g.memberGroups || []).length);
-        return { value: empty.length, affected: [] };
+        const groups = m.directory.groups;
+        const empty = groups.filter(g => !(g.memberUsers || []).length && !(g.memberGroups || []).length);
+        return { value: groups.length ? 100 * empty.length / groups.length : 0,
+          affected: empty.map(g => ({ kind: 'group', name: g.name, sub: g.ou || g.description || '' })) };
       } },
     { id: 'deep-nesting', goto: { view: 'permissions' }, severity: 'low', refs: { iso27001: 'A.5.15', bio: '5.15' }, unit: 'pct', dir: 'max', def: 5, paramDef: 3, needs: ['directory'],
       measure: (m, param) => {
         const metas = Array.from(m.directory.groupMeta.values());
         const deep = metas.filter(g => g.depth > param);
-        return { value: metas.length ? 100 * deep.length / metas.length : 0, affected: [] };
+        return { value: metas.length ? 100 * deep.length / metas.length : 0,
+          affected: deep.sort((x, y) => y.depth - x.depth).map(g => ({ kind: 'group', name: g.name, sub: String(g.depth) })) };
       } },
     /* AD's replicated lastLogonTimestamp can lag up to two weeks; at a 90-day
        limit that lag is noise. Accounts with no recorded sign-in are skipped. */
@@ -262,7 +297,9 @@
       measure: m => {
         const a = HR.attest.build(m);
         const cov = HR.attest.coverage(m, a.packs);
-        return { value: 100 * cov.privShare, affected: [] };
+        /* Nothing privileged in the packs is nothing to review — not a failed review. */
+        if (!cov.priv) return { applicable: false, missing: ['privileged'] };
+        return { value: 100 * cov.privShare, affected: (cov.privOpen || []).map(r => ({ kind: 'account', a: r.account })) };
       } },
     /* From the audit log: does the engine that enforces the policy actually run and land. */
     { id: 'failed-actions-rate', goto: { view: 'audit', params: { tab: 'health' } }, unit: 'pct', dir: 'max', def: 2, needs: ['audit'], severity: 'high',
@@ -274,11 +311,14 @@
     { id: 'import-failures', goto: { view: 'audit', params: { tab: 'health' } }, unit: 'count', dir: 'max', def: 0, needs: ['audit'], severity: 'high',
       refs: { iso27001: 'A.8.15', bio: '8.15' }, finding: 'audit-import-failures',
       measure: m => ({ value: HR.audit.health(m.audit).imports.failedRecent, affected: [] }) },
-    { id: 'evaluation-age', goto: { view: 'audit', params: { tab: 'health' } }, unit: 'count', dir: 'max', def: 1, needs: ['audit'], severity: 'critical',
+    /* Days between the last evaluation and the moment the audit log was exported — a
+       two-day-old export must not fail this by the wall clock. */
+    { id: 'evaluation-age', goto: { view: 'audit', params: { tab: 'health' } }, unit: 'days', dir: 'max', def: 2, needs: ['audit'], severity: 'critical',
       refs: { nis2: '21(2)(i)', iso27001: 'A.5.15', bio: '5.18' },
       measure: m => {
         const e = HR.audit.health(m.audit).evaluations;
-        return { value: e.ageDays == null ? 999 : e.ageDays, affected: [] };
+        if (e.ageDays == null) return { applicable: false, missing: ['data'] };
+        return { value: e.ageDays, affected: [] };
       } },
     { id: 'exclusions-without-reason', goto: { view: 'audit', params: { tab: 'decisions' } }, unit: 'count', dir: 'max', def: 0, needs: ['audit'], severity: 'medium',
       refs: { iso27001: 'A.5.18', bio: '5.18' }, finding: 'audit-exclusions-no-reason',
@@ -286,9 +326,14 @@
         const list = m.audit.exclusions.filter(x => !String(x.comment || '').trim());
         return { value: list.length, affected: [] };
       } },
-    { id: 'local-admin-logins', goto: { view: 'audit', params: { tab: 'admin' } }, unit: 'pct', dir: 'max', def: 0, needs: ['audit'], severity: 'high',
+    /* People signing in to HelloID past the identity provider (and its MFA). One or two
+       break-glass accounts are policy; more is a habit. */
+    { id: 'local-admin-logins', goto: { view: 'audit', params: { tab: 'admin' } }, unit: 'count', dir: 'max', def: 2, needs: ['audit'], severity: 'high',
       refs: { nis2: '21(2)(i)', iso27001: 'A.8.5', bio: '8.5' },
-      measure: m => ({ value: 100 * HR.audit.adminAccess(m.audit).logins.recentLocalShare, affected: [] }) },
+      measure: m => {
+        const users = HR.audit.adminAccess(m.audit).users.filter(u => u.local > 0);
+        return { value: users.length, affected: users.map(u => ({ kind: 'group', name: u.user, sub: String(u.local) })) };
+      } },
     { id: 'portal-login-failures', goto: { view: 'audit', params: { tab: 'admin' } }, unit: 'count', dir: 'max', def: 0, needs: ['audit'], severity: 'medium',
       refs: { iso27001: 'A.8.15', bio: '8.15' },
       measure: m => ({ value: HR.audit.adminAccess(m.audit).logins.failedUsersRecent.length, affected: [] }) },
@@ -304,7 +349,7 @@
       } },
     { id: 'dormant-accounts', goto: { view: 'accounts' }, severity: 'high', refs: { iso27001: 'A.5.18', bio: '5.18' }, unit: 'pct', dir: 'max', def: 5, paramDef: 90, needs: ['directory', 'lastlogon'],
       measure: (m, param) => {
-        const now = Date.now();
+        const now = asOf(m).getTime();
         const byName = new Map(m.accountList.map(a => [String(a.userName || '').toLowerCase(), a]));
         const withStamp = m.directory.users.filter(u => u.enabled !== false && u.lastLogon);
         const dormant = withStamp.filter(u => {
@@ -315,10 +360,12 @@
           const a = byName.get(String(u.userName || '').toLowerCase());
           return !a || !justified(a);
         });
-        const affected = open
-          .map(u => byName.get(String(u.userName || '').toLowerCase()))
-          .filter(Boolean)
-          .map(a => ({ kind: 'account', a }));
+        /* Every dormant account counted is listed — one the reconciliation does not carry
+           is listed by its directory name. */
+        const affected = open.map(u => {
+          const a = byName.get(String(u.userName || '').toLowerCase());
+          return a ? { kind: 'account', a } : { kind: 'group', name: u.userName, sub: u.lastLogon ? String(u.lastLogon).slice(0, 10) : '' };
+        });
         return { value: withStamp.length ? 100 * open.length / withStamp.length : 0, affected };
       } }
   ];
@@ -337,8 +384,11 @@
       due: st.due || '',
       note: st.note || '',
       exception,
-      /* An accepted risk holds while its date has not passed. */
-      accepted: !!(exception && new Date(exception.until) >= new Date(new Date().toDateString())),
+      /* An accepted risk holds while its date has not passed (day strings, so no time
+         zone moves the end by a day). An expired one is said, not silently dropped. */
+      accepted: !!(exception && exception.until >= todayIso()),
+      exceptionExpired: exception && exception.until < todayIso() ? exception.until : null,
+      overdue: st.due && st.due < todayIso() ? st.due : null,
       changes: st.changes || []
     };
   }
@@ -387,30 +437,40 @@
         : r.value >= st.threshold - 1e-9;
       /* An accepted exception counts as passed, and says so. */
       const status = met ? 'met' : st.accepted ? 'accepted' : 'notMet';
+      const g = groupOf(def.id);
       rows.push({ def, on: st.on, threshold: st.threshold, param: st.param,
         owner: st.owner, due: st.due, note: st.note, exception: st.exception, changes: st.changes,
+        exceptionExpired: !met && st.exceptionExpired ? st.exceptionExpired : null,
+        /* An exception on a control that is met again is no longer needed. */
+        exceptionStale: met && st.exception ? true : false,
+        overdue: !met && st.overdue ? st.overdue : null,
+        group: g, groupWith: g ? GROUPS[g].filter(x => x !== def.id) : [],
         applicable: true, value: r.value, affected: r.affected || [], met, pass: met || st.accepted, status,
         severity: def.severity || 'medium', weight: SEVERITY_WEIGHT[def.severity || 'medium'] });
     }
     const scored = rows.filter(r => r.applicable && r.on);
-    const passed = scored.filter(r => r.pass).length;
-    const weightOf = list => U.sum(list, r => r.weight);
+    const us = units(scored);
+    const passed = us.filter(u => u.pass).length;
     const bySeverity = {};
     SEVERITIES.forEach(sev => {
-      const of = scored.filter(r => r.severity === sev);
-      bySeverity[sev] = { of: of.length, passed: of.filter(r => r.pass).length, open: of.filter(r => !r.pass).length };
+      const of = us.filter(u => u.severity === sev);
+      bySeverity[sev] = { of: of.length, passed: of.filter(u => u.pass).length, open: of.filter(u => !u.pass).length };
     });
     const open = scored.filter(r => !r.pass).sort((a, b) => SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity));
     m._policy = {
       rows,
       summary: {
-        evaluated: scored.length,
+        /* Counted per scoring unit: grouped controls count once. */
+        evaluated: us.length,
         passed,
-        failed: scored.length - passed,
+        failed: us.length - passed,
         accepted: scored.filter(r => r.status === 'accepted').length,
-        /* Weighted: a critical control counts three times a housekeeping one. */
-        score: scored.length ? weightOf(scored.filter(r => r.pass)) / weightOf(scored) : 0,
-        plainScore: scored.length ? passed / scored.length : 0,
+        /* Weighted: a critical control counts three times a housekeeping one. Nothing
+           evaluated is no score (null), not zero. */
+        score: us.length ? scoreOf(us) : null,
+        plainScore: us.length ? passed / us.length : null,
+        expired: scored.filter(r => r.exceptionExpired).length,
+        overdue: scored.filter(r => r.overdue).length,
         bySeverity,
         criticalOpen: bySeverity.critical.open,
         worstOpen: open[0] || null,
@@ -448,21 +508,34 @@
     const rows = theme ? ev.rows.filter(r => theme.controls.includes(r.def.id))
       : ev.rows.filter(r => !fw || (r.def.refs && r.def.refs[fw]));
     const scored = rows.filter(r => r.applicable && r.on);
-    const w = list => U.sum(list, r => r.weight);
-    const critical = scored.filter(r => r.severity === 'critical');
+    const us = units(scored);
+    const critical = us.filter(u => u.severity === 'critical');
     const open = scored.filter(r => !r.pass).sort((a, b) => SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity));
     const cites = U.uniq(rows.filter(r => fw && r.def.refs && r.def.refs[fw]).map(r => r.def.refs[fw])).sort();
     return {
       fw, theme: theme ? fw.slice(6) : null, meta: FRAMEWORK_META[fw] || null, rows, scored,
-      evaluated: scored.length, met: scored.filter(r => r.pass).length,
-      points: w(scored.filter(r => r.pass)), total: w(scored),
-      score: scored.length ? w(scored.filter(r => r.pass)) / w(scored) : 0,
-      critical: critical.length, criticalMet: critical.filter(r => r.pass).length, criticalOpen: critical.filter(r => !r.pass).length,
+      evaluated: us.length, met: us.filter(u => u.pass).length,
+      points: U.sum(us.filter(u => u.pass), u => u.weight), total: U.sum(us, u => u.weight),
+      score: us.length ? scoreOf(us) : null,
+      critical: critical.length, criticalMet: critical.filter(u => u.pass).length, criticalOpen: critical.filter(u => !u.pass).length,
       owned: scored.filter(r => r.owner && r.due).length,
       accepted: scored.filter(r => r.status === 'accepted').length,
       waiting: rows.filter(r => !r.applicable).length,
       worst: open.slice(0, 3), cites
     };
+  }
+
+  /**
+   * The compliance score of a stored set of control results ({id: {value, status, on}}),
+   * scored the way evaluate() scores — used when a data point is re-scored but some of
+   * its controls keep the values measured at the time.
+   */
+  function scoreFromControls(controls) {
+    const scored = CATALOG.filter(def => controls[def.id] && settingsFor(def).on && controls[def.id].status)
+      .map(def => { const c = controls[def.id]; return { def, severity: def.severity || 'medium', weight: SEVERITY_WEIGHT[def.severity || 'medium'], pass: c.status === 'met' || c.status === 'accepted', status: c.status }; });
+    const us = units(scored);
+    return { score: us.length ? scoreOf(us) : null, passed: us.filter(u => u.pass).length, evaluated: us.length,
+      critical: us.filter(u => u.severity === 'critical' && !u.pass).length, accepted: scored.filter(r => r.status === 'accepted').length };
   }
 
   /** The rows that carry into the model summary and so into every snapshot. */
@@ -476,5 +549,5 @@
       policyCritical: ev.summary.criticalOpen, policyAccepted: ev.summary.accepted, controls };
   }
 
-  HR.policy = { CATALOG, SEVERITIES, SEVERITY_WEIGHT, FRAMEWORKS, FRAMEWORK_META, THEMES, evaluate, summaryOf, frameworkStats, set, settingsFor };
+  HR.policy = { CATALOG, SEVERITIES, SEVERITY_WEIGHT, FRAMEWORKS, FRAMEWORK_META, THEMES, GROUPS, groupOf, evaluate, summaryOf, frameworkStats, set, settingsFor, scoreFromControls };
 })(window.HR);

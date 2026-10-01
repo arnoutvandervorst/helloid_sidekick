@@ -460,7 +460,7 @@
    */
   function leavers(model, vault) {
     const index = HR.correlate.personAccountIndex(model, vault, model.correlation);
-    const now = new Date();
+    const now = new Date(model && model.asOf ? model.asOf : Date.now());
     const rows = [];
     for (const person of vault.persons) {
       const life = HR.vault.lifecycle(person, now);

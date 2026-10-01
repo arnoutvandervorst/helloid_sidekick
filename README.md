@@ -396,6 +396,20 @@ compared data point, and three bars: controls met, critical controls met, with a
 a due date. A card opens **The KPIs** tab filtered to that framework, with the same ring as
 its header; the board's Policy KPIs page leads with the four rings.
 
+Controls that measure one problem from different sides **count once**: the three leaver
+controls (enabled after the contract ended, past the leaver SLA, former employees by
+correlation) and the two unowned-account controls each score as one unit, at the worst
+member's state and the heaviest weight — a single leaver no longer costs three critical
+failures. A control waits rather than fails when there is nothing to judge (no toxic pair
+defined, nothing privileged to review). Ages and windows are measured from the data
+point's own date — leaver days, dormant days, review windows — and audit-log KPIs from the
+moment the log was exported, so an older export does not fail by the wall clock. An
+exception needs a date after today and a reason; one that ran out is shown as expired, one
+on a control that is met again as no longer needed, and a due date that passed as overdue.
+An empty limit means the default. "Recalculate trends" keeps the values a data point had for
+controls measured from companion files (audit log, directory, rules, decisions) instead of
+rewriting them with today's files. Tests: `NODE_OPTIONS= node test/policy.test.js`.
+
 ## Business rules
 
 Drop a HelloID business-rule export (`Name,EntitlementCount,PersonsLatestEvaluation,Categories,Status,Conditions,Entitlements`) on the same page — it routes by header, no second import button — and it is joined against the reconciliation export on distinguished path, falling back to system + name for systems that export none (Exchange Online, TOPdesk, Azure).

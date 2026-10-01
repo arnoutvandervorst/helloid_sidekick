@@ -48,9 +48,9 @@
 
   function openAffected(m, row) {
     const label = x => x.kind === 'account' ? x.a.userName
-      : x.kind === 'perm' ? x.perm.name : (x.person.displayName || x.person.externalId);
+      : x.kind === 'perm' ? x.perm.name : x.kind === 'group' ? x.name : (x.person.displayName || x.person.externalId);
     const sub = x => x.kind === 'account' ? (x.a.personName || T('c.unowned'))
-      : x.kind === 'perm' ? x.perm.system : T('c.person');
+      : x.kind === 'perm' ? x.perm.system : x.kind === 'group' ? (x.sub || '') : T('c.person');
     openDrawer(el('div', {}, [
       el('div', { text: T('po.p.' + row.def.id) }),
       el('span', { class: 'note', text: T('po.affectedHead', { n: row.affected.length }) })
@@ -64,6 +64,7 @@
       onRowClick: x => {
         if (x.kind === 'account') drawerAccount(x.a);
         else if (x.kind === 'perm') drawerPermission(x.perm, m);
+        else if (x.kind === 'group') { const p = m.permissionList.find(q => q.name === x.name); if (p) drawerPermission(p, m); }
         else drawerVaultPerson(personRow(m, x.person), m);
       }
     })));
@@ -73,6 +74,11 @@
   function change(m, id, patch) {
     HR.policy.set(id, patch);
     delete m._policy;
+    /* The movement against the compared data point is judged under the same limits, so
+       it is judged again. */
+    const bm = HR.app.state.baselineModel;
+    if (bm) delete bm._policy;
+    if (HR.app.recomputeDiff) HR.app.recomputeDiff().then(() => HR.app.render());
     /* The summary carries the score into snapshots and deltas; keep it current. */
     try { Object.assign(m.summary, HR.policy.summaryOf(m)); HR.model.governance(m.summary); } catch (e) { /* not scoreable yet */ }
     HR.app.updateTopbar && HR.app.updateTopbar();
@@ -94,6 +100,18 @@
   }
 
   /** The card: ring, status, articles, title, what it means, the affected — the row's summary. */
+  /** What needs a decision beyond met / not met: an exception that ran out, one no longer
+      needed, a due date passed, and the controls this one is counted with. */
+  function statePills(row) {
+    const d = v => U.fmtDate(v).split(',')[0];
+    return [
+      row.exceptionExpired ? el('span', { class: 'pill state warn', text: T('po.exExpired', { date: d(row.exceptionExpired) }) }) : null,
+      row.exceptionStale ? el('span', { class: 'pill state muted', title: T('po.exStaleTip'), text: T('po.exStale') }) : null,
+      row.overdue ? el('span', { class: 'pill state removed', text: T('po.overdue', { date: d(row.overdue) }) }) : null,
+      row.group ? el('span', { class: 'pill state muted', title: T('po.groupTip') + ': ' + row.groupWith.map(x => T('po.p.' + x)).join(', '), text: T('po.countedWithN', { n: row.groupWith.length }) }) : null
+    ].filter(Boolean);
+  }
+
   function policyCard(m, row) {
     const id = row.def.id;
     const status = !row.applicable
@@ -108,13 +126,14 @@
       el('div', { class: 'k-body' }, [
         el('div', { class: 'k-top' }, [status, el('span', { class: 'k-refs mono', text: refs })]),
         el('h3', { text: T('po.p.' + id) }),
+        statePills(row).length ? el('div', { class: 'row', style: 'gap:4px;margin:2px 0' }, statePills(row)) : null,
         el('p', { class: 'note', text: T('po.p.' + id + '.d') }),
         el('div', { class: 'k-foot' }, [
           row.applicable && row.affected.length
             ? el('a', { href: '#', text: T('po.affectedN', { n: U.fmtInt(row.affected.length) }) + ' \u2192', onclick: e => { e.preventDefault(); e.stopPropagation(); openAffected(m, row); } })
             : el('span', {}),
           el('span', { class: 'note' }, [
-            mv && mv.was ? el('span', { class: 'pill ' + MOVE_CLASS[mv.movement], text: T('tr.mv.' + mv.movement), style: 'margin-right:6px' }) : null,
+            row.on && mv && mv.was ? el('span', { class: 'pill ' + MOVE_CLASS[mv.movement], text: T('tr.mv.' + mv.movement), style: 'margin-right:6px' }) : null,
             document.createTextNode(T('po.owner') + ' ' + (row.owner || '\u2014') + ' \u00b7 ' + T('po.due') + ' ' + (row.due || '\u2014'))
           ].filter(Boolean))
         ])
@@ -155,8 +174,12 @@
     const by = el('input', { type: 'text', value: ex.by || '', placeholder: T('po.exBy') });
     const why = el('input', { type: 'text', value: ex.why || '', placeholder: T('po.exWhy') });
     why.style.minWidth = '260px';
+    const msg = el('span', { class: 'note' });
+    until.min = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    /* A date after today and a reason: an exception without one is not a decision. */
     const save = el('button', { class: 'btn sm primary', text: T('c.save'), onclick: () => {
-      if (!until.value) return;
+      if (!until.value || until.value <= new Date().toISOString().slice(0, 10)) { msg.textContent = T('rk.acceptNeedDate'); return; }
+      if (!why.value.trim()) { msg.textContent = T('rk.acceptNeedWhy'); return; }
       change(m, row.def.id, { exception: { until: until.value, by: by.value.trim(), why: why.value.trim() } });
     } });
     const clear = el('button', { class: 'btn sm ghost', text: T('po.exClear'),
@@ -164,7 +187,7 @@
     return el('div', { class: 'slot-actions', style: 'margin-top:6px' }, [
       el('span', { class: 'note', text: T('po.exTitle') }),
       el('label', { class: 'inline' }, [document.createTextNode(T('po.exUntil')), until]),
-      by, why, save, row.exception ? clear : null
+      by, why, save, row.exception ? clear : null, msg
     ].filter(Boolean));
   }
 
@@ -188,8 +211,9 @@
         el('strong', { text: T('po.p.' + id) })
       ]),
       el('p', { class: 'note ctl-desc', text: T('po.p.' + id + '.d') }),
+      statePills(row).length ? el('div', { class: 'row', style: 'gap:4px' }, statePills(row)) : null,
       el('div', { class: 'ctl-refs' }, refPills(row.def, () => { block.hidden = !block.hidden; }))
-    ]);
+    ].filter(Boolean));
     const block = refsBlock(row.def);
     block.hidden = !showRefs();
     what.appendChild(block);
@@ -265,15 +289,21 @@
     wrap.append(what, stand, who);
 
     /* --- the fold: limit, switch, owner, due, exception, log --- */
-    const tIn = el('input', { type: 'number', min: 0, step: row.def.unit === 'pct' ? 0.5 : 1, value: row.threshold });
+    const tIn = el('input', { type: 'number', min: 0, max: row.def.unit === 'pct' ? 100 : null, step: row.def.unit === 'pct' ? 0.5 : 1, value: row.threshold });
     tIn.style.width = '72px';
-    tIn.onchange = () => change(m, id, { t: Math.max(0, +tIn.value || 0) });
+    /* Empty means "the default", not zero; a share stays between 0 and 100. */
+    tIn.onchange = () => {
+      if (String(tIn.value).trim() === '') return change(m, id, { t: null });
+      const v = Math.max(0, +tIn.value || 0);
+      change(m, id, { t: row.def.unit === 'pct' ? Math.min(100, v) : v });
+    };
     const controls = el('div', { class: 'slot-actions' }, [
       el('label', { class: 'inline' }, [document.createTextNode(T('po.limitLabel')), tIn,
         document.createTextNode(row.def.unit === 'pct' ? '%' : '')]),
       el('span', { class: 'note', text: T('po.defaultIs', { v: row.def.unit === 'pct' ? U.fmtNum(row.def.def, 1) + '%' : U.fmtInt(row.def.def) })
-        + (row.def.paramDef !== undefined ? ' \u00b7 ' + T('po.paramLabel.' + id) + row.def.paramDef : '') })
-    ]);
+        + (row.def.paramDef !== undefined ? ' \u00b7 ' + T('po.paramLabel.' + id) + row.def.paramDef : '') }),
+      row.threshold !== row.def.def ? el('a', { href: '#', class: 'note', text: T('po.resetLimit'), onclick: e => { e.preventDefault(); change(m, id, { t: null }); } }) : null
+    ].filter(Boolean));
     if (row.def.paramDef !== undefined) {
       const pIn = el('input', { type: 'number', min: 1, step: 1, value: row.param });
       pIn.style.width = '64px';
@@ -294,7 +324,7 @@
       el('label', { class: 'inline' }, [document.createTextNode(T('po.due')), due])
     );
     editor.appendChild(controls);
-    if (row.applicable && (row.status === 'notMet' || row.status === 'accepted')) editor.appendChild(exceptionForm(m, row));
+    if (row.applicable && (row.status === 'notMet' || row.status === 'accepted' || row.exception)) editor.appendChild(exceptionForm(m, row));
     if (row.changes && row.changes.length) {
       const last = row.changes[row.changes.length - 1];
       editor.appendChild(el('p', { class: 'note', style: 'margin:4px 0 0', title: row.changes.slice(-5).map(c =>
@@ -312,8 +342,11 @@
       nis2: (r.def.refs || {}).nis2 || '', iso27001: (r.def.refs || {}).iso27001 || '', bio: (r.def.refs || {}).bio || '',
       refTitles: HR.frameworks.refsOf(r.def).map(x => x.label + ' ' + x.ref + ' ' + x.title).join('; '),
       evidence: HR.frameworks.evidenceOf(r.def),
-      value: r.applicable ? (r.def.unit === 'pct' ? U.fmtNum(r.value, 1) + '%' : U.fmtInt(r.value)) : '',
-      limit: fmtLimit(r), status: r.applicable ? (r.on ? r.status : 'off') : 'waiting',
+      /* Raw numbers, so the file sorts and sums; the status in words a reader reads. */
+      value: r.applicable ? Math.round(r.value * 100) / 100 : '', unit: r.def.unit,
+      limit: r.threshold, direction: r.def.dir === 'max' ? '<=' : '>=',
+      status: r.applicable ? (r.on ? T('po.status.' + r.status) : T('po.off')) : T('po.needs'),
+      exceptionExpired: r.exceptionExpired || '', overdue: r.overdue || '',
       owner: r.owner || '', due: r.due || '',
       exceptionUntil: r.exception ? r.exception.until : '', exceptionBy: r.exception ? r.exception.by : '', exceptionWhy: r.exception ? r.exception.why : '',
       affected: r.applicable ? r.affected.length : ''
@@ -480,11 +513,12 @@
         onclick: () => HR.app.go('policies', { tab: 'kpis', fw, move: mvFilter === mvk ? '' : mvk }) }))));
       kpis.appendChild(card(null, null, strip));
     }
-    /* Critical first, then the rest; inside a group, failing before passing. */
+    /* Critical first, then the rest; inside a group: failing, accepted, met, waiting, off. */
+    const rank = r => !r.applicable ? 3 : !r.on ? 4 : r.status === 'notMet' ? 0 : r.status === 'accepted' ? 1 : 2;
     const shown = ev.rows.filter(r => !fw || (themeId ? (HR.policy.THEMES[themeId] || { controls: [] }).controls.includes(r.def.id) : (r.def.refs && r.def.refs[fw])))
       .filter(r => !mvFilter || (movementOf(r.def.id) || {}).movement === mvFilter);
     const groups = HR.policy.SEVERITIES.map(sev => ({ sev, rows: shown.filter(r => (r.def.severity || 'medium') === sev)
-      .sort((a, b) => (a.status === 'notMet' ? 0 : 1) - (b.status === 'notMet' ? 0 : 1)) })).filter(g => g.rows.length);
+      .sort((a, b) => rank(a) - rank(b)) })).filter(g => g.rows.length);
     kpis.appendChild(card(T('po.cardTitle'), T('po.cardNote'), [chips].concat(groups.map(g => el('div', {}, [
       el('h3', { style: 'margin:14px 0 4px' }, [el('span', { class: 'sev ' + g.sev, text: T('po.sev.' + g.sev) }),
         document.createTextNode(' ' + T('po.groupFoot', { n: U.fmtInt(g.rows.length), open: U.fmtInt(g.rows.filter(r => r.applicable && r.on && r.status === 'notMet').length) }))]),

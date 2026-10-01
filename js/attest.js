@@ -169,7 +169,9 @@
   /** How much of the held access carries a decision younger than the review period. */
   function coverage(model, packs) {
     const months = (HR.config.get().sla || {}).privilegedReviewMonths || 12;
-    const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - months);
+    /* Reviewed within the window before the data point's date, not before today. */
+    const cutoff = new Date(model && model.asOf ? model.asOf : Date.now()); cutoff.setMonth(cutoff.getMonth() - months);
+    const privOpen = [];
     const dec = decisions();
     let all = 0, allDone = 0, priv = 0, privDone = 0, revokePending = 0;
     const pending = [];
@@ -178,10 +180,11 @@
       const d = dec[decisionKey(r.account, r.perm)];
       const fresh = d && d.at && new Date(d.at) >= cutoff;
       all++; if (fresh) allDone++;
-      if (r.perm.category === 'privileged' || r.perm.category === 'server') { priv++; if (fresh) privDone++; }
+      if (r.perm.category === 'privileged' || r.perm.category === 'server') { priv++; if (fresh) privDone++; else privOpen.push(r); }
       if (d && /revoke/i.test(d.decision)) { revokePending++; pending.push({ row: r, decision: d }); }
     }
     return { months, all, allDone, priv, privDone, revokePending, pending,
+      privOpen: Array.from(new Map(privOpen.map(r => [r.account.key, r])).values()),
       share: all ? allDone / all : 0, privShare: priv ? privDone / priv : 0 };
   }
 

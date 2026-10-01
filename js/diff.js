@@ -28,6 +28,7 @@
 
   /* Every KPI on both sides, and which way it went. "Improved" is the value moving
      toward the limit's good side; met/broken is the status flipping. */
+  const pass = x => x.status === 'met' || x.status === 'accepted';
   function diffControls(cur, base) {
     const now = HR.policy.evaluate(cur).rows, was = HR.policy.evaluate(base).rows;
     const wasById = new Map(was.map(r => [r.def.id, r]));
@@ -39,8 +40,9 @@
       let movement;
       if (!b || !b.applicable) movement = 'new';
       else if (!r.applicable) movement = 'gone';
-      else if (b.status !== 'met' && r.status === 'met') movement = 'newlyMet';
-      else if (b.status === 'met' && r.status !== 'met') movement = 'newlyBroken';
+      /* Met or accepted is a pass: an accepted control did not break. */
+      else if (!pass(b) && pass(r)) movement = 'newlyMet';
+      else if (pass(b) && !pass(r)) movement = 'newlyBroken';
       else if (Math.abs(r.value - b.value) < 1e-9) movement = 'same';
       else movement = (r.value - b.value) * good > 0 ? 'improved' : 'worse';
       rows.push({ id: r.def.id, def: r.def, severity: r.def.severity || 'medium', on: r.on,

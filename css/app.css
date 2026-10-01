@@ -340,6 +340,8 @@ span.info:not(.sev), .tooltip-glyph {
 .k-top { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: 11px; }
 .k-refs { font-size: 10px; color: var(--muted); text-align: right; }
 .k-card h3 { margin: 6px 0 2px; font-size: 14px; }
+.k-card .k-body { min-width: 0; }
+.k-card .pill.state { white-space: normal; }
 .k-card p.note { margin: 0; line-height: 1.4; }
 .k-foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 11.5px; flex-wrap: wrap; }
 .ctl-drawer .ctl { grid-template-columns: 1fr; }

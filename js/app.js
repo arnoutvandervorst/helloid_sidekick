@@ -1001,7 +1001,7 @@
         if (!snap) { U.toast(T('toast.snapNotFound')); return; }
         state.baselineId = id;
         state.baselineSnapshot = snap;
-        state.baselineModel = HR.model.build(snap.records, buildOpts(snapshotVault(snap)));
+        state.baselineModel = HR.model.build(snap.records, buildOpts(snapshotVault(snap), snap.dataDate || snap.importedAt));
         await recomputeDiff();
         if (!quiet) U.toast(T('toast.baselineSet', { name: snap.name }));
       });
@@ -1129,7 +1129,21 @@
         const snap = await HR.store.get(id);
         if (!snap) continue;
         try {
-          const m = HR.model.build(snap.records, buildOpts(snapshotVault(snap)));
+          const m = HR.model.build(snap.records, buildOpts(snapshotVault(snap), snap.dataDate || snap.importedAt));
+          /* Controls measured from companions (audit log, directory, rules, decisions,
+             history) are measured against today's companion files on a rebuild; a data
+             point keeps the values it had for those, and its score is recomputed from the
+             mix, so recalculating does not rewrite history. */
+          const old = snap.summary && snap.summary.controls;
+          if (old && m.summary.controls && snap.id !== state.currentSnapshotId) {
+            const companion = ['audit', 'directory', 'rules', 'decisions', 'history', 'lastlogon', 'evaluation'];
+            HR.policy.CATALOG.forEach(def => {
+              if (old[def.id] && (def.needs || []).some(n => companion.includes(n))) m.summary.controls[def.id] = old[def.id];
+            });
+            const sc = HR.policy.scoreFromControls(m.summary.controls);
+            Object.assign(m.summary, { policyScore: sc.score, policyPassed: sc.passed, policyEvaluated: sc.evaluated, policyCritical: sc.critical, policyAccepted: sc.accepted });
+            HR.model.governance(m.summary);
+          }
           snap.summary = m.summary;
           snap.rescoredAt = Date.now();
           await HR.store.put(snap);
@@ -1185,14 +1199,16 @@
     if (state.directory) return state.directory.records;
     return [];
   }
-  function buildOpts(vaultOverride) {
+  /** The data date of the loaded data point: the "now" a model measures ages against. */
+  const curAsOf = () => { const c = (state.snapshots || []).find(s => s.id === state.currentSnapshotId); return c ? (c.dataDate || c.importedAt) : null; };
+  function buildOpts(vaultOverride, asOf) {
     /* The audit log's provisioning actions stand in for the historic-actions export;
        the export wins when both are loaded — it carries the origins, the audit log does not. */
     return { ruleSet: state.ruleSet, vault: vaultOverride || effVault(),
       granted: state.granted, history: state.history || (state.audit ? HR.audit.asHistory(state.audit) : null),
       audit: state.audit,
       products: state.products, assignments: state.assignments,
-      directory: state.directory };
+      directory: state.directory, asOf: asOf || curAsOf() };
   }
 
   function rebuild() {
@@ -1203,7 +1219,7 @@
     const anySource = state.parsed || state.vault || state.directory || state.ruleSet ||
       state.granted || state.history || state.products || state.assignments || state.audit;
     state.model = anySource ? HR.model.build(effRecords(), opts) : null;
-    if (state.baselineSnapshot) state.baselineModel = HR.model.build(state.baselineSnapshot.records, buildOpts(snapshotVault(state.baselineSnapshot)));
+    if (state.baselineSnapshot) state.baselineModel = HR.model.build(state.baselineSnapshot.records, buildOpts(snapshotVault(state.baselineSnapshot), state.baselineSnapshot.dataDate || state.baselineSnapshot.importedAt));
     recomputeDiff();
     updateTopbar();
     render();
@@ -1424,7 +1440,7 @@
   const REPO_URL = 'https://github.com/arnoutvandervorst/helloid_sidekick';
 
   HR.app = {
-    tenantKeep, tenantDelete, tenantMove, deleteDataPoint, vocabAck, REPO_URL, state, go, rebuild, rebuildBusy, batch, loadSnapshot, setBaseline, refreshSnapshots, rescoreDataPoints, importText, render, applyChrome, updateTopbar,
+    tenantKeep, tenantDelete, tenantMove, deleteDataPoint, vocabAck, recomputeDiff, REPO_URL, state, go, rebuild, rebuildBusy, batch, loadSnapshot, setBaseline, refreshSnapshots, rescoreDataPoints, importText, render, applyChrome, updateTopbar,
     importFileAs, clearSource, clearRecon, detectKind, loadSample, findSample, sampleName: () => sampleFile || null,
     demoAvailable: () => demoManifest };
   document.addEventListener('DOMContentLoaded', init);

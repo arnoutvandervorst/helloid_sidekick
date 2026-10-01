@@ -213,6 +213,8 @@
       /* The model builds from whichever exports are present; views that can only
          speak about reconciliation rows check this rather than assuming them. */
       hasRecon: records.length > 0,
+      /* The day the data is about — "now" for every age, window and SLA measured on it. */
+      asOf: (opts && opts.asOf) || null,
       accountList: Array.from(accounts.values()),
       permissionList: Array.from(permissions.values()),
       personList: Array.from(persons.values()),

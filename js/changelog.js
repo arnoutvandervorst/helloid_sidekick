@@ -18,6 +18,17 @@
 
   const ENTRIES = [
     {
+      version: '2026.10.8', date: '2026-10-01',
+      changes: [
+        'KPIs that can be met and that cannot fail by accident. Wide group membership allows 5 % (was 0 %: one account over the limit failed it); empty groups are a share of all groups, at most 10 % (was zero empty groups, which no directory has); sign-ins past the identity provider count people, two break-glass accounts allowed (was any single one); days since the last evaluation are measured to the moment the audit log was exported, at most two (a two-day-old export failed a critical control by the wall clock). Limits you set yourself stay; the two whose unit changed fall back to the new default.',
+        'Waiting instead of failing: “privileged access reviewed” waits when there is nothing privileged to review (it scored 0 % — a critical failure), and the toxic-combinations KPI waits until a pair is defined. Audit-log KPIs read the 30 days before the log\u2019s own export, so an older export no longer reads as a quiet month.',
+        'Counted once: the three leaver controls and the two unowned-account controls each score as one unit at the worst state — one leaver cost three critical failures before. The cards say “counted once with 2 related”. Controls met and the scorecards count the same units.',
+        'Exceptions and deadlines that say so: an expired exception is flagged “expired”, one on a control that is met again “no longer needed”, a passed due date “overdue since”. An exception needs a date after today and a reason. An empty limit means the default, with a “back to the default” link; shares stay between 0 and 100. Editing a limit re-judges the movement against the compared data point at once, and an accepted control no longer shows as broken in the movement.',
+        'As of the data point: leaver, dormant and review ages are measured from the data point\u2019s own date, so the compared data point is judged as it was. Recalculating the trends keeps the values a data point had for controls measured from the audit log, directory, rules or review decisions instead of rewriting history with today\u2019s files.',
+        'Value matches the list: toxic combinations and duplicate ids count what they list; dormant accounts list the directory accounts the reconciliation does not carry; unmanaged share, empty groups, deep nesting, sign-ins and unreviewed privileged access now have a list behind them. The scorecard CSV carries raw numbers and the status in words.'
+      ]
+    },
+    {
       version: '2026.10.7', date: '2026-10-01',
       changes: [
         'Findings count everything they find. Lists were silently cut at 40, 50, 60 or 80, so the count pill, the CSV, the trend and the diff all under-reported; now the table pages and the CSV carries all of it. The pill says what it counts — 33 accounts, 12 entitlements, 8 people — instead of “items”.',

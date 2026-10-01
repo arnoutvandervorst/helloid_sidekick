@@ -315,7 +315,17 @@
        row by row, edits kept; the vocabulary from before is kept in vocabPrev so the
        next build can say which names moved, until the reader acknowledges it. A fresh
        install has nothing to compare and starts on v2 quietly. */
+    /* KPIs whose unit changed (empty groups: a count → a share of groups; local
+       sign-ins: a share → a number of people): a stored limit in the old unit means
+       nothing now, so it falls back to the new default. */
     let persist = false;
+    if (!current.migrations.kpi2) {
+      ['empty-groups', 'local-admin-logins'].forEach(id => {
+        const p = current.policies && current.policies[id];
+        if (p && p.t !== undefined && p.t !== null) { delete p.t; persist = !!stored; }
+      });
+      current.migrations.kpi2 = true;
+    }
     if (!current.migrations.hints2) {
       if (stored && HR.hints && HR.hints.upgradeRows) {
         const h = current.hints || {};

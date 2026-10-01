@@ -146,7 +146,9 @@
    */
   function health(audit, now) {
     if (audit._health) return audit._health;
-    now = now || new Date();
+    /* The audit log's own export moment is "now": a log exported last week reads its
+       last 30 days, not the 30 days before today. */
+    now = now || (audit.meta && (audit.meta.collectedAt || audit.meta.to)) || new Date();
     const recent = r => r.at && (now - r.at) <= 30 * DAY;
 
     /* imports: per source system, the last run and whether it landed */
@@ -183,7 +185,7 @@
       recent: starts.filter(recent).length,
       last: lastStart ? lastStart.at : null,
       lastEnforcement: enforce.length ? enforce[enforce.length - 1].at : null,
-      ageDays: lastStart ? Math.round((now - lastStart.at) / DAY) : null
+      ageDays: lastStart ? Math.max(0, Math.round((now - lastStart.at) / DAY)) : null
     };
 
     /* failed actions: what fails, where, for whom. "Recent" is the last 30 days of
@@ -236,7 +238,9 @@
    */
   function adminAccess(audit, now) {
     if (audit._admin) return audit._admin;
-    now = now || new Date();
+    /* The audit log's own export moment is "now": a log exported last week reads its
+       last 30 days, not the 30 days before today. */
+    now = now || (audit.meta && (audit.meta.collectedAt || audit.meta.to)) || new Date();
     const recent = r => r.at && (now - r.at) <= 30 * DAY;
     const byUser = new Map();
     for (const r of audit.logins) {
