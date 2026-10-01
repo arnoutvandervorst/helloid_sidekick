@@ -6,9 +6,11 @@
    catching "FinanceAdmins" fell to Other after Save. Everything now asks here, with
    the saved vocabulary or a draft one, and gets the same answer.
 
-   Order for a permission:  item answer › family answer › rules › signals › fallback.
-   Order for an account:    item answer › cohort answer › rules › signals ›
-                            privileged membership › fallback.
+   Order for a permission:  item answer › family answer › hard facts (licence SKU,
+                            distribution group, nested in a privileged group) › rules ›
+                            soft hints (Microsoft 365 group, price-book licence) › fallback.
+   Order for an account:    item answer › cohort answer › rules › signals (#EXT#, `$`,
+                            the OU) › privileged membership › fallback.
 
    A rule whose target no longer exists is skipped, not terminal — a deleted category
    used to swallow every name its row matched. The fallback is named (`other`,
@@ -81,14 +83,82 @@
     return String(tok || '').length >= 4 ? 'strong' : 'weak';
   }
 
-  /** The first category row that matches this name and points at a real category. */
-  function ruleFor(name, rows, valid) {
+  /** The first category row that matches this name (or, for `path` rows, where the
+      group lives) and points at a real category. */
+  function ruleFor(name, rows, valid, path) {
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       if (valid && !valid(row.id)) continue;
-      const tok = HR.hints.matchToken(row, name);
+      const tok = HR.hints.matchToken(row, name, path);
       if (tok != null) return { index: i, row, op: row.op || 'starts', t: tok };
     }
+    return null;
+  }
+
+  /* --------------------------------------------------------------- signals */
+  /* What the data says beyond the name. Hard facts outrank a name rule — a group the
+     directory calls Distribution cannot grant access, a group nested in Domain Admins
+     hands out what Domain Admins has, a licence SKU is a licence whatever it is called.
+     Soft hints only place what no rule placed. */
+
+  /** The directory's facts about a group, when a directory export is loaded. */
+  const metaOf = (name, ctx) => {
+    const gm = ctx && ctx.dir && ctx.dir.groupMeta;
+    return gm ? gm.get(String(name || '').toLowerCase()) || null : null;
+  };
+  /** Where a group lives: the DN text in the recon's brackets, or the directory OU. A
+      directory row's path is its nesting chain ("via …"), which is not a place. */
+  function pathOf(p, ctx) {
+    const own = p.path && !/^via /.test(p.path) ? p.path : '';
+    const meta = metaOf(p.name, ctx);
+    return [own, meta && meta.ou].filter(Boolean).join(' ');
+  }
+  /** The nearest group above this one (any depth) that is privileged in its own right. */
+  function privilegedAncestor(name, system, ctx) {
+    const memo = ctx._ancMemo || (ctx._ancMemo = new Map());
+    const key = system + SEP + String(name).toLowerCase();
+    if (memo.has(key)) return memo.get(key);
+    memo.set(key, null);                                  // cycle guard
+    let found = null;
+    const meta = metaOf(name, ctx);
+    for (const parent of (meta && meta.parentNames) || []) {
+      const own = permission({ name: parent, system }, Object.assign({}, ctx, { signals: 'none' }));
+      if (own.id === 'privileged') { found = parent; break; }
+      const up = privilegedAncestor(parent, system, ctx);
+      if (up) { found = up; break; }
+    }
+    memo.set(key, found);
+    return found;
+  }
+  function hardSignal(p, cfg, ctx) {
+    if (p.record && String(p.record.permissionConfig || '').toLowerCase() === 'license') return { id: 'licence', signal: 'licence-sku' };
+    const meta = metaOf(p.name, ctx);
+    if (meta && meta.category === 'Distribution') return { id: 'distribution', signal: 'group-distribution' };
+    if (meta) {
+      const via = privilegedAncestor(p.name, p.system || '', ctx);
+      if (via) return { id: 'privileged', signal: 'nested-privileged', via };
+    }
+    return null;
+  }
+  function softSignal(p, cfg, ctx) {
+    const meta = metaOf(p.name, ctx);
+    if (meta && meta.scope === 'Microsoft365') return { id: 'team', signal: 'group-m365' };
+    /* A price-book row written for licences that names this group by pattern. The
+       catch-all licence row has no pattern and says nothing about the name. */
+    const priced = (cfg.priceBook || []).find(r => r.classification === 'licence' && r.pattern && r._rx && r._rx.test(p.name));
+    if (priced) return { id: 'licence', signal: 'price-licence' };
+    return null;
+  }
+  /** An account's directory facts: the OU it lives in says service or admin. */
+  function accSignal(a, cfg, ctx) {
+    const users = ctx && ctx.dir && ctx.dir.users;
+    if (!users) return null;
+    const idx = ctx._userIdx || (ctx._userIdx = new Map(users.map(u => [String(u.userName || '').toLowerCase(), u])));
+    const u = idx.get(String(a.userName || '').toLowerCase());
+    const ou = String(u && u.ou || '').toLowerCase();
+    if (!ou) return null;
+    if (/service|svc|serviceaccount|applicatie/.test(ou)) return { id: 'service', signal: 'ou-service' };
+    if (/\badmin|beheer|tier ?0|privileged/.test(ou)) return { id: 'admin', signal: 'ou-admin' };
     return null;
   }
   /** The first account-type row that names this cohort word and points at a real type. */
@@ -134,10 +204,13 @@
       const fid = families[famStoreKey(system, fam)];
       if (fid && catOf(cfg, fid)) return done(catOf(cfg, fid), 'family');
     }
-    const hit = ruleFor(name, rows, id => !!catOf(cfg, id));
+    const useSignals = ctx.signals !== false && ctx.signals !== 'none';
+    const hard = useSignals ? hardSignal(p, cfg, ctx) : null;
+    if (hard && catOf(cfg, hard.id)) return done(catOf(cfg, hard.id), 'signal', { signal: hard.signal, via: hard.via || null });
+    const hit = ruleFor(name, rows, id => !!catOf(cfg, id), pathOf(p, ctx));
     if (hit) return done(catOf(cfg, hit.row.id), 'auto', { rule: hit.index, ruleOp: hit.op, ruleToken: hit.t, confidence: ruleConfidence(hit.row, hit.t) });
-    const sig = ctx.signals !== false && HR.classify.permSignal ? HR.classify.permSignal(p, cfg) : null;
-    if (sig && catOf(cfg, sig.id)) return done(catOf(cfg, sig.id), 'signal', { signal: sig.signal });
+    const soft = useSignals ? softSignal(p, cfg, ctx) : null;
+    if (soft && catOf(cfg, soft.id)) return done(catOf(cfg, soft.id), 'signal', { signal: soft.signal });
     return done(fallbackCat(cfg), 'default');
   }
 
@@ -170,7 +243,7 @@
     const n = normAccount(a.userName);
     if (n.guest && clsOf(cfg, 'external')) return done(clsOf(cfg, 'external'), 'signal', { signal: 'guest' });
     if (n.msa && clsOf(cfg, 'service')) return done(clsOf(cfg, 'service'), 'signal', { signal: 'msa' });
-    const sig = ctx.signals !== false && HR.classify.accSignal ? HR.classify.accSignal(a, cfg) : null;
+    const sig = ctx.signals !== false ? accSignal(a, cfg, ctx) : null;
     if (sig && clsOf(cfg, sig.id)) return done(clsOf(cfg, sig.id), 'signal', { signal: sig.signal });
     if (a.privileged && a.privileged.length && clsOf(cfg, 'admin')) return done(clsOf(cfg, 'admin'), 'membership');
     return done(fallbackCls(cfg), 'default');
@@ -181,8 +254,6 @@
 
   HR.classify = {
     SEP, FALLBACK, famKeyOf, normAccount, cohortKeyOf, famStoreKey, overrideKey,
-    ruleFor, classRuleFor, permission, account, isUnclassified,
-    /* Part D fills these: evidence beyond the name. */
-    permSignal: null, accSignal: null
+    ruleFor, classRuleFor, pathOf, permission, account, isUnclassified
   };
 })(window.HR);

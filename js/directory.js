@@ -196,6 +196,8 @@
         name: g.name, kind, parents, children,
         depth: childDepth(g.id, new Set()),
         dynamic: !!g.dynamic,
+        /* What kind of group the directory says it is — read by js/classify.js. */
+        category: str(g.category), scope: str(g.scope), ou: str(g.ou),
         membershipRule: str(g.membershipRule),
         parentNames: (parentsOf.get(g.id) || []).map(pid => (groupsById.get(pid) || {}).name).filter(Boolean),
         directUsers: (g.memberUsers || []).length

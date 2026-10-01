@@ -18,6 +18,14 @@
 
   const ENTRIES = [
     {
+      version: '2026.10.4', date: '2026-10-01',
+      changes: [
+        'Classification reads more than the name. With a directory export loaded, hard facts outrank a name rule: an Entra licence SKU is a licence, a group the directory calls Distribution is a distribution list (so an AGDLP DL_ security group no longer is, and a distribution group named like a file share no longer looks like access), and a group nested at any depth in a privileged group — Domain Admins, an ADMIN- group — is privileged, because it hands out what its parent has. Soft hints place what no rule did: a Microsoft 365 group is a team, a price-book licence row that names a group makes it a licence. Accounts in a service-account OU are service accounts, in an admin or beheer OU admin accounts.',
+        'A recognition rule can read where a group lives: “lives in (OU / path)” matches the DN in the reconciliation\u2019s brackets or the directory OU — Admin Groups, Tier0, Distributielijsten.',
+        'Workbench: an unplaced entitlement held only by admin and service accounts is marked probably privileged, with a one-click confirm and its own filter tile. Signals show as “signal: nested in privileged group Domain Admins” and similar.'
+      ]
+    },
+    {
       version: '2026.10.3', date: '2026-10-01',
       changes: [
         'Recognition vocabulary v2. Built-in words now match whole words (digits after them allowed) instead of the start of a name: LOG-Eventcollector and SRV01-Backup still land where they did, but LOGISTIEK is no longer a server group, BEHANDELAAR and PRIVACY no longer privileged — and with that their holders no longer become admin accounts — SECRETARIAAT is no longer security, NASCHOLING no longer a file share, SharePoint no longer a file share.',

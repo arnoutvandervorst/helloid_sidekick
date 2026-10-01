@@ -63,16 +63,17 @@
   /* The same resolver the model build uses (js/classify.js), handed the draft — so
      what this page shows is what Save will produce. */
   const fallbackCat = cfg => HR.classify.permission({ name: '' }, { cfg, rows: [], overrides: {}, families: {}, signals: false }).def;
+  const dirNow = () => (HR.app.state.model && HR.app.state.model.directory) || HR.app.state.directory || null;
   const classifyPerm = (p, d, cfg) => HR.classify.permission(p,
-    { cfg, rows: d.hints.categories, overrides: d.catOverrides, families: d.catFamilies });
+    { cfg, rows: d.hints.categories, overrides: d.catOverrides, families: d.catFamilies, dir: dirNow() });
   const classifyAcc = (a, d, cfg) => HR.classify.account(a,
-    { cfg, rows: d.hints.classes, overrides: d.clsOverrides, families: d.clsFamilies });
+    { cfg, rows: d.hints.classes, overrides: d.clsOverrides, families: d.clsFamilies, dir: dirNow() });
 
   /* ---- shared pieces ------------------------------------------------------------- */
   const ruleLabel = (row, i) => (i + 1) + ' · ' + T('st.hintOp.' + (row.op || 'starts')) + ' ' + String(row.t || '').split(',').map(s => s.trim()).filter(Boolean).join(', ');
   const decidedBy = (r, rows) => r.source === 'auto' && rows[r.rule]
     ? T('cw.byRule', { rule: ruleLabel(rows[r.rule], r.rule) })
-    : r.source === 'signal' ? T('cw.bySignal', { what: T('cw.sig.' + r.signal) })
+    : r.source === 'signal' ? T('cw.bySignal', { what: T('cw.sig.' + r.signal, { via: r.via || '' }) })
     : T('cw.by.' + r.source);
 
   /** The word most of the selected names share — the seed of a new rule. */
@@ -95,7 +96,7 @@
     const rows = d.hints[kind];
     const cfg = HR.config.get();
     const hitsOf = i => kind === 'categories'
-      ? items.filter(p => HR.hints.matchesRow(rows[i], nameOf(p))).length
+      ? items.filter(p => HR.hints.matchesRow(rows[i], nameOf(p), HR.classify.pathOf(p, { dir: dirNow() }))).length
       : items.filter(a => { const co = HR.classify.cohortKeyOf(a.userName, rows); return co && HR.hints.tokens(rows[i]).includes(co.slice(2)); }).length;
     const winsOf = i => results.filter(r => r.res.source === 'auto' && r.res.rule === i).length;
     const body = el('div', {});
@@ -158,6 +159,14 @@
       results.forEach(r => { if (r.res.source === 'default' && r.res.cohort) { const k = r.item.system + '|' + r.res.cohort; size.set(k, (size.get(k) || 0) + 1); } });
       results.forEach(r => { if (r.res.source === 'default') r.res.source = r.res.cohort && size.get(r.item.system + '|' + r.res.cohort) >= floor ? 'unknown' : 'plain'; });
     }
+    /* Suggestions, never decisions: an unplaced entitlement that only admin or service
+       accounts hold is probably privileged — the reader confirms it with one click. */
+    const suggest = new Set();
+    if (isPerm) results.forEach(r => {
+      if (r.res.source !== 'default' || !r.item.holders || r.item.holders.size < 2) return;
+      const all = Array.from(r.item.holders).map(k => m.accounts.get(k)).filter(Boolean);
+      if (all.length >= 2 && all.every(a => a.cls === 'admin' || a.cls === 'service')) suggest.add(r.item.key);
+    });
     /* Names the vocabulary update moved, while it is unacknowledged: key → old answer. */
     const vc = m.vocabChanges ? new Map((isPerm ? m.vocabChanges.perms : m.vocabChanges.accs).map(x => [x.item.key, x.from])) : null;
     const rows = d.hints[kind];
@@ -178,6 +187,7 @@
       seg(T('cw.kFamily'), cnt('family'), 'family', undefined),
       cnt('signal') ? seg(T('cw.kSignal'), cnt('signal'), 'signal', 'good') : null,
       vc && vc.size ? seg(T('cw.kVocab'), vc.size, 'vocab', 'medium') : null,
+      suggest.size ? seg(T('cw.kSuggest'), suggest.size, 'suggest', 'high') : null,
       isPerm ? tile(T('cw.kTotal'), U.fmtInt(items.length), T('cw.kTotalFoot'), { small: true }) : seg(T('cw.kMembership'), cnt('membership'), 'membership', undefined),
       isPerm ? null : seg(T('cw.kPlain'), cnt('plain'), 'plain', undefined)
     ].filter(Boolean)));
@@ -188,6 +198,7 @@
     let shown = results;
     if (filter === 'unclassified') shown = results.filter(r => r.res.source === 'default' || r.res.source === 'unknown');
     else if (filter === 'vocab') shown = vc ? results.filter(r => vc.has(r.item.key)) : [];
+    else if (filter === 'suggest') shown = results.filter(r => suggest.has(r.item.key));
     else if (filter.startsWith('rule:')) { const i = +filter.slice(5); shown = results.filter(r => r.res.source === 'auto' && r.res.rule === i); }
     else if (filter) shown = results.filter(r => r.res.source === filter);
     const overrides = isPerm ? d.catOverrides : d.clsOverrides;
@@ -215,6 +226,10 @@
       } },
       { key: 'by', label: T('cw.cDecidedBy'), value: r => r.res.source + ':' + (r.res.rule == null ? '' : r.res.rule), render: r => {
         const bits = [el('span', { class: 'note', text: decidedBy(r.res, rows) })];
+        if (suggest.has(r.item.key) && HR.classify && (cfg.categories || []).some(c => c.id === 'privileged')) {
+          bits.push(el('span', { class: 'pill warn', title: T('cw.suggestTip'), text: T('cw.suggestPriv') }));
+          bits.push(el('button', { class: 'btn sm', text: T('cw.confirm'), onclick: () => { setOverride(r, 'privileged'); redraw(); } }));
+        }
         if (vc && vc.has(r.item.key)) bits.push(el('span', { class: 'pill', title: T('cw.wasTip'), text: T('cw.was', { what: HR.config.labelOf(targets.find(c => c.id === vc.get(r.item.key)) || { label: vc.get(r.item.key) }) }) }));
         if (r.res.source === 'family') {
           const famKey = HR.classify.famStoreKey(r.item.system, isPerm ? r.res.fam : r.res.cohort);

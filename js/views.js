@@ -2797,7 +2797,7 @@
     const hintCatCount = item => {
       const m2 = HR.app.state.model;
       if (!m2) return null;
-      return { valid: true, count: m2.permissionList.filter(p => HR.hints.matchesRow(item, p.name)).length };
+      return { valid: true, count: m2.permissionList.filter(p => HR.hints.matchesRow(item, p.name, HR.classify.pathOf(p, { dir: m2.directory }))).length };
     };
     const hintClsCount = item => {
       const m2 = HR.app.state.model;

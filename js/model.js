@@ -22,8 +22,8 @@
     /* Categories and account types are decided by js/classify.js, the same resolver the
        workbench previews with. The saved answers and rows are read once per build. */
     const clsCtx = {
-      perm: { cfg, rows: HR.hints.rowsFor('categories'), overrides: HR.config.getCatOverrides(), families: HR.config.getCatFamilies() },
-      acc: { cfg, rows: HR.hints.rowsFor('classes'), overrides: HR.config.getClsOverrides(), families: HR.config.getClsFamilies() }
+      perm: { cfg, rows: HR.hints.rowsFor('categories'), overrides: HR.config.getCatOverrides(), families: HR.config.getCatFamilies(), dir: opts && opts.directory },
+      acc: { cfg, rows: HR.hints.rowsFor('classes'), overrides: HR.config.getClsOverrides(), families: HR.config.getClsFamilies(), dir: opts && opts.directory }
     };
 
     const akey = r => accountKey(r.system, r.userName);
@@ -68,7 +68,7 @@
             category: cat.id, categoryLabel: HR.config.labelOf(cat), sensitivity: cat.sensitivity, colorSlot: cat.color,
             categorySource: res.source, categoryRule: res.rule,
             categoryRuleOp: res.ruleOp || null, categoryRuleToken: res.ruleToken || null,
-            categorySignal: res.signal, categoryConfidence: res.confidence,
+            categorySignal: res.signal, categorySignalVia: res.via || null, categoryConfidence: res.confidence,
             monthlyPrice: price.monthly, priceLabel: price.entry ? price.entry.label : null,
             holders: new Set(), holdersEnabled: 0, holdersDisabled: 0, holdersOrphan: 0,
             missingFor: new Set(), issues: {}, records: []

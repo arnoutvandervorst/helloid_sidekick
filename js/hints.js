@@ -124,7 +124,8 @@
   const tokens = row => String(row.t || '').toLowerCase().split(',')
     .map(s => s.trim()).filter(Boolean);
 
-  const OPS = ['starts', 'contains', 'ends', 'word', 'equals'];
+  /* `path` reads where the group lives — the OU or DN text, not the name. */
+  const OPS = ['starts', 'contains', 'ends', 'word', 'equals', 'path'];
 
   /** The words of a name: split on separators and on case changes, so
       "GG_FinanceAdmin" yields gg, finance, admin. */
@@ -135,12 +136,13 @@
   /** Which of this row's tokens hits this entitlement name — the token, or null.
       The one matcher: the build, the workbench preview and its hit counts all use it,
       so a rule never shows hits it cannot win. */
-  function matchToken(row, name) {
+  function matchToken(row, name, path) {
     const n = String(name || '').toLowerCase();
     if (!n) return null;
     const toks = tokens(row);
     let hit;
     switch (row.op || 'starts') {
+      case 'path': { const pth = String(path || '').toLowerCase(); hit = pth ? toks.find(x => pth.includes(x)) : undefined; break; }
       case 'contains': hit = toks.find(x => n.includes(x)); break;
       case 'ends': hit = toks.find(x => n.endsWith(x)); break;
       case 'equals': hit = toks.find(x => n === x); break;
@@ -156,7 +158,7 @@
     }
     return hit == null ? null : hit;
   }
-  const matchesRow = (row, name) => matchToken(row, name) != null;
+  const matchesRow = (row, name, path) => matchToken(row, name, path) != null;
 
   const rowsFor = kind => {
     const cfg = HR.config ? HR.config.get() : null;

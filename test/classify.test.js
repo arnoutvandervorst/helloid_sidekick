@@ -168,6 +168,41 @@ eq('upgrade: well-known still on top', up2[0].b, 'privileged-known');
 const upC = HR.hints.upgradeRows(JSON.parse(JSON.stringify(V1.classes)), 'classes');
 eq('upgrade classes: `a` gone', upC.find(r => r.id === 'admin').t.split(',').map(x => x.trim()).includes('a'), false);
 
+/* ---------- signals: what the data says beyond the name ---------- */
+const meta = (name, m) => [name.toLowerCase(), Object.assign({ name, parentNames: [], category: 'Security', scope: '', ou: '' }, m || {})];
+const dir = { groupMeta: new Map([
+  meta('Domain Admins'),
+  meta('GRP-Helpdesk-L2', { parentNames: ['Domain Admins'] }),          // nested straight in
+  meta('GRP-Helpdesk-L1', { parentNames: ['GRP-Helpdesk-L2'] }),        // two levels down
+  meta('Team-Finance', { parentNames: ['Team-Sales'] }),
+  meta('Team-Sales', { parentNames: ['Team-Finance'] }),                // a containment cycle
+  meta('DL_FS_Finance_RW', { category: 'Distribution' }),
+  meta('Finance Updates', { category: 'Distribution' }),
+  meta('Project Zeus', { scope: 'Microsoft365' }),
+  meta('Zeus Initiative', { scope: 'Microsoft365' }),
+  meta('Readers', { ou: 'OU=Admin Groups,DC=corp,DC=local' })
+]), users: [{ userName: 'jdoe', ou: 'OU=Service Accounts,DC=corp' }, { userName: 'piet', ou: 'OU=Beheer,DC=corp' }] };
+const sp = (name, extra) => HR.classify.permission(Object.assign({ name, system: 'AD' }, extra || {}), { cfg, dir });
+eq('signal: nested in Domain Admins is privileged', sp('GRP-Helpdesk-L2').id, 'privileged');
+eq('signal: nested signal names the group', sp('GRP-Helpdesk-L2').via, 'Domain Admins');
+eq('signal: two levels down is privileged', sp('GRP-Helpdesk-L1').id, 'privileged');
+eq('signal: nesting beats a name rule', sp('GRP-Helpdesk-L2').source, 'signal');
+eq('signal: a nesting cycle terminates', sp('Team-Finance').id, 'team');
+eq('signal: directory Distribution beats the name', sp('DL_FS_Finance_RW').id, 'distribution');
+eq('signal: unnamed distribution group', sp('Finance Updates').id, 'distribution');
+eq('signal: M365 group placed when no rule did', sp('Zeus Initiative').signal, 'group-m365');
+eq('signal: a name rule beats the soft M365 hint', sp('Project Zeus').id, 'project');
+eq('signal: licence SKU from the directory', sp('POWER_AUTOMATE_FREE', { record: { permissionConfig: 'license' } }).id, 'licence');
+eq('signal: no directory, no signal', HR.classify.permission({ name: 'Finance Updates', system: 'AD' }, { cfg }).id, 'other');
+const priced = Object.assign({}, cfg, { priceBook: [{ classification: 'licence', pattern: '^Adobe-.*$', _rx: /^Adobe-.*$/i, price: 20, unit: 'month' }] });
+eq('signal: price-book licence row names it', HR.classify.permission({ name: 'Adobe-Pro', system: 'AD' }, { cfg: priced }).signal, 'price-licence');
+eq('path op: OU text', HR.classify.permission({ name: 'Readers', system: 'AD' }, { cfg, dir, rows: [{ op: 'path', t: 'admin groups', id: 'privileged' }] }).id, 'privileged');
+eq('path op: recon DN in brackets', HR.classify.permission({ name: 'X', system: 'AD', path: 'corp.local/Tier0/Groups' }, { cfg, rows: [{ op: 'path', t: 'tier0', id: 'privileged' }] }).id, 'privileged');
+eq('path op: nesting chain is not a path', HR.classify.permission({ name: 'X', system: 'AD', path: 'via Tier0-Admins' }, { cfg, rows: [{ op: 'path', t: 'tier0', id: 'privileged' }] }).id, 'other');
+const sa = userName => HR.classify.account({ key: 'AD|' + userName, system: 'AD', userName }, { cfg, dir });
+eq('signal: service-account OU', sa('jdoe').id, 'service');
+eq('signal: beheer OU', sa('piet').id, 'admin');
+
 console.log(failures.join('\n'));
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

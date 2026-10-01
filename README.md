@@ -321,6 +321,18 @@ managed service accounts are service accounts when no rule says otherwise. The
 workbench saves only the parts you edited, and asks before replacing a part that was
 changed elsewhere meanwhile.
 
+**Signals beyond the name.** With a directory export loaded (AD or Entra), the group's own
+facts count. Hard facts outrank a name rule: a licence SKU from Entra is a licence, a
+group the directory calls *Distribution* is a distribution list (an AGDLP `DL_…` security
+group is not), and a group nested at any depth in a privileged group is privileged — it
+hands out what its parent has. Soft hints only place what no rule did: a Microsoft 365
+(Unified) group is a team, and a price-book row written for licences that names a group
+by pattern makes it a licence. Accounts in a service-account OU are service accounts, in
+an admin/beheer OU admin accounts. A rule can also read **where a group lives** (*lives in
+(OU / path)*): the DN in the reconciliation's brackets or the directory OU. In the
+workbench, an unplaced entitlement held only by admin and service accounts is marked
+*probably privileged* with a one-click confirm — a suggestion, never a silent decision.
+
 Tests: `NODE_OPTIONS= node test/classify.test.js` runs the golden list against the real
 modules (no dependencies).
 
