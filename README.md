@@ -357,6 +357,23 @@ account names, and see the match count, a sample of hits, and a warning when the
 invalid or matches everything. Every rule row in Settings also shows its live match count
 against the loaded import.
 
+## Risk exposure
+
+Every account gets a 0–100 score from named parts — an identity nobody owns, privileged
+access held (owned and managed or not; ×1.5 when it is outside the model), entitlements
+outside the model (distinct, not rows), disabled-but-entitled, rarity within its own
+system, unusual for its peers, a toxic combination, stacked licences — scaled by account
+type and by who the account works for. Rows someone triaged in HelloID (any resolution but
+None) stay visible but no longer count; an owner confirmed by hand in Matching outranks the
+export's "account unmanaged"; missing access is a service problem, not exposure.
+
+The organisation's exposure follows its **worst** accounts, not the average: 45 % the mean of
+the riskiest 0.5 % of enabled accounts (at least ten), 35 % how many enabled accounts sit at
+high or critical on a saturating curve (10 → 63, 20 → 86), 20 % the share nobody owns. Twenty
+unowned domain admins weigh about the same among fifty users as among five thousand — an
+average used to hide them. Risk › Score build-up lists the riskiest accounts with the parts
+of their score. Tests: `NODE_OPTIONS= node test/risk.test.js`.
+
 ## Compliance scorecards
 
 Compliance opens on **scorecards**: one card for all KPIs and one per framework — NIS2

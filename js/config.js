@@ -184,14 +184,16 @@
   const DEFAULT_RISK = {
     issueWeights: {
       'Account unmanaged': 28,      // an identity nobody owns
-      'Permission unmanaged': 2,    // entitlement outside the IAM model
-      'Permission missing': 6,      // person should have it but does not
-      'Unspecified': 3
+      'Permission unmanaged': 2     // entitlement outside the IAM model
     },
     orphanEnabledBonus: 22,         // no person + still enabled
     disabledWithEntitlementsBonus: 14,
     disabledWithLicenceBonus: 8,
     privilegedOrphanBonus: 30,
+    privilegedBonus: 12,            // holding any privileged / server entitlement
+    privilegedPerExtra: 3,          // each further one
+    privilegedCap: 20,
+    privilegedUnmanagedMult: 1.5,   // when one of them is held outside the model
     rarityBonus: 10,                // max bonus for entitlements almost nobody else holds
     stackedLicenceBonus: 8,
     outlierBonus: 12,               // peer-group entitlement outlier

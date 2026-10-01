@@ -38,7 +38,7 @@
           key: ak, system: r.system, userName: r.userName,
           displayName: r.accountDisplayName || r.userName,
           enabled: r.enabled, personRaw: r.personRaw, personName: r.personRaw, personId: '',
-          records: [], permKeys: new Set(), missingPermKeys: new Set(),
+          records: [], permKeys: new Set(), missingPermKeys: new Set(), unmanagedPermKeys: new Set(),
           issues: { total: 0 }, resolutions: {},
           flagged: { accountUnmanaged: false }
         };
@@ -52,7 +52,10 @@
       a.issues[r.issue] = (a.issues[r.issue] || 0) + 1;
       a.issues.total++;
       a.resolutions[r.resolution] = (a.resolutions[r.resolution] || 0) + 1;
-      if (r.issue === ISSUE_ACCOUNT) a.flagged.accountUnmanaged = true;
+      /* A row someone triaged in HelloID (resolution Excluded, …) is accounted for: it
+         stays visible, but it no longer counts as exposure. */
+      const open = !r.resolution || r.resolution === 'None';
+      if (r.issue === ISSUE_ACCOUNT && open) a.flagged.accountUnmanaged = true;
 
       /* ---- permission node ---- */
       if (r.permission) {
@@ -79,6 +82,7 @@
         p.issues[r.issue] = (p.issues[r.issue] || 0) + 1;
         if (r.issue === ISSUE_PERM_MISSING) { p.missingFor.add(ak); a.missingPermKeys.add(pk); }
         else { p.holders.add(ak); a.permKeys.add(pk); }
+        if (r.issue === ISSUE_PERM_UNMANAGED && open) a.unmanagedPermKeys.add(pk);
       }
 
       /* ---- person node ---- */
@@ -126,7 +130,9 @@
       }
       a.permCount = a.permKeys.size;
       a.missingCount = a.missingPermKeys.size;
-      a.unmanagedPermCount = a.issues[ISSUE_PERM_UNMANAGED] || 0;
+      /* Distinct entitlements held outside the model and not triaged — not rows. */
+      a.unmanagedPermCount = a.unmanagedPermKeys.size;
+      a.unmanagedPerms = Array.from(a.unmanagedPermKeys).map(k => permissions.get(k)).filter(Boolean);
       a.perms = Array.from(a.permKeys).map(k => permissions.get(k)).filter(Boolean);
       a.missingPerms = Array.from(a.missingPermKeys).map(k => permissions.get(k)).filter(Boolean);
       a.licences = a.perms.filter(p => p.category === 'licence');
@@ -182,7 +188,9 @@
         if (a.orphan) p.holdersOrphan++;
       }
       p.holderCount = p.holders.size;
-      p.rare = p.holderCount <= cfg.rarityThreshold;
+      /* Rare only means something in a system with a crowd to be rare in: in a connector
+         with a dozen accounts every group is held by few. */
+      p.rare = p.holderCount <= cfg.rarityThreshold && (systems.get(p.system) ? systems.get(p.system).accounts.size : 0) >= 20;
       p.monthlyTotal = (p.monthlyPrice || 0) * p.holderCount;
     }
 

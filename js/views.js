@@ -1008,7 +1008,9 @@
     top.append(
       /* The arc is the exposure itself: a short arc is a small exposure, coloured by band. */
       ringCard({ title: T('gs.risk'), kicker: T('gs.lowerBetter'), score: m.risk.overall / 100, value: String(m.risk.overall), sub: '/ 100',
-        band: m.summary.riskBand, min: 0.03, delta: bDelta('riskScore'), foot: T('c.' + m.summary.riskBand) + ' \u00b7 ' + T('gs.halfOfShort') }),
+        band: m.summary.riskBand, min: 0.03, delta: bDelta('riskScore'),
+        foot: T('c.' + m.summary.riskBand) + ' \u00b7 ' + T(m.summary.governancePartial ? 'gs.allOfShort' : 'gs.halfOfShort'),
+        onClick: () => HR.app.go('risk', { tab: 'score' }) }),
       tile(T('rk.criticalFindings'), String(m.summary.criticalFindings), T('rk.actWeek'), { severity: 'critical' }),
       tile(T('rk.highFindings'), String(m.summary.highFindings), T('rk.actQuarter'), { severity: 'high' }),
       tile(T('rk.atHigh'), String((m.risk.bands.critical || 0) + (m.risk.bands.high || 0)), T('rk.ofN', { n: m.summary.accounts }), { severity: 'high' })
@@ -1078,6 +1080,23 @@
   /* How the overall number is built, and which classes and categories carry it. */
   function riskScoreTab(m) {
     const g = el('div', { class: 'grid g2' });
+    /* The accounts that carry the number, each with what put it there. */
+    const top = m.accountList.filter(a => a.enabled !== false).slice().sort((x, y) => y.riskScore - x.riskScore || y.riskRaw - x.riskRaw).slice(0, 25);
+    const parts = a => el('div', { class: 'risk-parts' }, (a.riskParts || []).slice(0, 4).map(p =>
+      el('span', { class: 'risk-part', title: p.detail || '' }, [el('i', { style: 'width:' + Math.max(4, Math.min(100, p.value)).toFixed(0) + 'px' }), document.createTextNode(p.label + ' ' + U.fmtNum(p.value, 0))])));
+    const why = card(T('rk.topWhy'), T('rk.topWhyNote', { n: U.fmtInt(m.risk.highLive || 0) }), HR.table.make({
+      columns: [
+        { key: 'userName', label: T('c.account') },
+        { key: 'person', label: T('c.person'), value: a => a.personName || '', render: a => a.personName ? el('span', { text: a.personName }) : el('span', { class: 'note', text: T('c.unowned') }) },
+        { key: 'cls', label: T('c.class'), value: a => a.clsLabel },
+        { key: 'riskScore', label: T('c.risk'), num: true, render: a => scoreBar(a.riskScore) },
+        { key: 'parts', label: T('rk.cWhy'), sortable: false, render: parts }
+      ], rows: top, pageSize: 25, exportName: 'riskiest-accounts',
+      initialSort: { key: 'riskScore', dir: -1 },
+      onRowClick: a => drawerAccount(a)
+    }));
+    why.style.gridColumn = '1 / -1';
+    g.appendChild(why);
     g.appendChild(card(T('rk.formula'), null, [
       (() => {
         const t = el('table', { class: 'tbl' });
@@ -2922,9 +2941,15 @@
       card(T('st.riskWeights'), T('st.riskWeightsNote'), el('div', { class: 'row' }, [
       numField(cfg.risk.issueWeights, 'Account unmanaged', T('st.wAccountUnmanaged')),
       numField(cfg.risk.issueWeights, 'Permission unmanaged', T('st.wPermUnmanaged')),
-      numField(cfg.risk.issueWeights, 'Permission missing', T('st.wPermMissing')),
       numField(cfg.risk, 'orphanEnabledBonus', T('st.wOrphanEnabled')),
       numField(cfg.risk, 'privilegedOrphanBonus', T('st.wOrphanPriv')),
+      numField(cfg.risk, 'privilegedBonus', T('st.wPriv')),
+      numField(cfg.risk, 'privilegedPerExtra', T('st.wPrivExtra')),
+      numField(cfg.risk, 'privilegedCap', T('st.wPrivCap')),
+      numField(cfg.risk, 'privilegedUnmanagedMult', T('st.wPrivUnmanaged'), '0.1'),
+      numField(cfg.risk, 'toxicBonus', T('st.wToxic')),
+      numField(cfg.risk, 'unmanagedPermCap', T('st.wDriftCap')),
+      numField(cfg.risk, 'accountCap', T('st.wAccountCap')),
       numField(cfg.risk, 'disabledWithEntitlementsBonus', T('st.wDisabledEnt')),
       numField(cfg.risk, 'disabledWithLicenceBonus', T('st.wDisabledLic')),
       numField(cfg.risk, 'rarityBonus', T('st.wRarity')),

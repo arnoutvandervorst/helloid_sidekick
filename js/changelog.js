@@ -18,6 +18,14 @@
 
   const ENTRIES = [
     {
+      version: '2026.10.6', date: '2026-10-01',
+      changes: [
+        'Risk exposure follows the worst accounts, not the average one. It was a population average: twenty unowned domain admins among five thousand clean users read as risk 1 and governance 99. Now it is 45 % the riskiest 0.5 % of enabled accounts, 35 % how many enabled accounts sit at high or critical (an absolute count on a saturating curve) and 20 % the share nobody owns. Expect your risk number to rise and the governance score to fall where a handful of accounts carry real exposure — the demo goes from 24 to 82. Older data points keep their stored score until you recalculate the trends.',
+        'Holding privileged access now counts on its own (12 points, +3 per further one, up to 20; ×1.5 when one of them is outside the model) — before, an owned admin in Domain Admins scored nothing for it. Rows someone triaged in HelloID (resolution Excluded or any other) stay visible but no longer count as exposure, and an owner confirmed by hand in Matching outranks the export\u2019s “account unmanaged”. Missing access no longer raises risk (it stays a finding). Entitlements outside the model count per entitlement, not per row. A permission is only “rare” in a system with at least twenty accounts. No more NaN on an export without accounts.',
+        'Risk › Score build-up opens with the riskiest accounts and the parts of each score; the risk ring opens it. The toxic-combination, privileged-access and ceiling weights are editable in Settings.'
+      ]
+    },
+    {
       version: '2026.10.5', date: '2026-10-01',
       changes: [
         'The Classified ring tells the truth: it weighs by access — the share of all assignments whose entitlement has a category and whose account a known type — so an unplaced Domain Admins with forty holders weighs forty instead of one name in thousands. The count by name sits under it. Compliance warns when less than 80 % of the access is placed.',
