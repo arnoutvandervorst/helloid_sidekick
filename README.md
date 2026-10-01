@@ -299,6 +299,21 @@ role, file share (`fs`, `shr`, `share`…), application, mailbox, project / work
 distribution list, team and device. Account-type rows match an account's first or last
 word exactly.
 
+**One resolver.** Every category and account type is decided in `js/classify.js` — the
+model build, the workbench preview and the findings all call it, so what the workbench
+shows is what Save produces. Order: item answer › family answer › rules › signals ›
+fallback (`other` / `user`, by id). Rules apply to every name, prefixed or not; a rule
+whose category was deleted is skipped rather than swallowing names. Item answers for
+entitlements are kept per system. Account names lose their directory decoration first
+(`DOMAIN\`, `@domain`, a trailing `$`); a recognised trailing word beats an unrecognised
+leading one (`jan-adm` is an admin account); `#EXT#` guests are external and `…$`
+managed service accounts are service accounts when no rule says otherwise. The
+workbench saves only the parts you edited, and asks before replacing a part that was
+changed elsewhere meanwhile.
+
+Tests: `NODE_OPTIONS= node test/classify.test.js` runs the golden list against the real
+modules (no dependencies).
+
 A **pattern tester** sits on the same page and in Settings: type a regex, pick permission or
 account names, and see the match count, a sample of hits, and a warning when the pattern is
 invalid or matches everything. Every rule row in Settings also shows its live match count

@@ -1,11 +1,13 @@
 /* The recognition vocabulary: the product knowledge behind every "recognised"
-   answer in the classification wizard.
+   answer. The decision itself is made in js/classify.js; this file holds the rows
+   and the one matcher everything shares.
 
    A category row says how its words match an entitlement's name — starts with
    (the default, and what the built-ins mean), contains, ends with, is a whole
-   word, is exactly — in plain language, no regex. An account name's leading or
-   trailing word is compared against the account-type rows (the word IS a
-   token). First row that hits wins, a wizard answer always beats a hint.
+   word, is exactly — in plain language, no regex. An account's cohort word (a short
+   leading or trailing word, js/classify.js cohortKeyOf) is compared against the
+   account-type rows: the word IS a token. First row that hits wins; an item or
+   family answer always beats a row.
 
    The rows are plain data, editable in Settings › Recognition. Edits are
    stored in cfg.hints and travel with the settings export; without edits the
@@ -49,20 +51,24 @@
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 
-  /** Does this row's vocabulary hit this entitlement name? */
-  function matchesRow(row, name) {
+  /** Which of this row's tokens hits this entitlement name — the token, or null.
+      The one matcher: the build, the workbench preview and its hit counts all use it,
+      so a rule never shows hits it cannot win. */
+  function matchToken(row, name) {
     const n = String(name || '').toLowerCase();
-    if (!n) return false;
+    if (!n) return null;
     const toks = tokens(row);
-    if (!toks.length) return false;
+    let hit;
     switch (row.op || 'starts') {
-      case 'contains': return toks.some(x => n.includes(x));
-      case 'ends': return toks.some(x => n.endsWith(x));
-      case 'equals': return toks.some(x => n === x);
-      case 'word': { const w = wordsOf(name); return toks.some(x => w.includes(x)); }
-      default: return toks.some(x => n.startsWith(x));
+      case 'contains': hit = toks.find(x => n.includes(x)); break;
+      case 'ends': hit = toks.find(x => n.endsWith(x)); break;
+      case 'equals': hit = toks.find(x => n === x); break;
+      case 'word': { const w = wordsOf(name); hit = toks.find(x => w.includes(x)); break; }
+      default: hit = toks.find(x => n.startsWith(x));
     }
+    return hit == null ? null : hit;
   }
+  const matchesRow = (row, name) => matchToken(row, name) != null;
 
   const rowsFor = kind => {
     const cfg = HR.config ? HR.config.get() : null;
@@ -70,20 +76,14 @@
     return (Array.isArray(stored) && stored.length) ? stored : DEFAULTS[kind];
   };
 
-  /** Which category row wins for an entitlement — its index and the row — or null.
-      `rows` may be a draft vocabulary (the workbench previews edits before saving). */
+  /** Which category row hits an entitlement name — its index and the row — or null.
+      `rows` may be a draft vocabulary. A bare family token (no name) is matched as the
+      name, which is what "starts with" means for a prefix. */
   function explain(token, name, rows) {
-    const t = String(token || '').toLowerCase();
-    const full = String(name || '') || t;
-    if (!t && !full) return null;
+    const full = String(name || '') || String(token || '');
+    if (!full) return null;
     const list = rows || rowsFor('categories');
-    for (let i = 0; i < list.length; i++) {
-      const row = list[i];
-      const op = row.op || 'starts';
-      /* "starts" keeps its old meaning: the first word starts with the token. */
-      const hit = op === 'starts' ? (t ? tokens(row).some(x => t.startsWith(x)) : matchesRow(row, full)) : matchesRow(row, full);
-      if (hit) return { index: i, row };
-    }
+    for (let i = 0; i < list.length; i++) if (matchesRow(list[i], full)) return { index: i, row: list[i] };
     return null;
   }
 
@@ -113,5 +113,5 @@
     return { id: hit.row.id, weight: def ? def.weight : 1.2, rule: hit.index };
   }
 
-  HR.hints = { DEFAULTS, OPS, categoryHintFor, classHintFor, explain, explainClass, matchesRow, wordsOf, tokens, rowsFor };
+  HR.hints = { DEFAULTS, OPS, categoryHintFor, classHintFor, explain, explainClass, matchToken, matchesRow, wordsOf, tokens, rowsFor };
 })(window.HR);

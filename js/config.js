@@ -51,8 +51,10 @@
   }
 
   /* --- permission taxonomy -------------------------------------------------
-     Matched in order against the permission display name. `sensitivity` is the
-     multiplier applied to a permission-level risk weight. */
+     The categories a permission can land in; which one it lands in is decided by
+     js/classify.js from the recognition rows (js/hints.js), item and family answers.
+     `sensitivity` is the multiplier applied to a permission-level risk weight.
+     `other` is the fallback by id, wherever it sits in the list. */
   const DEFAULT_CATEGORIES = [
     { id: 'privileged', key: 'cat.privileged', label: 'Privileged / PAM', sensitivity: 3.0, color: 8 },
     { id: 'server', key: 'cat.server', label: 'Server / infra', sensitivity: 2.4, color: 7 },
@@ -70,13 +72,11 @@
   ];
 
   /* --- account classes ------------------------------------------------------
-     What the account technically is; `weight` scales identity risk. Classified by
-     the same layered engine as employee categories — `pattern` matches username
-     then display name, `groupPattern` the entitlements it holds, `vaultPattern`
-     the linked contract text. Name evidence leads here (naming conventions are the
-     stronger signal for admin/service accounts); membership catches the admin
-     account that does not announce itself. The last row is the fallback and is
-     not matched on patterns. */
+     What the account technically is; `weight` scales identity risk. Decided by
+     js/classify.js: item and cohort answers, the recognition rows against the
+     name's cohort word, the directory's own decoration (#EXT# guests, `$` managed
+     service accounts), then privileged membership catches the admin account that
+     does not announce itself. `user` is the fallback by id. */
   const DEFAULT_ACCOUNT_CLASSES = [
     { id: 'admin', key: 'cls.admin', label: 'Admin account', weight: 2.4 },
     { id: 'service', key: 'cls.service', label: 'Service account', weight: 1.6 },
@@ -372,7 +372,6 @@
       try { r._rx = new RegExp(r.pattern, 'i'); }
       catch (e) { r._rx = /$^/; r._bad = true; }
     });
-    migratePriceBook(cfg);
     rx(cfg.priceBook);
     /* Employee categories keep their layered patterns; permission categories and
        account classes are pure definitions since classification moved to mined
@@ -389,27 +388,6 @@
     layers(cfg.employeeCategories, 'accountPattern');
   }
 
-  /* Price rows saved before rules linked to classifications carry only a regex.
-     Classify the pattern by its own text: when the pattern matches the sample it
-     denotes ("^LIC-M365-E5$" → "LIC-M365-E5"), that sample can be classified like
-     any permission name and the row lands in that classification with its old
-     pattern as the refine. A pattern too regex-shaped to yield a sample prices
-     any classification — exactly what it did before. Idempotent: only rows with
-     no classification field at all are touched. */
-  function migratePriceBook(cfg) {
-    (cfg.priceBook || []).forEach(p => {
-      if (p.classification !== undefined) return;
-      const sample = (p.pattern || '').replace(/^\^/, '').replace(/\$$/, '').replace(/\\(.)/g, '$1');
-      let cls = '';
-      try {
-        if (sample && new RegExp(p.pattern, 'i').test(sample)) {
-          const cat = cfg.categories.find(c => c._rx && c._rx.test(sample));
-          if (cat && cat.id !== 'other') cls = cat.id;
-        }
-      } catch (e) { /* unreadable pattern keeps any-classification */ }
-      p.classification = cls;
-    });
-  }
 
   const clone = o => JSON.parse(JSON.stringify(o));
   function stripCompiled(cfg) {
@@ -440,38 +418,10 @@
     const cfg = load();
     return cfg.accountClasses.find(c => c.id === id) || cfg.accountClasses[cfg.accountClasses.length - 1];
   };
-  /* Resolve a permission name without model context: per-item assignment, then a
-     family assignment in any system, then the built-in name hint, else the
-     fallback. The model build does the same with the system known. */
-  const categoryFor = (name, system) => {
-    const cfg = load();
-    const ov = (cfg.catOverrides || {})[name];
-    if (ov) return categoryDefOf(ov);
-    const fam = HR.wizard ? HR.wizard.famKeyOf(name) : null;
-    if (fam) {
-      const fams = cfg.catFamilies || {};
-      const key = system ? system + '\u001f' + fam : Object.keys(fams).find(k => k.endsWith('\u001f' + fam));
-      if (key && fams[key]) return categoryDefOf(fams[key]);
-    }
-    const hint = HR.mine ? HR.mine.hintFor(fam, name) : null;
-    if (hint) {
-      const def = cfg.categories.find(c => c.id === hint.hint);
-      if (def) return def;
-    }
-    return cfg.categories[cfg.categories.length - 1];
-  };
-  /* Name evidence only; the model build adds assignments and the membership
-     heuristic (privileged holdings make an admin account). */
-  const accountClassFor = (userName) => {
-    const cfg = load();
-    const key = HR.wizard ? HR.wizard.cohortKeyOf(userName) : null;
-    const hint = key && HR.mine ? HR.mine.classHintFor(key.split(':')[1] || '') : null;
-    if (hint) {
-      const def = cfg.accountClasses.find(c => c.id === hint.id);
-      if (def) return def;
-    }
-    return cfg.accountClasses[cfg.accountClasses.length - 1];
-  };
+  /* A permission name's category outside a model build — the same resolver the build
+     uses (js/classify.js). Pass the system when known: item and family answers are
+     stored per system. */
+  const categoryFor = (name, system) => HR.classify.permission({ name, system: system || '' }, { cfg: load() }).def;
   /* A rule applies when its classification matches (empty = any) and its refine
      regex matches (empty = the whole classification). First match wins. */
   const priceFor = (name, categoryId) => {
@@ -803,7 +753,7 @@
     return cfg.namegen;
   }
 
-  HR.config = { get: load, save, reset, DEFAULTS, categoryFor, accountClassFor, priceFor, compileMatch,
+  HR.config = { get: load, save, reset, DEFAULTS, categoryFor, priceFor, compileMatch,
     severityOf, clone, labelOf, exportJson, importJson, looksLikeSettings, FILE_KIND,
     getMap, setMapping, exportMap, exportMapCsv, importMap, looksLikeProductMap, MAP_KIND,
     getMatchBook, setMatchDecision, exportMatchBook, importMatchBook, looksLikeMatchBook, MATCH_KIND,

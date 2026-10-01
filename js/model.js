@@ -19,14 +19,12 @@
     const permissions = new Map();
     const persons = new Map();
     const systems = new Map();
-    /* Per-item classification answers from the wizard: they win over every
-       pattern rule, the way a corrected bank transaction stays corrected. */
-    const catOverrides = HR.config.getCatOverrides();
-    const clsOverrides = HR.config.getClsOverrides();
-    const catFamilies = HR.config.getCatFamilies();
-    const clsFamilies = HR.config.getClsFamilies();
-    const categoryById = id => (cfg.categories || []).find(c => c.id === id) || null;
-    const classById = id => (cfg.accountClasses || []).find(c => c.id === id) || null;
+    /* Categories and account types are decided by js/classify.js, the same resolver the
+       workbench previews with. The saved answers and rows are read once per build. */
+    const clsCtx = {
+      perm: { cfg, rows: HR.hints.rowsFor('categories'), overrides: HR.config.getCatOverrides(), families: HR.config.getCatFamilies() },
+      acc: { cfg, rows: HR.hints.rowsFor('classes'), overrides: HR.config.getClsOverrides(), families: HR.config.getClsFamilies() }
+    };
 
     const akey = r => accountKey(r.system, r.userName);
     const pkey = r => permissionKey(r.system, r.permission);
@@ -61,27 +59,16 @@
         const pk = pkey(r);
         let p = permissions.get(pk);
         if (!p) {
-          /* item assignment > family assignment > built-in hint > fallback */
-          let cat = null, catSource = 'default', catRule = null;
-          const ov = catOverrides[r.permission];
-          if (ov && categoryById(ov)) { cat = categoryById(ov); catSource = 'manual'; }
-          if (!cat) {
-            const fam = HR.wizard.famKeyOf(r.permission);
-            if (fam) {
-              const famId = catFamilies[HR.wizard.famStoreKey(r.system, fam)];
-              if (famId && categoryById(famId)) { cat = categoryById(famId); catSource = 'family'; }
-              if (!cat) {
-                const hint = HR.mine.hintFor(fam, r.permission);
-                if (hint && categoryById(hint.hint)) { cat = categoryById(hint.hint); catSource = 'auto'; catRule = hint.rule; }
-              }
-            }
-          }
-          if (!cat) cat = cfg.categories[cfg.categories.length - 1];
+          /* item answer > family answer > rules > signals > fallback (js/classify.js) */
+          const res = HR.classify.permission({ name: r.permission, system: r.system, path: r.permissionPath, record: r }, clsCtx.perm);
+          const cat = res.def;
           const price = HR.config.priceFor(r.permission, cat.id);
           p = {
             key: pk, system: r.system, name: r.permission, path: r.permissionPath,
             category: cat.id, categoryLabel: HR.config.labelOf(cat), sensitivity: cat.sensitivity, colorSlot: cat.color,
-            categorySource: catSource, categoryRule: catRule,
+            categorySource: res.source, categoryRule: res.rule,
+            categoryRuleOp: res.ruleOp || null, categoryRuleToken: res.ruleToken || null,
+            categorySignal: res.signal, categoryConfidence: res.confidence,
             monthlyPrice: price.monthly, priceLabel: price.entry ? price.entry.label : null,
             holders: new Set(), holdersEnabled: 0, holdersDisabled: 0, holdersOrphan: 0,
             missingFor: new Set(), issues: {}, records: []
@@ -160,29 +147,16 @@
          membership > fallback. The membership step replaces the old
          group-pattern layer: an account holding privileged entitlements is an
          admin account, whatever its name says, unless assigned otherwise. */
-      let clsRow = null, clsSource = 'default', clsRule = null;
-      const clsOv = clsOverrides[a.key];
-      if (clsOv && classById(clsOv)) { clsRow = classById(clsOv); clsSource = 'manual'; }
-      if (!clsRow) {
-        const co = HR.wizard.cohortKeyOf(a.userName);
-        if (co) {
-          const famId = clsFamilies[HR.wizard.famStoreKey(a.system, co)];
-          if (famId && classById(famId)) { clsRow = classById(famId); clsSource = 'family'; }
-          if (!clsRow) {
-            const hint = HR.mine.classHintFor(co.slice(2));
-            if (hint && classById(hint.id)) { clsRow = classById(hint.id); clsSource = 'auto'; clsRule = hint.rule; }
-          }
-        }
-      }
-      if (!clsRow && a.privileged.length && classById('admin')) {
-        clsRow = classById('admin'); clsSource = 'membership';
-      }
-      if (!clsRow) clsRow = cfg.accountClasses[cfg.accountClasses.length - 1];
+      const cres = HR.classify.account(a, clsCtx.acc);
+      const clsRow = cres.def;
       a.cls = clsRow.id;
       a.clsLabel = HR.config.labelOf(clsRow);
       a.clsWeight = clsRow.weight > 0 ? clsRow.weight : 1;
-      a.clsSource = clsSource;
-      a.clsRule = clsRule;
+      a.clsSource = cres.source;
+      a.clsRule = cres.rule;
+      a.clsRuleToken = cres.ruleToken || null;
+      a.clsSignal = cres.signal;
+      a.clsCohort = cres.cohort;
       const ec = classifyByLayers(cfg.employeeCategories || [], ['Vault', 'Account', 'Group'], ctx);
       a.ecat = ec.row ? ec.row.id : '';
       a.ecatLabel = ec.row ? HR.config.labelOf(ec.row) : '';
@@ -512,7 +486,7 @@
        account whose name carries a marker shape (adm-, svc-, …-test) nobody answered —
        by the wizard's own rule, so the count is what the wizard lists. A plain
        firstname.lastname account is a user account: the fallback is right there. */
-    const unclassifiedPerms = m.permissionList.filter(p => p.categorySource === 'default');
+    const unclassifiedPerms = m.permissionList.filter(HR.classify.isUnclassified);
     const unclassifiedAccs = HR.wizard && HR.wizard.unansweredAccounts ? HR.wizard.unansweredAccounts(m) : [];
     return {
       rows: m.records.length,

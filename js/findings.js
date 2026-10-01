@@ -141,8 +141,8 @@
       const rows = m.records.filter(r => r.issue === m.ISSUE_PERM_MISSING);
       if (!rows.length) return null;
       const byPerm = U.by(rows, r => r.permission);
-      const sensitive = Array.from(byPerm.keys()).some(name => {
-        const c = HR.config.categoryFor(name);
+      const sensitive = Array.from(byPerm.entries()).some(([name, rs]) => {
+        const c = HR.config.categoryFor(name, rs[0] && rs[0].system);
         return c.id === 'security' || c.id === 'privileged';
       });
       return Object.assign({

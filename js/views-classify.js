@@ -16,27 +16,39 @@
   const { card, tile, tabbed, openDrawer, closeDrawer } = HR.viewkit;
 
   /* ---- the draft: what the page edits, applied on save ----------------------- */
+  /* The draft remembers what the saved settings looked like when it was taken, per
+     field, and which fields the reader touched. Save writes only those fields, so an
+     edit made meanwhile in Settings › Recognition or the wizard to another field
+     survives; a clash on the same field is asked about, never silently overwritten. */
+  const FIELDS = ['hints', 'catOverrides', 'clsOverrides', 'catFamilies', 'clsFamilies'];
+  const savedField = (cfg, f) => f === 'hints'
+    ? { categories: HR.hints.rowsFor('categories'), classes: HR.hints.rowsFor('classes') }
+    : (cfg[f] || {});
+  const sig = v => JSON.stringify(v);
   let DRAFT = null;
-  function draft() {
-    if (DRAFT) return DRAFT;
+  function fresh() {
     const cfg = HR.config.get();
-    const clone = HR.config.clone;
-    DRAFT = {
-      hints: clone(cfg.hints && Array.isArray(cfg.hints.categories) ? cfg.hints : HR.hints.DEFAULTS),
-      catOverrides: clone(cfg.catOverrides || {}), clsOverrides: clone(cfg.clsOverrides || {}),
-      catFamilies: clone(cfg.catFamilies || {}), clsFamilies: clone(cfg.clsFamilies || {}),
-      dirty: false
-    };
+    const d = { dirty: false, touched: new Set(), base: {} };
+    FIELDS.forEach(f => { d[f] = HR.config.clone(savedField(cfg, f)); d.base[f] = sig(savedField(cfg, f)); });
+    return d;
+  }
+  function draft() {
+    /* An untouched draft follows the saved settings; it is only a cache until edited. */
+    if (DRAFT && !DRAFT.dirty) {
+      const cfg = HR.config.get();
+      if (FIELDS.some(f => sig(savedField(cfg, f)) !== DRAFT.base[f])) DRAFT = null;
+    }
+    if (!DRAFT) DRAFT = fresh();
     return DRAFT;
   }
-  const touch = () => { draft().dirty = true; };
+  const touch = field => { const d = draft(); d.dirty = true; d.touched.add(field); };
 
   async function save() {
     const d = draft(), cfg = HR.config.get();
-    cfg.hints = HR.config.clone(d.hints);
-    ['categories', 'classes'].forEach(k => (cfg.hints[k] || []).forEach(r => { delete r._new; }));
-    cfg.catOverrides = HR.config.clone(d.catOverrides); cfg.clsOverrides = HR.config.clone(d.clsOverrides);
-    cfg.catFamilies = HR.config.clone(d.catFamilies); cfg.clsFamilies = HR.config.clone(d.clsFamilies);
+    const clashed = Array.from(d.touched).filter(f => sig(savedField(cfg, f)) !== d.base[f]);
+    if (clashed.length && !confirm(T('cw.clash'))) return;
+    d.touched.forEach(f => { cfg[f] = HR.config.clone(d[f]); });
+    if (d.touched.has('hints')) ['categories', 'classes'].forEach(k => (cfg.hints[k] || []).forEach(r => { delete r._new; }));
     HR.config.save(cfg);
     DRAFT = null;
     await HR.app.rebuildBusy();
@@ -44,43 +56,23 @@
     HR.app.render();
   }
   function discard() { DRAFT = null; HR.app.render(); }
+  /* Leaving the page with unsaved rule edits asks first. */
+  window.addEventListener('beforeunload', e => { if (DRAFT && DRAFT.dirty) { e.preventDefault(); e.returnValue = ''; } });
 
   /* ---- the preview: the draft's answer for one name ---------------------------- */
-  const catDef = (cfg, id) => (cfg.categories || []).find(c => c.id === id) || null;
-  const clsDef = (cfg, id) => (cfg.accountClasses || []).find(c => c.id === id) || null;
-  const fallbackCat = cfg => cfg.categories[cfg.categories.length - 1];
-  const fallbackCls = cfg => cfg.accountClasses[cfg.accountClasses.length - 1];
-
-  function classifyPerm(p, d, cfg) {
-    const ov = d.catOverrides[p.name];
-    if (ov && catDef(cfg, ov)) return { id: ov, source: 'manual', rule: null };
-    const fam = HR.wizard.famKeyOf(p.name);
-    if (fam) {
-      const famId = d.catFamilies[HR.wizard.famStoreKey(p.system, fam)];
-      if (famId && catDef(cfg, famId)) return { id: famId, source: 'family', rule: null, fam };
-    }
-    const hit = HR.hints.explain(fam, p.name, d.hints.categories);
-    if (hit && catDef(cfg, hit.row.id)) return { id: hit.row.id, source: 'auto', rule: hit.index, fam };
-    return { id: fallbackCat(cfg).id, source: 'default', rule: null, fam };
-  }
-  function classifyAcc(a, d, cfg) {
-    const ov = d.clsOverrides[a.key];
-    if (ov && clsDef(cfg, ov)) return { id: ov, source: 'manual', rule: null };
-    const co = HR.wizard.cohortKeyOf(a.userName);
-    if (co) {
-      const famId = d.clsFamilies[HR.wizard.famStoreKey(a.system, co)];
-      if (famId && clsDef(cfg, famId)) return { id: famId, source: 'family', rule: null, token: co.slice(2) };
-      const hit = HR.hints.explainClass(co.slice(2), d.hints.classes);
-      if (hit && clsDef(cfg, hit.row.id)) return { id: hit.row.id, source: 'auto', rule: hit.index, token: co.slice(2) };
-    }
-    if (a.privileged && a.privileged.length && clsDef(cfg, 'admin')) return { id: 'admin', source: 'membership', rule: null };
-    return { id: fallbackCls(cfg).id, source: 'default', rule: null, token: co ? co.slice(2) : null };
-  }
+  /* The same resolver the model build uses (js/classify.js), handed the draft — so
+     what this page shows is what Save will produce. */
+  const fallbackCat = cfg => HR.classify.permission({ name: '' }, { cfg, rows: [], overrides: {}, families: {}, signals: false }).def;
+  const classifyPerm = (p, d, cfg) => HR.classify.permission(p,
+    { cfg, rows: d.hints.categories, overrides: d.catOverrides, families: d.catFamilies });
+  const classifyAcc = (a, d, cfg) => HR.classify.account(a,
+    { cfg, rows: d.hints.classes, overrides: d.clsOverrides, families: d.clsFamilies });
 
   /* ---- shared pieces ------------------------------------------------------------- */
   const ruleLabel = (row, i) => (i + 1) + ' · ' + T('st.hintOp.' + (row.op || 'starts')) + ' ' + String(row.t || '').split(',').map(s => s.trim()).filter(Boolean).join(', ');
   const decidedBy = (r, rows) => r.source === 'auto' && rows[r.rule]
     ? T('cw.byRule', { rule: ruleLabel(rows[r.rule], r.rule) })
+    : r.source === 'signal' ? T('cw.bySignal', { what: T('cw.sig.' + r.signal) })
     : T('cw.by.' + r.source);
 
   /** The word most of the selected names share — the seed of a new rule. */
@@ -104,7 +96,7 @@
     const cfg = HR.config.get();
     const hitsOf = i => kind === 'categories'
       ? items.filter(p => HR.hints.matchesRow(rows[i], nameOf(p))).length
-      : items.filter(a => { const co = HR.wizard.cohortKeyOf(a.userName); return co && HR.hints.tokens(rows[i]).includes(co.slice(2)); }).length;
+      : items.filter(a => { const co = HR.classify.cohortKeyOf(a.userName, rows); return co && HR.hints.tokens(rows[i]).includes(co.slice(2)); }).length;
     const winsOf = i => results.filter(r => r.res.source === 'auto' && r.res.rule === i).length;
     const body = el('div', {});
     const t = el('table', { class: 'tbl' });
@@ -121,13 +113,13 @@
     rows.forEach((row, i) => {
       const tr = el('tr', { class: row._new ? 'cw-new' : '' });
       tr.appendChild(el('td', { class: 'mono note', text: String(i + 1) }));
-      const opSel = el('select', { onchange: e => { row.op = e.target.value; touch(); onChange(); } });
+      const opSel = el('select', { onchange: e => { row.op = e.target.value; touch('hints'); onChange(); } });
       (kind === 'categories' ? HR.hints.OPS : ['edge']).forEach(op => opSel.appendChild(el('option', { value: op, text: T('st.hintOp.' + op), selected: (row.op || (kind === 'categories' ? 'starts' : 'edge')) === op })));
       tr.appendChild(el('td', {}, opSel));
-      const words = el('input', { type: 'text', value: row.t || '', placeholder: T('st.opValuesPh'), onchange: e => { row.t = e.target.value; delete row._new; touch(); onChange(); } });
+      const words = el('input', { type: 'text', value: row.t || '', placeholder: T('st.opValuesPh'), onchange: e => { row.t = e.target.value; delete row._new; touch('hints'); onChange(); } });
       words.style.width = '220px';
       tr.appendChild(el('td', {}, words));
-      const tgt = el('select', { onchange: e => { row.id = e.target.value; touch(); onChange(); } });
+      const tgt = el('select', { onchange: e => { row.id = e.target.value; touch('hints'); onChange(); } });
       targets.forEach(c => tgt.appendChild(el('option', { value: c.id, text: HR.config.labelOf(c), selected: row.id === c.id })));
       tr.appendChild(el('td', {}, tgt));
       const hits = hitsOf(i), wins = winsOf(i);
@@ -135,16 +127,16 @@
       tr.appendChild(el('td', { class: 'num' }, el('a', { href: '#', class: 'pill' + (wins ? ' ok' : hits ? ' warn' : ' muted'), text: U.fmtInt(wins),
         title: hits && !wins ? T('cw.shadowed') : T('cw.winsTip'), onclick: e => { e.preventDefault(); HR.app.go('classify', { tab: kind === 'categories' ? 'perms' : 'accounts', filter: 'rule:' + i }); } })));
       tr.appendChild(el('td', {}, el('div', { class: 'row', style: 'gap:2px;flex-wrap:nowrap' }, [
-        el('button', { class: 'btn sm ghost', text: '↑', title: T('cw.up'), disabled: i === 0, onclick: () => { rows.splice(i - 1, 0, rows.splice(i, 1)[0]); touch(); onChange(); } }),
-        el('button', { class: 'btn sm ghost', text: '↓', title: T('cw.down'), disabled: i === rows.length - 1, onclick: () => { rows.splice(i + 1, 0, rows.splice(i, 1)[0]); touch(); onChange(); } }),
-        el('button', { class: 'btn sm danger', text: '✕', onclick: () => { rows.splice(i, 1); touch(); onChange(); } })
+        el('button', { class: 'btn sm ghost', text: '↑', title: T('cw.up'), disabled: i === 0, onclick: () => { rows.splice(i - 1, 0, rows.splice(i, 1)[0]); touch('hints'); onChange(); } }),
+        el('button', { class: 'btn sm ghost', text: '↓', title: T('cw.down'), disabled: i === rows.length - 1, onclick: () => { rows.splice(i + 1, 0, rows.splice(i, 1)[0]); touch('hints'); onChange(); } }),
+        el('button', { class: 'btn sm danger', text: '✕', onclick: () => { rows.splice(i, 1); touch('hints'); onChange(); } })
       ])));
       tb.appendChild(tr);
     });
     t.appendChild(tb);
     body.appendChild(el('div', { class: 'tbl-wrap' }, t));
     body.appendChild(el('div', { class: 'slot-actions', style: 'margin-top:8px' }, [
-      el('button', { class: 'btn sm', text: T('st.addRow'), onclick: () => { rows.push(kind === 'categories' ? { op: 'contains', t: '', id: fallbackCat(cfg).id, _new: true } : { t: '', id: 'user', _new: true }); touch(); onChange(); } }),
+      el('button', { class: 'btn sm', text: T('st.addRow'), onclick: () => { rows.push(kind === 'categories' ? { op: 'contains', t: '', id: fallbackCat(cfg).id, _new: true } : { t: '', id: HR.classify.FALLBACK.cls, _new: true }); touch('hints'); onChange(); } }),
       el('span', { class: 'note', text: T('cw.orderNote') })
     ]));
     return card(T(kind === 'categories' ? 'st.hintsCat' : 'st.hintsCls'), T('cw.rulesNote'), body);
@@ -161,8 +153,10 @@
     /* A plain user name that fell through is a user account — the fallback is right for
        it. What counts as unclassified is a name shape the wizard rule would ask about. */
     if (!isPerm) {
-      const asked = new Set(HR.wizard.unansweredAccounts(m).map(a => a.key));
-      results.forEach(r => { if (r.res.source === 'default') r.res.source = asked.has(r.item.key) ? 'unknown' : 'plain'; });
+      /* Same rule as the summary (wizard.unansweredAccounts), on the draft's answers. */
+      const floor = HR.wizard.cohortFloor(m), size = new Map();
+      results.forEach(r => { if (r.res.source === 'default' && r.res.cohort) { const k = r.item.system + '|' + r.res.cohort; size.set(k, (size.get(k) || 0) + 1); } });
+      results.forEach(r => { if (r.res.source === 'default') r.res.source = r.res.cohort && size.get(r.item.system + '|' + r.res.cohort) >= floor ? 'unknown' : 'plain'; });
     }
     const rows = d.hints[kind];
     const wrap = el('div', {});
@@ -174,12 +168,13 @@
     const cnt = src => results.filter(r => r.res.source === src).length;
     const pick = f => HR.app.go('classify', { tab: tabId, filter: filter === f ? '' : f });
     const seg = (label, n, f, sev) => tile(label, U.fmtInt(n), filter === f ? T('c.filtered', { what: label }) : T('cw.tapToFilter'), { small: true, severity: sev, onClick: () => pick(f) });
-    wrap.appendChild(el('div', { class: 'grid ' + (isPerm ? 'g5' : 'g6'), style: 'margin-bottom:14px' }, [
+    wrap.appendChild(el('div', { class: 'grid', style: 'margin-bottom:14px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))' }, [
       isPerm ? seg(T('cw.kUnclassified'), cnt('default'), 'unclassified', cnt('default') ? 'high' : 'good')
         : seg(T('cw.kUnknownShape'), cnt('unknown'), 'unclassified', cnt('unknown') ? 'high' : 'good'),
       seg(T('cw.kByRule'), cnt('auto'), 'auto', 'good'),
       seg(T('cw.kManual'), cnt('manual'), 'manual', undefined),
       seg(T('cw.kFamily'), cnt('family'), 'family', undefined),
+      cnt('signal') ? seg(T('cw.kSignal'), cnt('signal'), 'signal', 'good') : null,
       isPerm ? tile(T('cw.kTotal'), U.fmtInt(items.length), T('cw.kTotalFoot'), { small: true }) : seg(T('cw.kMembership'), cnt('membership'), 'membership', undefined),
       isPerm ? null : seg(T('cw.kPlain'), cnt('plain'), 'plain', undefined)
     ].filter(Boolean)));
@@ -192,8 +187,13 @@
     else if (filter.startsWith('rule:')) { const i = +filter.slice(5); shown = results.filter(r => r.res.source === 'auto' && r.res.rule === i); }
     else if (filter) shown = results.filter(r => r.res.source === filter);
     const overrides = isPerm ? d.catOverrides : d.clsOverrides;
-    const keyOf = isPerm ? r => r.item.name : r => r.item.key;
-    const setOverride = (r, id) => { if (id) overrides[keyOf(r)] = id; else delete overrides[keyOf(r)]; touch(); };
+    const keyOf = isPerm ? r => HR.classify.overrideKey(r.item.system, r.item.name) : r => r.item.key;
+    const setOverride = (r, id) => {
+      /* Permission answers are kept per system; an older name-only answer is replaced. */
+      if (isPerm) delete overrides[r.item.name];
+      if (id) overrides[keyOf(r)] = id; else delete overrides[keyOf(r)];
+      touch(isPerm ? 'catOverrides' : 'clsOverrides');
+    };
     const columns = [
       { key: 'name', label: isPerm ? T('c.permission') : T('c.account'), value: r => nameOf(r.item) },
       { key: 'system', label: T('c.system'), value: r => r.item.system },
@@ -212,13 +212,14 @@
       { key: 'by', label: T('cw.cDecidedBy'), value: r => r.res.source + ':' + (r.res.rule == null ? '' : r.res.rule), render: r => {
         const bits = [el('span', { class: 'note', text: decidedBy(r.res, rows) })];
         if (r.res.source === 'family') {
-          const famKey = isPerm ? HR.wizard.famStoreKey(r.item.system, r.res.fam) : HR.wizard.famStoreKey(r.item.system, HR.wizard.cohortKeyOf(r.item.userName));
+          const famKey = HR.classify.famStoreKey(r.item.system, isPerm ? r.res.fam : r.res.cohort);
+          const famField = isPerm ? 'catFamilies' : 'clsFamilies';
           const fams = isPerm ? d.catFamilies : d.clsFamilies;
           bits.push(el('button', { class: 'btn sm ghost', text: T('cw.toRule'), title: T('cw.toRuleTip'), onclick: () => {
             rows.push(isPerm ? { op: 'starts', t: String(r.res.fam || '').toLowerCase(), id: r.res.id, _new: true } : { t: r.res.token, id: r.res.id, _new: true });
-            delete fams[famKey]; touch(); redraw();
+            delete fams[famKey]; touch('hints'); touch(famField); redraw();
           } }));
-          bits.push(el('button', { class: 'btn sm ghost', text: T('cw.forget'), onclick: () => { delete fams[famKey]; touch(); redraw(); } }));
+          bits.push(el('button', { class: 'btn sm ghost', text: T('cw.forget'), onclick: () => { delete fams[famKey]; touch(famField); redraw(); } }));
         }
         return el('div', { class: 'row', style: 'gap:6px;align-items:center;flex-wrap:nowrap' }, bits);
       } }
@@ -241,7 +242,7 @@
           if (!prop) { U.toast(T('cw.noCommonWord'), 5000); return; }
           askTarget(T('cw.bulkRuleTitle', { op: T('st.hintOp.' + prop.op), word: prop.t }), T('cw.ruleProposed', { op: T('st.hintOp.' + prop.op), word: prop.t, covers: U.fmtInt(prop.covers), of: U.fmtInt(sel.length) }), id => {
             rows.unshift(isPerm ? { op: prop.op, t: prop.t, id, _new: true } : { t: prop.t, id, _new: true });
-            touch(); redraw();
+            touch('hints'); redraw();
           });
         } },
         { label: n => T('cw.bulkClear', { n }), run: sel => { sel.forEach(r => setOverride(r, '')); redraw(); } }

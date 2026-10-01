@@ -18,6 +18,15 @@
 
   const ENTRIES = [
     {
+      version: '2026.10.2', date: '2026-10-01',
+      changes: [
+        'One classification engine. Categories and account types are decided in one place (js/classify.js) that the model build, the classification workbench and the findings all call — before, three copies disagreed, and the build skipped every rule for a name without a family prefix, so a “contains admin” rule the workbench showed catching FinanceAdmins left it Uncategorised after Save. Rules now apply to every name; a rule pointing at a deleted category is skipped instead of swallowing names; the fallback is Uncategorised / User by name, not whichever row is last; one definition of “unclassified” everywhere.',
+        'Account names: the directory\u2019s decoration is taken off first (DOMAIN\\, @domain, a trailing $), a recognised trailing word beats an unrecognised leading one (jan-adm and jdoe.adm@corp.nl are admin accounts), Entra #EXT# guests are external and $ managed service accounts are service accounts unless a rule says otherwise — shown as “by signal” in the workbench.',
+        'Workbench: hits and wins use the same matcher (no more rules marked shadowed that were not), the unknown-name-shape count follows the draft, item answers for entitlements are kept per system, and Save writes only the parts you edited — it asks before replacing a part that Settings or the wizard changed meanwhile, and leaving with unsaved edits asks first.',
+        'A test suite for the engine: NODE_OPTIONS= node test/classify.test.js.'
+      ]
+    },
+    {
       version: '2026.10.1', date: '2026-10-01',
       changes: ['Deleting a data point on the Data points page leaves nothing pointing at it. Deleting the loaded one loads the point dated before it (else the newest left, else an empty workspace); deleting the compared one compares with the point before the loaded one; deleting any other refreshes the diff and the findings\u2019 first-seen dates. Before, the app kept showing the deleted point\u2019s numbers and the Trend and Diff kept comparing against it until a reload.']
     },

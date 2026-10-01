@@ -20,35 +20,14 @@
   'use strict';
 
   const U = HR.util;
-  const SEP = '';
 
   /* ------------------------------------------------------- family identity */
 
-  /** The family a permission name belongs to: its prefix token, uppercased.
-      Deterministic and total — this is identity, not a threshold. */
-  function famKeyOf(name) {
-    const m = /^([A-Za-z][A-Za-z0-9#]{1,11})[-_. ]/.exec(String(name || ''));
-    return m ? m[1].toUpperCase() : null;
-  }
-
-  /** The cohort an account name belongs to: a short leading token before a
-      separator ('s:adm'), or a short hinted trailing token ('e:tst'). */
-  function cohortKeyOf(userName) {
-    const name = String(userName || '');
-    const parts = name.split(/([-_.\s]+)/);
-    if (parts.length < 3) return null;
-    const head = parts[0], sep = parts[1];
-    if (head && head.length <= 6 && (HR.mine.classHintFor(head) || sep !== '.')) {
-      return 's:' + head.toLowerCase();
-    }
-    const tail = parts[parts.length - 1];
-    if (tail && tail.length <= 6 && HR.mine.classHintFor(tail)) {
-      return 'e:' + tail.toLowerCase();
-    }
-    return null;
-  }
-
-  const famStoreKey = (system, fam) => system + SEP + fam;
+  /* Name shapes live with the resolver (js/classify.js); kept here under their old
+     names for the callers that grew up with the wizard. */
+  const famKeyOf = name => HR.classify.famKeyOf(name);
+  const cohortKeyOf = (userName, rows) => HR.classify.cohortKeyOf(userName, rows);
+  const famStoreKey = (system, fam) => HR.classify.famStoreKey(system, fam);
 
   /* ------------------------------------------------------------- examine */
 
@@ -94,7 +73,7 @@
         const def = HR.config.categoryDefOf(top);
         g.sensitivity = def ? def.sensitivity : first.sensitivity;
       }
-      g.current = g.assigned || g.hintId || 'other';
+      g.current = g.assigned || g.hintId || HR.classify.FALLBACK.category;
       g.source = g.assigned ? 'family' : (g.hintId ? 'auto' : 'none');
       g.count = g.members.length;
       g.overrides = g.members.filter(p => p.categorySource === 'manual').length;
@@ -119,7 +98,7 @@
           hintId: hint && (cfg.accountClasses || []).some(c => c.id === hint.id) ? hint.id : null,
           weight: hint ? hint.weight : null
         };
-        g.current = assigned || g.hintId || 'user';
+        g.current = assigned || g.hintId || HR.classify.FALLBACK.cls;
         g.source = assigned ? 'family' : (g.hintId ? 'auto' : 'none');
         coMap.set(key, g);
       }
@@ -138,8 +117,7 @@
     accountFamilies.sort((a, b) =>
       (a.source === 'none' ? 0 : 1) - (b.source === 'none' ? 0 : 1) || b.count - a.count);
 
-    const unmappedPerms = model.permissionList.filter(p =>
-      p.category === 'other' && p.categorySource !== 'manual');
+    const unmappedPerms = model.permissionList.filter(HR.classify.isUnclassified);
     const bySource = list => {
       const out = {};
       list.forEach(x => { out[x] = (out[x] || 0) + 1; });
@@ -190,13 +168,13 @@
     };
     (decisions.newCategories || []).forEach(d => {
       if (!cfg.categories.some(c => c.id === 'mined-' + slug(d.label))) {
-        before(cfg.categories, 'other',
+        before(cfg.categories, HR.classify.FALLBACK.category,
           { id: 'mined-' + slug(d.label), label: d.label, sensitivity: d.sensitivity || 1.0, color: 2 });
       }
     });
     (decisions.newClasses || []).forEach(d => {
       if (!cfg.accountClasses.some(c => c.id === 'mined-' + slug(d.label))) {
-        before(cfg.accountClasses, 'user',
+        before(cfg.accountClasses, HR.classify.FALLBACK.cls,
           { id: 'mined-' + slug(d.label), label: d.label, weight: d.weight || 1.2 });
       }
     });
