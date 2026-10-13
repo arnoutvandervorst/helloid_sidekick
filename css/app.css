@@ -2,11 +2,15 @@
 
 :root {
   color-scheme: light;
-  --surface-1: #fcfcfb;
-  --plane: #f9f9f7;
+  /* The HelloID portal's own ground, text and blue, so Sidekick reads as one more module. */
+  --surface-1: #ffffff;
+  --plane: #fafafa;
   --surface-2: #ffffff;
-  --text-primary: #0b0b0b;
-  --text-secondary: #52514e;
+  --text-primary: #2c2c2c;
+  --text-secondary: #626262;
+  --header-bg: #ffffff;
+  --header-ink: #3b4751;
+  --header-line: rgba(230, 230, 230, .7);
   --muted: #898781;
   --grid: #e1e0d9;
   --axis: #c3c2b7;
@@ -14,7 +18,7 @@
   --border-strong: rgba(11, 11, 11, .18);
   --hover: rgba(11, 11, 11, .04);
 
-  --series-1: #2a78d6;
+  --series-1: #2a7de1;
   --series-2: #eb6834;
   --series-3: #1baf7a;
   --series-4: #eda100;
@@ -34,7 +38,7 @@
 
   --radius: 10px;
   --shadow: 0 1px 2px rgba(11,11,11,.05), 0 8px 24px rgba(11,11,11,.06);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Segoe UI", Arial, sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -55,6 +59,7 @@
     --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
     --good-ink: #0ca30c;
     --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    --header-bg: #1a1a19; --header-ink: #c3c2b7; --header-line: rgba(255,255,255,.08);
   }
 }
 :root[data-theme="dark"] {
@@ -74,6 +79,7 @@
   --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
   --good-ink: #0ca30c;
   --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  --header-bg: #1a1a19; --header-ink: #c3c2b7; --header-line: rgba(255,255,255,.08);
 }
 
 * { box-sizing: border-box; }
@@ -89,24 +95,56 @@ h3 { font-size: 14px; }
 a { color: var(--series-1); }
 em { font-style: normal; color: var(--text-primary); font-weight: 600; }
 
-/* ---------- top bar ---------- */
-.topbar {
-  position: sticky; top: 0; z-index: 40;
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  padding: 10px 18px; background: var(--surface-1);
-  border-bottom: 1px solid var(--border);
+/* ---------- chrome: the HelloID portal's rail, header and footer ----------
+   Measured off the portal (Provisioning): rail 250px #2b303b with a #272b35 head, labels
+   #788195 (white when active), 40px round badges #21252d (blue #2a7de1 when active),
+   open groups on a #21252d band; a white 60px header with 14px module icons and a
+   separator; the copyright line centred under the content. The rail stays dark in both
+   themes, as the portal's does. */
+.rail {
+  position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column;
+  background: #2b303b; color: #788195; z-index: 41; overflow: hidden;
 }
-.brand { display: flex; align-items: center; gap: 10px; }
+.rail-head {
+  height: 60px; flex: none; display: flex; align-items: center; gap: 12px;
+  padding: 0 0 0 26px; background: #272b35; white-space: nowrap; overflow: hidden;
+}
 .brand .mark {
-  width: 26px; height: 26px; border-radius: 8px; flex: none;
+  width: 28px; height: 28px; border-radius: 8px; flex: none;
   background: linear-gradient(140deg, var(--series-1), var(--series-7));
 }
-.brand strong { display: block; font-size: 14px; }
-.brand .sub { color: var(--muted); font-size: 12px; }
+.rail-head strong { color: #fff; font-size: 14px; font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+.rail-head #topbar-ver { display: none; }
+.rail-head .topbar-edition { color: #9fc4f5; }
 #topbar-ver { color: var(--muted); font-size: 11px; font-weight: 400; cursor: pointer; }
 #topbar-ver:hover { color: var(--text-primary); text-decoration: underline; }
-.topbar-actions { display: flex; align-items: center; gap: 10px; }
+
+.main-col { display: flex; flex-direction: column; min-width: 0; min-height: 100vh; }
+.topbar {
+  position: sticky; top: 0; z-index: 40; height: 60px; flex: none;
+  display: flex; align-items: center; gap: 14px; padding: 0 22px 0 18px;
+  background: var(--header-bg); border-bottom: 1px solid var(--header-line);
+}
+.topbar-spacer { flex: 1 1 auto; }
+.topbar-actions { display: flex; align-items: center; gap: 12px; }
 .select-wrap { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+
+/* The workspace — the customer this tab is about — where the portal shows its modules. */
+.topbar-ws { font-size: 14px; min-width: 180px; max-width: 320px; }
+.app-foot {
+  margin: auto 40px 0; padding: 22px 0 26px; border-top: 1px solid rgba(98, 98, 98, .07);
+  text-align: center; font-size: 13px; color: var(--text-secondary); line-height: 1.6;
+}
+.app-foot .sub { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+.app-foot a { color: #3a8fc8; text-decoration: none; }
+.app-foot a:hover { text-decoration: underline; }
+.app-foot-controls { display: flex; gap: 10px; justify-content: center; align-items: center; margin-top: 8px; }
+.app-foot-controls select { font-size: 12px; padding: 3px 6px; }
+
+/* Page titles as the portal writes them: the section light, the page bold. */
+.view-head h1 { font-size: 22px; font-weight: 300; color: var(--text-primary); letter-spacing: .01em; }
+.view-head h1 .h-light { font-weight: 300; }
+.view-head h1 strong { font-weight: 700; }
 
 .btn {
   appearance: none; border: 1px solid var(--border-strong); background: var(--surface-2);
@@ -131,75 +169,63 @@ input[type=range] { accent-color: var(--series-1); }
 label.inline { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
 
 /* ---------- layout ---------- */
-.shell { display: grid; grid-template-columns: 216px 1fr; align-items: start; }
+.shell { display: grid; grid-template-columns: 250px 1fr; align-items: start; transition: grid-template-columns .12s ease; }
+body.nav-collapsed .shell { grid-template-columns: 70px 1fr; }
 .sidenav {
-  /* The offset is measured rather than assumed: the demo banner sits between the top bar
-     and the shell, and a hard-coded 47px pushed the rail's bottom — and the collapse
-     control with it — below the viewport. */
-  position: sticky; top: var(--chrome-h, 47px); display: flex; flex-direction: column; gap: 1px;
-  padding: 10px 8px; height: calc(100vh - var(--chrome-h, 47px)); border-right: 1px solid var(--border);
-  background: var(--surface-1); overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0;
+  padding: 20px 0 0; overflow-y: auto; overflow-x: hidden;
 }
-/* A row is the button plus its star; the star only shows on hover or when it is set,
-   so the resting state stays a plain list. */
-.nav-row { display: flex; align-items: center; gap: 2px; }
-.nav-item {
-  appearance: none; text-align: left; background: transparent; border: 0; cursor: pointer;
-  color: var(--text-secondary); font: inherit; font-size: 13px; padding: 7px 8px;
-  border-radius: 8px; display: flex; align-items: center; gap: 10px; flex: 1 1 auto;
-  min-width: 0; white-space: nowrap;
+/* A top-level row: label left, chevron for a group, the round badge on the right. */
+.rail-item {
+  appearance: none; border: 0; background: transparent; cursor: pointer; font: inherit;
+  display: flex; align-items: center; gap: 8px; height: 50px; padding: 0 10px 0 15px;
+  color: #788195; font-size: 14px; text-align: left; white-space: nowrap; flex: none;
 }
-.nav-item:hover { background: var(--hover); color: var(--text-primary); }
-.nav-item.active { background: var(--hover); color: var(--text-primary); font-weight: 600; }
-.nav-item.active .nav-icon { color: var(--series-1); }
-.nav-label { overflow: hidden; text-overflow: ellipsis; }
-.nav-icon {
-  width: 16px; height: 16px; flex: 0 0 16px; fill: none; stroke: currentColor;
-  stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; color: var(--muted);
+.rail-item .nav-label { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.rail-item:hover, .rail-item.active, .rail-item.open { color: #fff; }
+.rail-ico {
+  width: 40px; height: 40px; flex: 0 0 40px; border-radius: 50%; background: #21252d;
+  display: inline-flex; align-items: center; justify-content: center; color: #aeb4c1;
 }
-.nav-item:hover .nav-icon { color: var(--text-secondary); }
-.nav-star {
-  appearance: none; background: transparent; border: 0; cursor: pointer; padding: 4px;
-  border-radius: 6px; opacity: 0; color: var(--muted); line-height: 0;
+.rail-item.active .rail-ico { background: #2a7de1; color: #fff; }
+.rail-ico .nav-icon { width: 15px; height: 15px; flex: 0 0 15px; color: inherit; stroke-width: 2; }
+.rail-chev { width: 12px; height: 12px; flex: 0 0 12px; color: #788195; stroke-width: 2; transition: transform .12s ease; }
+.rail-item.open .rail-chev { transform: rotate(-90deg); color: #fff; }
+.nav-icon { width: 16px; height: 16px; flex: 0 0 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+/* The open group's pages, on the darker band, indented under the label. */
+.rail-sub { list-style: none; margin: 0; padding: 14px 0; background: #21252d; flex: none; }
+.rail-sub-row { display: flex; align-items: center; padding-right: 8px; }
+.rail-sub-item {
+  appearance: none; border: 0; background: transparent; cursor: pointer; font: inherit; font-size: 13px;
+  color: #788195; text-align: left; padding: 8px 10px 8px 45px; flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: 6px; white-space: nowrap;
 }
-.nav-row:hover .nav-star, .nav-star.on { opacity: 1; }
-.nav-star:hover { background: var(--hover); color: var(--text-primary); }
+.rail-sub-item .nav-label { overflow: hidden; text-overflow: ellipsis; }
+.rail-sub-item:hover, .rail-sub-item.active { color: #fff; }
+.rail-sub-item.gated .nav-label { opacity: .7; }
+.nav-lock { width: 11px; height: 11px; flex: 0 0 11px; margin-left: auto; opacity: .7; }
+.nav-star { appearance: none; background: transparent; border: 0; cursor: pointer; padding: 4px; border-radius: 4px; opacity: 0; color: #788195; line-height: 0; }
+.rail-sub-row:hover .nav-star, .nav-star.on { opacity: 1; }
+.nav-star:hover { color: #fff; }
 .nav-star.on { color: var(--warning); }
 .nav-star.on .nav-icon { fill: currentColor; color: var(--warning); }
-.nav-star .nav-icon { width: 13px; height: 13px; flex-basis: 13px; }
-.nav-item.gated .nav-label { color: var(--muted); }
-.nav-lock { width: 11px; height: 11px; flex: 0 0 11px; margin-left: auto; opacity: .7; }
-.sidenav.collapsed .nav-lock { display: none; }
+.nav-star .nav-icon { width: 12px; height: 12px; flex-basis: 12px; }
 .gate-source { padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 8px; }
 .gate-source p { margin: 4px 0 0; }
 .slot-health { color: var(--warning); }
-.nav-group-label {
-  font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
-  padding: 12px 10px 4px; white-space: nowrap;
-}
-.nav-divider { height: 1px; background: var(--border); margin: 6px 8px; }
 .nav-toggle {
-  appearance: none; background: transparent; border: 0; cursor: pointer; color: var(--muted);
-  font: inherit; font-size: 12px; padding: 8px; border-radius: 8px; display: flex;
-  align-items: center; gap: 10px;
-  /* Sits at the bottom of the rail whatever the list length. Sticky rather than merely
-     last, so a list taller than the viewport does not scroll it out of reach. */
-  margin-top: auto; border-top: 1px solid var(--border); padding-top: 10px; border-radius: 0;
-  position: sticky; bottom: 0; background: var(--surface-1); z-index: 1;
+  appearance: none; background: #272b35; border: 0; cursor: pointer; color: #788195; font: inherit; font-size: 12px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; height: 44px; padding: 0 22px 0 15px;
+  margin-top: auto; position: sticky; bottom: 0; flex: none;
 }
-.nav-toggle:hover { background: var(--hover); color: var(--text-primary); }
-.sidenav.collapsed .nav-toggle { justify-content: center; }
+.nav-toggle:hover { color: #fff; }
 
-/* Collapsed: icons only, labels gone, the shell narrows to match. */
-.sidenav.collapsed { padding: 10px 6px; }
-.sidenav.collapsed .nav-label { display: none; }
-.sidenav.collapsed .nav-star { display: none; }
-.sidenav.collapsed .nav-item { justify-content: center; padding: 8px 0; }
-.sidenav.collapsed .nav-group-label {
-  padding: 10px 0 4px; text-align: center; overflow: hidden; height: 14px;
-}
-.shell { transition: grid-template-columns .12s ease; }
-body.nav-collapsed .shell { grid-template-columns: 56px 1fr; }
+/* Collapsed: the badges only, as the portal's unpinned rail. */
+body.nav-collapsed .rail-head strong { display: none; }
+body.nav-collapsed .rail-head { padding-left: 21px; }
+.sidenav.collapsed .nav-label, .sidenav.collapsed .rail-chev, .sidenav.collapsed .nav-star, .sidenav.collapsed .nav-lock { display: none; }
+.sidenav.collapsed .rail-item { justify-content: center; padding: 0; }
+.sidenav.collapsed .nav-toggle { justify-content: center; padding: 0; }
 
 main { padding: 20px 24px 60px; min-width: 0; }
 /* Views append cards, grids and notes as siblings. Spacing them here rather than in
@@ -228,7 +254,7 @@ main { padding: 20px 24px 60px; min-width: 0; }
 .g3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
 .g4 { grid-template-columns: repeat(4, minmax(0,1fr)); }
 @media (max-width: 1100px) { .g3, .g4 { grid-template-columns: repeat(2, minmax(0,1fr)); } }
-@media (max-width: 720px) { .g2, .g3, .g4 { grid-template-columns: minmax(0,1fr); } .shell { grid-template-columns: 1fr; } .sidenav { position: static; height: auto; flex-direction: row; overflow-x: auto; } }
+@media (max-width: 720px) { .g2, .g3, .g4 { grid-template-columns: minmax(0,1fr); } .shell { grid-template-columns: 1fr; } .rail { position: static; height: auto; } .sidenav { flex-direction: row; overflow-x: auto; padding: 0; } .rail-sub { display: none; } .app-foot { margin: auto 16px 0; } }
 
 /* ---------- stat tiles ---------- */
 .tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
@@ -461,7 +487,7 @@ code.inline { background: var(--hover); padding: 1px 5px; border-radius: 5px; fo
 .scorebar { display: inline-block; width: 46px; height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; vertical-align: middle; }
 .scorebar > i { display: block; height: 100%; }
 @media print {
-  .sidenav, .topbar-actions, .toolbar { display: none; }
+  .rail, .sidenav, .topbar-actions, .toolbar, .app-foot { display: none; }
   .shell { grid-template-columns: 1fr; }
 }
 
@@ -573,7 +599,7 @@ table.board-tbl td.mono { font-family: var(--mono, ui-monospace, monospace); fon
 @page { size: A4 portrait; margin: 14mm 15mm; }
 @media print {
   :root, html, body { color-scheme: light !important; background: #fff !important; height: auto; overflow: visible; }
-  .topbar, .sidenav, .board-controls, #demo-host, #drawer, #drawer-scrim, #tooltip, #toast, #drop-veil, #busy-veil { display: none !important; }
+  .topbar, .rail, .sidenav, .app-foot, .board-controls, #demo-host, #drawer, #drawer-scrim, #tooltip, #toast, #drop-veil, #busy-veil { display: none !important; }
   .shell { display: block; }
   main { padding: 0; }
   .paper { gap: 0; display: block; }

@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.10.10] — 2026-10-13
+
+- Sidekick looks like HelloID. The chrome now follows the HelloID portal so it reads as a natural extension of it: a dark rail the full height of the page with the logo on top, labels on the left and round icon badges on the right — blue for the section you are in — each section opening its pages on a darker band underneath, one at a time, and a collapsed rail that keeps only the badges; a white header with the workspace on the left and Import on the right; page titles the portal’s way, the section light and the page bold (“Governance Compliance”); and the portal’s centred line under the content with the version, the changelog and documentation links, what the numbers rest on, the language and the light/dark switch. The portal’s font, ground and blue throughout.
+
 ## [2026.10.9] — 2026-10-01
 
 - One colour for one number. The governance score, the compliance score, identity coverage, the managed share and the classified share were coloured by their own copy of a threshold on every page — 85 % compliance was amber on the Overview and green on Compliance, 65 % red on one and amber on the other. Every page now asks one place (js/bands.js), and a person’s risk tile follows the editable risk bands.

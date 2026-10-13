@@ -857,6 +857,19 @@ settings** rebuilds every data point with its own reconciliation and vault under
 limits and weights — which also gives data points from before this feature their KPI
 history.
 
+## Look
+
+The chrome follows the HelloID portal, so Sidekick reads as a natural extension of it: a
+dark rail the full height of the page (250px, `#2b303b`) with the logo on top, labels on the
+left and round icon badges on the right — blue for the section you are in — and each
+section opening its pages on a darker band underneath, one at a time; a white 60px header
+with the workspace on the left and Import on the right; page titles written the portal's
+way, the section light and the page bold ("Governance **Compliance**"); and the portal's
+centred line under the content with the version and links, plus what the numbers rest on,
+the language and the light/dark switch. Segoe UI / Arial on a `#fafafa` ground, HelloID
+blue `#2a7de1`. The rail stays dark in both themes. Collapsed, the rail keeps only the
+badges. Sidekick does not copy the portal's own module icons or a user account.
+
 ## Layout
 
 ```

@@ -113,30 +113,88 @@
     document.body.classList.toggle('nav-collapsed', state.collapsed);
   }
 
-  /** One row: icon, label, and a star that appears on hover or when it is set. */
-  function item(view, current) {
-    /* A view whose imports are missing stays clickable — the page it opens says
-       exactly what to import — but wears a lock so nobody hunts for hidden data. */
+  /* ---- the rail, as the HelloID portal draws it ------------------------------------
+     A top-level row is a label on the left and the module's icon in a round badge on the
+     right; a group carries a chevron and opens a darker band of its pages underneath,
+     one group open at a time. The badge turns blue for the group the reader is in. */
+  const GROUP_ICON = { favourites: 'star', state: 'policies', who: 'people', model: 'rules', data: 'snapshots', out: 'board', dashboard: 'overview' };
+  let OPEN = null;                       // the group the reader opened; null → the current view's
+
+  const badge = name => el('span', { class: 'rail-ico' }, icon(name));
+  /* The portal's chevron: pointing left when closed, down when open. */
+  const chevron = () => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('class', 'nav-icon rail-chev'); svg.setAttribute('aria-hidden', 'true');
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path'); p.setAttribute('d', 'M15 6l-6 6 6 6');
+    svg.appendChild(p); return svg;
+  };
+
+  /** A page inside a group: a plain label, a lock when its imports are missing, a star. */
+  function subItem(view, current) {
     const missing = HR.views.missingFor ? HR.views.missingFor(view) : [];
     const needs = missing.map(req => req.split('|').map(k => T('src.' + k)).join(' / ')).join(', ');
-    const button = el('button', {
-      class: 'nav-item' + (view === current ? ' active' : '') + (missing.length ? ' gated' : ''),
-      'data-view': view,
-      title: T('nav.' + view) + (missing.length ? ' \u2014 ' + T('nav.needs', { list: needs }) : ''),
+    const dash = HR.dashboard && HR.dashboard.active();
+    return el('li', { class: 'rail-sub-row' }, [
+      el('button', {
+        class: 'rail-sub-item' + (view === current ? ' active' : '') + (missing.length ? ' gated' : ''),
+        'data-view': view,
+        title: T('nav.' + view) + (missing.length ? ' \u2014 ' + T('nav.needs', { list: needs }) : ''),
+        onclick: () => HR.app.go(view)
+      }, [
+        el('span', { class: 'nav-label', text: T('nav.' + view) }),
+        missing.length ? icon('lock', 'nav-lock') : null
+      ].filter(Boolean)),
+      dash ? null : el('button', {
+        class: 'nav-star' + (isFavourite(view) ? ' on' : ''),
+        title: T(isFavourite(view) ? 'nav.unfavourite' : 'nav.favourite'),
+        onclick: e => { e.stopPropagation(); toggleFavourite(view); }
+      }, icon('star'))
+    ].filter(Boolean));
+  }
+
+  /** A top-level page of its own (Overview, a dashboard's pages): label and badge. */
+  function topItem(view, current) {
+    return el('button', {
+      class: 'rail-item' + (view === current ? ' active' : ''), 'data-view': view, title: T('nav.' + view),
       onclick: () => HR.app.go(view)
-    }, [
-      icon(view),
-      el('span', { class: 'nav-label', text: T('nav.' + view) }),
-      missing.length ? icon('lock', 'nav-lock') : null
-    ]);
+    }, [el('span', { class: 'nav-label', text: T('nav.' + view) }), badge(view)]);
+  }
 
-    const star = el('button', {
-      class: 'nav-star' + (isFavourite(view) ? ' on' : ''),
-      title: T(isFavourite(view) ? 'nav.unfavourite' : 'nav.favourite'),
-      onclick: e => { e.stopPropagation(); toggleFavourite(view); }
-    }, icon('star'));
+  /** A group: its row, and — when open — the band of its pages. */
+  function group(key, views, current) {
+    const holds = views.includes(current);
+    const open = (OPEN || groupOf(current)) === key;
+    const head = el('button', {
+      class: 'rail-item' + (holds ? ' active' : '') + (open ? ' open' : ''), title: T('nav.g.' + key),
+      'aria-expanded': open ? 'true' : 'false',
+      onclick: () => {
+        /* Collapsed, a badge is all there is: open the rail and the group together. */
+        if (state.collapsed) { OPEN = key; toggleCollapsed(); return; }
+        OPEN = open ? '\u0000' : key;
+        render();
+      }
+    }, [el('span', { class: 'nav-label', text: T('nav.g.' + key) }), chevron(), badge(GROUP_ICON[key] || 'overview')]);
+    const out = [head];
+    if (open && !state.collapsed) out.push(el('ul', { class: 'rail-sub' }, views.map(v => subItem(v, current))));
+    return out;
+  }
 
-    return el('div', { class: 'nav-row' }, [button, HR.dashboard && HR.dashboard.active() ? null : star]);
+  /** The groups as the edition (or the dashboard) lays them out, Overview lifted to the top. */
+  function layout() {
+    const dash = HR.dashboard && HR.dashboard.active();
+    if (dash) return { top: HR.dashboard.views().filter(v => HR.views[v]), groups: [] };
+    const groups = (HR.edition ? HR.edition.groups() : GROUPS)
+      .map(g => ({ key: g.key, views: g.views.filter(v => HR.views[v]) })).filter(g => g.views.length);
+    const top = [];
+    if (groups[0] && groups[0].views[0] === 'overview') { top.push('overview'); groups[0].views = groups[0].views.slice(1); }
+    const favs = state.favourites.filter(v => HR.views[v]);
+    return { top, groups: (favs.length ? [{ key: 'favourites', views: favs }] : []).concat(groups.filter(g => g.views.length)) };
+  }
+  /** The group a page sits in (favourites only when it sits nowhere else). */
+  function groupOf(view) {
+    const L = layout();
+    const g = L.groups.find(x => x.key !== 'favourites' && x.views.includes(view)) || L.groups.find(x => x.views.includes(view));
+    return g ? g.key : null;
   }
 
   function render() {
@@ -145,24 +203,9 @@
     const current = HR.app.state.view;
     nav.innerHTML = '';
     nav.classList.toggle('collapsed', state.collapsed);
-
-    /* Favourites first, because that is the point of them. */
-    const dash = HR.dashboard && HR.dashboard.active();
-    const favourites = dash ? [] : state.favourites.filter(v => HR.views[v]);
-    if (favourites.length) {
-      nav.appendChild(el('div', { class: 'nav-group-label', text: T('nav.g.favourites') }));
-      favourites.forEach(view => nav.appendChild(item(view, current)));
-      nav.appendChild(el('div', { class: 'nav-divider' }));
-    }
-
-    /* The edition decides which groups exist; the constant above is the full map. */
-    const groups = dash ? [{ key: 'dashboard', views: HR.dashboard.views() }] : (HR.edition ? HR.edition.groups() : GROUPS);
-    groups.forEach(group => {
-      const views = group.views.filter(v => HR.views[v]);
-      if (!views.length) return;
-      nav.appendChild(el('div', { class: 'nav-group-label', text: T('nav.g.' + group.key) }));
-      views.forEach(view => nav.appendChild(item(view, current)));
-    });
+    const L = layout();
+    L.top.forEach(v => nav.appendChild(topItem(v, current)));
+    L.groups.forEach(g => group(g.key, g.views, current).forEach(n => nav.appendChild(n)));
 
     /* Last, and pushed to the bottom: a control you use once a session should not sit
        where the ones you use constantly are. */
@@ -171,10 +214,12 @@
       title: T(state.collapsed ? 'nav.expand' : 'nav.collapse'),
       onclick: toggleCollapsed
     }, [
-      icon(state.collapsed ? 'expand' : 'collapse'),
-      el('span', { class: 'nav-label', text: T('nav.collapse') })
+      el('span', { class: 'nav-label', text: T('nav.collapse') }),
+      icon(state.collapsed ? 'expand' : 'collapse')
     ]));
   }
+  /** A new page opens its own group again, even after the reader closed one. */
+  function onNavigate() { OPEN = null; }
 
   function init() {
     load();
@@ -182,5 +227,5 @@
     render();
   }
 
-  HR.nav = { init, render, toggleFavourite, toggleCollapsed, state: () => state, ICONS, icon };
+  HR.nav = { init, render, toggleFavourite, toggleCollapsed, groupOf, onNavigate, state: () => state, ICONS, icon };
 })(window.HR);

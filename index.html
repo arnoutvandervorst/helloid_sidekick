@@ -10,35 +10,40 @@
 
 <div id="drop-veil" hidden><div id="drop-veil-text"></div></div>
 
-<header class="topbar">
-  <div class="brand">
-    <span class="mark-host"></span>
-    <div>
-      <strong id="topbar-title">HelloID Sidekick</strong>
-      <span class="sub" id="topbar-sub"></span>
-    </div>
-  </div>
-  <div class="topbar-actions">
-    <select id="workspace-select" title="Workspace"></select>
-    <button class="btn primary" id="btn-import">
-      <span id="btn-import-label">Import</span>
-    </button>
-    <a class="btn ghost" id="link-repo" href="https://github.com/arnoutvandervorst/helloid_sidekick"
-       target="_blank" rel="noopener noreferrer">GitHub</a>
-    <select id="lang-select" title="Language"></select>
-    <button class="btn ghost" id="btn-theme" title="Toggle light/dark">◐</button>
-  </div>
-</header>
-
-<div id="demo-host"></div>
-
+<!-- The chrome follows the HelloID portal: a dark rail the full height of the page with
+     the logo on top, a white bar beside it, and the copyright line under the content. -->
 <div class="shell">
-  <nav class="sidenav" id="sidenav"></nav>
-  <main id="view-root">
-
-  </main>
+  <aside class="rail">
+    <div class="brand rail-head">
+      <span class="mark-host"></span>
+      <strong id="topbar-title">HelloID Sidekick</strong>
+    </div>
+    <nav class="sidenav" id="sidenav"></nav>
+  </aside>
+  <div class="main-col">
+    <header class="topbar">
+      <select id="workspace-select" class="topbar-ws" title="Workspace"></select>
+      <span class="topbar-spacer"></span>
+      <div class="topbar-actions">
+        <button class="btn primary" id="btn-import">
+          <span id="btn-import-label">Import</span>
+        </button>
+      </div>
+    </header>
+    <div id="demo-host"></div>
+    <main id="view-root">
+    </main>
+    <footer class="app-foot" id="app-foot">
+      <div class="sub" id="topbar-sub"></div>
+      <div id="app-foot-line"></div>
+      <div class="app-foot-controls">
+        <select id="lang-select" title="Language"></select>
+        <button class="btn ghost sm" id="btn-theme" title="Toggle light/dark">◐</button>
+        <a id="link-repo" href="https://github.com/arnoutvandervorst/helloid_sidekick" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </div>
+    </footer>
+  </div>
 </div>
-
 <div id="drawer" class="drawer" hidden>
   <div class="drawer-head">
     <div id="drawer-title"></div>

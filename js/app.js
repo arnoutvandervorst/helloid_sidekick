@@ -103,6 +103,18 @@
         el('p', { class: 'note', text: String(err && err.stack || err) })
       ]));
     }
+    /* The page title the way the portal writes it: the section light, the page bold —
+       "Target systems", here "Governance Compliance". */
+    const h1 = root.querySelector('.view-head h1');
+    if (h1 && !h1.children.length && HR.nav && HR.nav.groupOf) {
+      const g = HR.nav.groupOf(state.view);
+      const light = g && g !== 'favourites' && g !== 'dashboard' ? T('nav.g.' + g) : (HR.brand.state.productName || T('app.titleShort'));
+      const page = h1.textContent;
+      if (light && light.toLowerCase() !== page.toLowerCase()) {
+        h1.textContent = '';
+        h1.append(el('span', { class: 'h-light', text: light + ' ' }), el('strong', { text: page }));
+      }
+    }
     /* The net under every view: anything marked with a facet the role lacks goes. */
     if (HR.access) HR.access.sweep(root);
     /* Long explanations fold behind an ⓘ, whichever view wrote them. */
@@ -112,12 +124,29 @@
     renderCost.set(key, performance.now() - started);
   }
 
-  /** Everything above the shell, in pixels: the sidebar sizes itself against it. */
+  /** The header's height: tab bars stick under it. The rail runs the full height. */
   function measureChrome() {
     const bar = document.querySelector('.topbar');
-    const host = document.getElementById('demo-host');
-    const h = (bar ? bar.offsetHeight : 47) + (host ? host.offsetHeight : 0);
-    document.documentElement.style.setProperty('--chrome-h', h + 'px');
+    document.documentElement.style.setProperty('--chrome-h', (bar ? bar.offsetHeight : 60) + 'px');
+  }
+
+  /* ---- the footer, as the HelloID portal draws it: product, version and links under
+     the content, plus what the numbers rest on and the language / theme controls. */
+  function renderFoot() {
+    const line = document.getElementById('app-foot-line');
+    if (!line) return;
+    line.innerHTML = '';
+    const product = HR.brand.state.productName || T('app.title');
+    const link = (text, href, onclick) => el('a', { href: href || '#', text, target: href ? '_blank' : null, rel: href ? 'noopener noreferrer' : null,
+      onclick: onclick ? e => { e.preventDefault(); onclick(); } : null });
+    const dot = () => document.createTextNode(' \u00b7 ');
+    line.append(
+      el('div', { text: '\u00a9 ' + new Date().getFullYear() + ' ' + product + '. ' + T('hd.version', { v: HR.changelog.VERSION }) }),
+      el('div', {}, [
+        link(T('hd.changelog'), null, () => HR.viewkit.drawerChangelog()), dot(),
+        link(T('hd.docs'), 'https://github.com/arnoutvandervorst/helloid_sidekick#readme')
+      ])
+    );
   }
 
   /* The banner is chrome, but it has to survive a re-render of the view it sits above. */
@@ -216,6 +245,7 @@
   /* The hash names the view and, when the view is about one thing, that thing:
      "#person/500107" survives a reload and can be sent to a colleague. */
   function go(view, params) {
+    if (view !== state.view && HR.nav && HR.nav.onNavigate) HR.nav.onNavigate();
     state.view = view; state.params = params || {};
     location.hash = view + (state.params.id ? '/' + encodeURIComponent(state.params.id) : '');
     render();
@@ -1287,6 +1317,7 @@
     ver.title = T('app.versionTitle');
     ver.onclick = () => HR.viewkit.drawerChangelog();
     titleEl.append(' ', ver);
+    renderFoot();
     document.getElementById('btn-import-label').textContent = T('app.import');
     renderWorkspacePicker();
     /* A dashboard has nothing to import and no workspace to pick: the only action is
