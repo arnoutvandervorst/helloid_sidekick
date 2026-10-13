@@ -138,8 +138,7 @@ em { font-style: normal; color: var(--text-primary); font-weight: 600; }
 .app-foot .sub { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
 .app-foot a { color: #3a8fc8; text-decoration: none; }
 .app-foot a:hover { text-decoration: underline; }
-.app-foot-controls { display: flex; gap: 10px; justify-content: center; align-items: center; margin-top: 8px; }
-.app-foot-controls select { font-size: 12px; padding: 3px 6px; }
+
 
 /* Page titles as the portal writes them: the section light, the page bold. */
 .view-head h1 { font-size: 22px; font-weight: 300; color: var(--text-primary); letter-spacing: .01em; }

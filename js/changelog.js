@@ -18,6 +18,10 @@
 
   const ENTRIES = [
     {
+      version: '2026.10.11', date: '2026-10-13',
+      changes: ['The language, light/dark and source & issues controls are back in the header, on the right next to Import; the footer keeps the version, the links and what the numbers rest on.']
+    },
+    {
       version: '2026.10.10', date: '2026-10-13',
       changes: [
         'Sidekick looks like HelloID. The chrome now follows the HelloID portal so it reads as a natural extension of it: a dark rail the full height of the page with the logo on top, labels on the left and round icon badges on the right — blue for the section you are in — each section opening its pages on a darker band underneath, one at a time, and a collapsed rail that keeps only the badges; a white header with the workspace on the left and Import on the right; page titles the portal\u2019s way, the section light and the page bold (“Governance Compliance”); and the portal\u2019s centred line under the content with the version, the changelog and documentation links, what the numbers rest on, the language and the light/dark switch. The portal\u2019s font, ground and blue throughout.'
