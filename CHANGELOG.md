@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.10.12] — 2026-10-13
+
+- The sidebar head shows the product and the edition on two lines — “HelloID Sidekick” with “Health check” under it — instead of one line that ran out of the sidebar; a long name ends in “…”.
+
 ## [2026.10.11] — 2026-10-13
 
 - The language, light/dark and source & issues controls are back in the header, on the right next to Import; the footer keeps the version, the links and what the numbers rest on.

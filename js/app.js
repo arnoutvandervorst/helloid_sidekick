@@ -1296,18 +1296,22 @@
     const edId = HR.edition && HR.edition.chosen() ? HR.edition.get() : null;
     const edName = edId ? T('ed.' + edId + '.name') : '';
     document.title = (HR.brand.state.productName || T('app.title')) + (edName ? ' \u00b7 ' + edName : '');
+    /* Two lines in the rail head: the product, and under it the edition (or dashboard) —
+       one line overflowed the rail with names like "Health Check". */
     const titleEl = document.getElementById('topbar-title');
-    titleEl.textContent = HR.brand.state.productName || T('app.title');
+    titleEl.textContent = '';
+    const product = HR.brand.state.productName || T('app.title');
+    titleEl.append(el('span', { class: 'brand-name', text: product, title: product }));
     const dash = HR.dashboard && HR.dashboard.active();
     if (dash) {
-      titleEl.append(' \u00b7 ', el('span', { class: 'topbar-edition', text: HR.dashboard.name(), title: T('db.title') }));
-      document.title = (HR.brand.state.productName || T('app.title')) + ' \u00b7 ' + HR.dashboard.name();
+      titleEl.append(el('span', { class: 'topbar-edition', text: HR.dashboard.name(), title: T('db.title') }));
+      document.title = product + ' \u00b7 ' + HR.dashboard.name();
     } else if (edName) {
       /* The edition word is the way back to the chooser. */
-      titleEl.append(' \u00b7 ', el('span', { class: 'topbar-edition', text: edName, title: T('ed.switch'), onclick: () => go('choose') }));
+      titleEl.append(el('span', { class: 'topbar-edition', text: edName, title: T('ed.switch'), onclick: () => go('choose') }));
     } else if (HR.edition && !HR.edition.chosen()) {
       /* Data from before editions existed: nothing is hidden until a choice is made. */
-      titleEl.append(' \u00b7 ', el('span', { class: 'topbar-edition', text: T('ed.pick'), title: T('ed.switch'), onclick: () => go('choose') }));
+      titleEl.append(el('span', { class: 'topbar-edition', text: T('ed.pick'), title: T('ed.switch'), onclick: () => go('choose') }));
     }
     /* The version rides on the title, rebuilt here because the line above
        wipes it on every chrome refresh. Clicking it opens the changelog. */
