@@ -21,6 +21,7 @@ helloid-config.json.tmp
 /product-assignments.csv
 /products.json
 helloid-service-automation*.json
+helloid-sa-config*.json
 
 # Collector output — real directories carry personal data. demo/ stays the exception.
 directory*.json

@@ -862,3 +862,16 @@ select.cw-auto { color: var(--muted); }
 /* Sections built as one wrapper div stack their cards inside it; without this, only the
    wrapper itself was spaced and its children sat flush. .stack spaces itself. */
 .tab-body > div:not(.stack) > * + * { margin-top: 14px; }
+
+/* ============================ scripts & forms ============================ */
+.notice.ok { border-left-color: var(--good); }
+.sa-code { margin: 0; max-height: 520px; overflow: auto; font: 12px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  background: var(--plane); border: 1px solid var(--border); border-radius: 6px; padding: 8px 0; white-space: pre; }
+.sa-code .sa-line { display: block; padding: 0 10px; }
+.sa-code .sa-ln { display: inline-block; min-width: 3.2em; margin-right: 10px; color: var(--muted); text-align: right; user-select: none; }
+.sa-code .sa-line.mark { background: color-mix(in srgb, var(--serious) 16%, transparent); box-shadow: inset 3px 0 0 var(--serious); }
+.sa-diff .sa-line.add { background: color-mix(in srgb, var(--good) 16%, transparent); }
+.sa-diff .sa-line.del { background: color-mix(in srgb, var(--critical) 14%, transparent); }
+.sa-diff .sa-line.fold { color: var(--muted); font-style: italic; }
+ol.sa-actions { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; }
+ol.sa-actions .note { margin-top: 2px; }

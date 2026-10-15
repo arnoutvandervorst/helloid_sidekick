@@ -17,6 +17,7 @@
     ruleSet: null,         // parsed HelloID business-rule export, when one is loaded
     vault: null,           // parsed HelloID Vault export: persons, contracts, attributes
     directory: null,       // AD/Entra collector export: pre-HelloID baseline
+    saconfig: null,        // Service Automation configuration export: forms, data sources, scripts
     granted: null,         // what HelloID believes is granted right now
     history: null,         // what HelloID did, when, why, and whether it worked
     demo: null,            // set while showing the published fictional tenant
@@ -62,7 +63,7 @@
     const root = document.getElementById('view-root');
     root.innerHTML = '';
     const worksEmpty = state.view === 'settings' || state.view === 'snapshots' || state.view === 'sources' ||
-      state.view === 'nedap' || state.view === 'fieldmap' || state.view === 'choose';
+      state.view === 'nedap' || state.view === 'fieldmap' || state.view === 'scripts' || state.view === 'choose';
     if (!state.model && (!worksEmpty || (HR.dashboard && HR.dashboard.active()))) { emptyState(root); return; }
     /* A dashboard is a fence, not a hint: a view outside it does not render. */
     if (HR.dashboard && HR.dashboard.active() && !HR.dashboard.views().includes(state.view)) {
@@ -408,6 +409,7 @@
       if (peek.kind === 'helloid-recon-snapshots' || Array.isArray(peek.snapshots)) return 'snapshots';
       if (HR.directory.looksLikeDirectory(peek)) return 'directory';
       if (HR.audit.looksLikeAudit(peek)) return 'audit';
+      if (HR.salint.looksLikeConfig(peek)) return 'saconfig';
       if (HR.products.looksLikeServiceAutomation(peek)) return 'products';
       if (HR.products.looksLikeProducts(peek)) return 'products';
       if (HR.fieldmap.looksLikeFieldMapping(peek)) return 'fieldmapping';
@@ -448,7 +450,7 @@
   /** Drop a companion source without clearing the rest — each one stands on its own. */
   function clearSource(kind) {
     if (kind === 'fieldmapping') kind = 'fieldMapping';   // slot id vs state key
-    if (!['rules', 'vault', 'granted', 'history', 'products', 'assignments', 'directory', 'fieldMapping', 'audit'].includes(kind)) return;
+    if (!['rules', 'vault', 'granted', 'history', 'products', 'assignments', 'directory', 'fieldMapping', 'audit', 'saconfig'].includes(kind)) return;
     state[kind] = null;
     if (kind === 'rules') state.ruleSet = null;
     delete state.raw[kind];
@@ -654,6 +656,7 @@
     }
     if (peek && HR.directory.looksLikeDirectory(peek)) return importDirectory(text, fileName);
     if (peek && HR.audit.looksLikeAudit(peek)) return importAudit(text, fileName);
+    if (peek && HR.salint.looksLikeConfig(peek)) return importSaConfig(peek, text, fileName);
     if (peek && HR.products.looksLikeServiceAutomation(peek)) return importServiceAutomation(peek, fileName);
     if (peek && HR.products.looksLikeProducts(peek)) return importProducts(text, fileName);
     if (peek && HR.fieldmap.looksLikeFieldMapping(peek)) return importFieldMapping(text, fileName);
@@ -749,6 +752,32 @@
     HR.usage.imported('audit', audit.meta.rowCount);
     await withBusy(T('busy.recalc'), () => rebuild());
     go('audit');
+  }
+
+  /**
+   * The Service Automation configuration (helloid-sa-export.py): forms, data sources,
+   * task scripts, variables and, when the collector had an audit-log key, their use.
+   * It stands alone: no population needed, so it never triggers a model rebuild.
+   */
+  function parseSaConfig(peek, fileName) {
+    return { cfg: peek, fileName: fileName, analysis: HR.salint.analyse(peek) };
+  }
+
+  async function importSaConfig(peek, text, fileName) {
+    let sa;
+    try { sa = parseSaConfig(peek, fileName); }
+    catch (err) { U.toast(err.message, 7000); return; }
+    state.saconfig = sa;
+    state.raw.saconfig = text;
+    state.importedAt.saconfig = Date.now();
+    state.fileNames.saconfig = fileName;
+    HR.store.saveContext({ saconfig: text, importedAt: state.importedAt, fileNames: state.fileNames });
+    const a = sa.analysis;
+    U.toast(T('toast.saconfigLoaded', { f: U.fmtInt(a.summary.delegated + a.summary.products),
+      s: U.fmtInt(a.summary.scripts), n: U.fmtInt(a.findings.length) }), 7000);
+    HR.usage.imported('sa-config', a.summary.scripts);
+    render();
+    go('scripts');
   }
 
   async function importDirectory(text, fileName) {
@@ -1430,7 +1459,7 @@
       if (!ctx) return;
       state.raw = { rules: ctx.rules, vault: ctx.vault, granted: ctx.granted, history: ctx.history,
         products: ctx.products, assignments: ctx.assignments, directory: ctx.directory,
-        fieldMapping: ctx.fieldMapping };
+        fieldMapping: ctx.fieldMapping, saconfig: ctx.saconfig };
       /* Context saved before import times were tracked still has one useful timestamp:
          when it was written. Better than showing nothing for every restored file. */
       state.importedAt = ctx.importedAt || {};
@@ -1438,11 +1467,12 @@
       state.demo = ctx.demo || null;
       state.noAutoRecon = !!ctx.noAutoRecon;
       const named = (k, fallback) => state.fileNames[k] || fallback;
-      ['rules', 'vault', 'granted', 'history', 'products', 'assignments', 'directory', 'audit'].forEach(k => {
+      ['rules', 'vault', 'granted', 'history', 'products', 'assignments', 'directory', 'audit', 'saconfig'].forEach(k => {
         if (ctx[k] && !state.importedAt[k]) state.importedAt[k] = ctx.savedAt || null;
       });
       try { if (ctx.directory) state.directory = HR.directory.parse(ctx.directory, named('directory', 'directory.json')); } catch (e) { /* stale */ }
       try { if (ctx.audit) state.audit = HR.audit.parse(ctx.audit, named('audit', 'helloid-audit.json')); } catch (e) { /* stale */ }
+      try { if (ctx.saconfig) state.saconfig = parseSaConfig(JSON.parse(ctx.saconfig), named('saconfig', 'helloid-sa-config.json')); } catch (e) { /* stale */ }
       try { if (ctx.fieldMapping) state.fieldMapping = HR.fieldmap.parse(ctx.fieldMapping, named('fieldMapping', 'fieldMapping.json')); } catch (e) { /* stale */ }
       try { if (ctx.rules) state.ruleSet = HR.rules.parse(ctx.rules, named('rules', 'rules.csv')); } catch (e) { /* stale */ }
       try { if (ctx.vault) state.vault = HR.vault.parse(ctx.vault, named('vault', 'vault.json')); } catch (e) { /* stale */ }

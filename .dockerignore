@@ -7,6 +7,7 @@ Vault*.json
 *-vault.json
 helloid-audit*.json
 helloid-service-automation*.json
+helloid-sa-config*.json
 directory*.json
 .env
 helloid-config.json

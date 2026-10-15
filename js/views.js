@@ -550,7 +550,8 @@
     { kind: 'audit',     accept: '.json' },
     { kind: 'products', accept: '.json' },
     { kind: 'assignments', accept: '.csv' },
-    { kind: 'fieldmapping', accept: '.json' }
+    { kind: 'fieldmapping', accept: '.json' },
+    { kind: 'saconfig', accept: '.json' }
   ];
 
   function slotState(kind) {
@@ -614,6 +615,15 @@
           detail: T('src.fieldmappingDetail', { n: st.fieldMapping.counts.fields,
             c: st.fieldMapping.counts.complex, u: st.fieldMapping.counts.updateScoped }),
           health: null };
+      case 'saconfig': {
+        if (!st.saconfig) return null;
+        const a = st.saconfig.analysis;
+        return { file: st.saconfig.fileName, loaded: st.importedAt.saconfig,
+          detail: T('src.saconfigDetail', { f: U.fmtInt(a.summary.delegated + a.summary.products),
+            s: U.fmtInt(a.summary.scripts), n: U.fmtInt(a.findings.length) })
+            + (a.activity ? ' · ' + T('src.saconfigActivity', { d: a.activity.window.days || '—' }) : ''),
+          health: null };
+      }
       default: return null;
     }
   }
@@ -635,7 +645,7 @@
   function probeCollectors() {
     if (collectorProbe) return collectorProbe;
     collectorProbe = Promise.all(['collect-ad.ps1', 'collect-entra.ps1', 'docs/ENTRA-CONSENT.md',
-      'helloid-audit.py', 'helloid-audit.ps1', 'helloid-export.py', 'helloid-export.ps1', 'HelloIDCreds.ps1', 'helloid_creds.py'].map(path =>
+      'helloid-audit.py', 'helloid-audit.ps1', 'helloid-export.py', 'helloid-export.ps1', 'HelloIDCreds.ps1', 'helloid_creds.py', 'helloid-sa-export.py'].map(path =>
       fetch(path, { method: 'HEAD' })
         .then(res => res.ok && !(res.headers.get('content-type') || '').includes('html') ? path : null)
         .catch(() => null)
@@ -649,7 +659,8 @@
     directory: ['collect-ad.ps1', 'collect-entra.ps1', 'docs/ENTRA-CONSENT.md'],
     audit: ['helloid-audit.py', 'helloid_creds.py', 'helloid-audit.ps1', 'HelloIDCreds.ps1'],
     products: ['helloid-export.py', 'helloid_creds.py', 'helloid-export.ps1', 'HelloIDCreds.ps1'],
-    assignments: ['helloid-export.py', 'helloid_creds.py', 'helloid-export.ps1', 'HelloIDCreds.ps1']
+    assignments: ['helloid-export.py', 'helloid_creds.py', 'helloid-export.ps1', 'HelloIDCreds.ps1'],
+    saconfig: ['helloid-sa-export.py', 'helloid_creds.py', 'helloid-audit.py']
   };
   function collectorDownloads(kind) {
     const row = el('div', { class: 'slot-actions' });
@@ -3262,7 +3273,7 @@
         const snaps = await HR.store.list().catch(() => []);
         const ctx = await HR.store.loadContext().catch(() => null);
         const rawKinds = ctx
-          ? ['recon', 'vault', 'rules', 'granted', 'history', 'products', 'assignments', 'directory', 'fieldMapping', 'audit']
+          ? ['recon', 'vault', 'rules', 'granted', 'history', 'products', 'assignments', 'directory', 'fieldMapping', 'audit', 'saconfig']
               .filter(k => ctx[k]).length
           : 0;
         const rows = [
