@@ -156,7 +156,7 @@
       /* Skip the single root: it is everyone. path[0] = root, last = the leaf itself. */
       path.slice(1, -1).forEach((n, i) => {
         const key = 'Org' + (i + 1);
-        p.attrs[key] = n.id; p.labels[key] = n.name; p.byId[key] = !!n.externalId;
+        p.attrs[key] = n.id; p.labels[key] = n.name; p.byId[key] = n.externalId ? 'ExternalId' : false;
       });
       maxDepth = Math.max(maxDepth, path.length - 2);
     }
@@ -218,7 +218,7 @@
       const key = values.join(SEP);
       let cell = cells.get(key);
       if (!cell) {
-        cell = { conds: attrs.map((a, i) => ({ attr: a, value: values[i], label: p.labels[a] || values[i], byId: !!p.byId[a] })),
+        cell = { conds: attrs.map((a, i) => ({ attr: a, value: values[i], label: p.labels[a] || values[i], byId: p.byId[a] || false })),
           members: [] };
         cells.set(key, cell);
       }
@@ -669,7 +669,7 @@
     };
     const condition = c => /^Org\d+$/.test(c.attr)
       ? 'Department.ExternalId, one of: ' + U.uniq(c.values.flatMap(beneath)).join(', ')
-      : c.attr + (c.byId ? '.ExternalId' : '.Name') + ', one of: ' + c.values.join(', ');
+      : HR.pyramid.condPath(c) + ', one of: ' + c.values.join(', ');
     const name = c => c.labels.length > 1
       ? c.labels.slice(0, 3).join(' / ') + (c.labels.length > 3 ? '…' : '')
       : (c.labels[0] || c.values[0]);

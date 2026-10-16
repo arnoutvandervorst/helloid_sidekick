@@ -39,7 +39,7 @@
   const ATTRIBUTES = {
     Employer: c => c && ref(c.employer),
     Division: c => c && ref(c.division),
-    Department: c => c && ref(c.department),
+    Department: c => { const r = c && ref(c.department); return r && r.byId === 'Code' ? { value: r.label, label: r.label, byId: false } : r; },
     Team: c => c && ref(c.team),
     Title: c => c && ref(c.title),
     Location: c => c && ref(c.location),
@@ -51,13 +51,26 @@
        leaves. Stored level choices naming Manager are filtered out on build. */
   };
 
-  /** A HelloID reference: id if there is one, name for the reader. */
+  /** A HelloID reference: id if there is one, name for the reader. byId names the field the id came
+      from ('ExternalId' or 'Code', false for a name), so a proposed condition reads that field: a vault
+      whose titles carry only a Code must get "Title.Code, one of", not "Title.ExternalId". */
   function ref(o) {
     if (!o) return null;
-    const id = String(o.externalId || o.code || '').trim();
+    const ext = String(o.externalId || '').trim(), code = String(o.code || '').trim();
+    const id = ext || code;
     const name = String(o.name || '').trim();
     if (!id && !name) return null;
-    return { value: id || name, label: name || id, byId: !!id };
+    return { value: id || name, label: name || id, byId: ext ? 'ExternalId' : (code ? 'Code' : false) };
+  }
+
+  /** The HelloID contract field a condition on this attribute reads (Contract schema: Department has
+      ExternalId/DisplayName only, Type has Code/Description, the others ExternalId/Code/Name). */
+  function condPath(c) {
+    const attr = c.attr === 'ContractType' ? 'Type' : c.attr;
+    const id = c.byId === true ? 'ExternalId' : c.byId;
+    if (attr === 'Type') return 'Type.' + (id ? 'Code' : 'Description');
+    if (attr === 'Department') return 'Department.' + (id === 'ExternalId' ? 'ExternalId' : 'DisplayName');
+    return attr + '.' + (id || 'Name');
   }
 
   const primary = person => person.primaryContract || person.contracts[0] || null;
@@ -163,7 +176,7 @@
         const got = ATTRIBUTES[name](contract);
         attrs[name] = got ? String(got.value) : '';
         labels[name] = got ? String(got.label) : '';
-        byId[name] = !!(got && got.byId);
+        byId[name] = (got && got.byId) || false;
       }
       people.push({ person, accounts, ents, attrs, labels, byId, name: person.displayName });
     }
@@ -214,7 +227,7 @@
         const id = cur.id + SEP + attr + '=' + value;
         if (!nodes.has(id)) {
           const node = mkNode(id, i + 1, cur.path.concat([
-            { attr, value, label, byId: !!person.byId[attr] }
+            { attr, value, label, byId: person.byId[attr] || false }
           ]), cur, label);
           nodes.set(id, node);
           cur.children.push(node);
@@ -407,7 +420,7 @@
 
     const groups = new Map();
     for (const p of people) {
-      const pairs = opts.attributes.map(a => [a, p.attrs[a], p.labels[a], !!p.byId[a]]).filter(x => x[1]);
+      const pairs = opts.attributes.map(a => [a, p.attrs[a], p.labels[a], p.byId[a] || false]).filter(x => x[1]);
       const combos = [];
       for (let i = 0; i < pairs.length; i++) {
         combos.push([pairs[i]]);
@@ -519,7 +532,7 @@
     /* Every group a condition of one or two attribute values can select. */
     const groups = new Map();
     for (const person of people) {
-      const pairs = attributes.map(a => [a, person.attrs[a], person.labels[a], !!person.byId[a]])
+      const pairs = attributes.map(a => [a, person.attrs[a], person.labels[a], person.byId[a] || false])
         .filter(x => x[1]);
       const combos = [];
       for (let i = 0; i < pairs.length; i++) {
@@ -1099,7 +1112,7 @@
       Status: 'proposal',
       /* "one of" already takes a list; this is the shape HelloID writes itself. */
       Conditions: rule.conds.map(c =>
-        c.attr + (c.byId ? '.ExternalId' : '.Name') + ', one of: ' + c.values.join(', ')).join('|'),
+        condPath(c) + ', one of: ' + c.values.join(', ')).join('|'),
       Entitlements: rule.grants.map(g => entName(g.ent)).join('|')
     })));
     return U.toCSV(rows, ['Name', 'EntitlementCount', 'PersonsLatestEvaluation', 'Categories',
@@ -1126,7 +1139,7 @@
         (cap && i >= cap ? '|Over rule cap' : ''),
       Status: 'proposal',
       Conditions: rule.conds.map(c =>
-        c.attr + (c.byId ? '.ExternalId' : '.Name') + ', one of: ' + c.values.join(', ')).join('|'),
+        condPath(c) + ', one of: ' + c.values.join(', ')).join('|'),
       Entitlements: rule.grants.map(g => entName(g.ent)).join('|')
     }));
     return U.toCSV(rows, ['Name', 'EntitlementCount', 'PersonsLatestEvaluation', 'Categories',
@@ -1139,7 +1152,7 @@
     const label = node => node.path.map(p => p.attr + ': ' + (p.label || p.value || '(empty)')).join(' / ') || 'Everyone';
     /* ExternalId where we grouped on one: a rule keyed on a name stops selecting anybody
        the day HR renames the department. */
-    const condition = p => p.attr + (p.byId ? '.ExternalId' : '.Name') + ', one of: ' + p.value;
+    const condition = p => condPath(p) + ', one of: ' + p.value;
     const entName = key => {
       const perm = model.permissions.get(key);
       return perm ? (perm.system + ' - ' + perm.name + (perm.path ? ' (' + perm.path + ')' : '')) : key;
@@ -1172,7 +1185,7 @@
         Categories: group.conds.length > 1 ? 'Combination' : 'Single attribute',
         Status: 'proposal',
         Conditions: group.conds.map(c =>
-          c.attr + (c.byId ? '.ExternalId' : '.Name') + ', one of: ' + c.value).join('|'),
+          condPath(c) + ', one of: ' + c.value).join('|'),
         Entitlements: group.rules.map(r => entName(r.ent)).join('|')
       });
     });
@@ -1180,7 +1193,7 @@
       'Status', 'Conditions', 'Entitlements']);
   }
 
-  HR.pyramid = { build, mine, account, suggestLevels, mineCombos, population, greedy, explains,
+  HR.pyramid = { condPath, build, mine, account, suggestLevels, mineCombos, population, greedy, explains,
     sweep, baseline, condense, condensedOf, condenseGreedy, condensedToRulesCsv,
     rankForCap, ruleCap, availableAttributes, toRulesCsv, greedyToRulesCsv, ATTRIBUTES };
 })(window.HR);

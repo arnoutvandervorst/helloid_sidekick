@@ -3,6 +3,10 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.10.14] — 2026-10-16
+
+- Rule proposals name the field the data really has. A contract attribute without an ExternalId but with a Code (titles often are) was proposed as “Title.ExternalId, one of: <code>”, which matches nobody in HelloID: on the demo set 77 of 98 pyramid rules, 75 of 98 coverage-first rules and every cohort rule selected no one. Proposals now write Title.Code (or .Name when there is no id), Department.DisplayName when a department has no ExternalId, and Type.Code / Type.Description for the contract type; the rule check understands Division, Team and Organization by ExternalId and Code as well. Pinned by test/pyramid.test.js.
+
 ## [2026.10.13] — 2026-10-15
 
 - Scripts & forms: a quality check over a whole tenant’s Service Automation — every delegated form, product, data source, task script and library variable — read from one file the new helloid-sa-export.py writes (HelloID API key, read access). It opens with what to fix first and where the problems sit, then the findings per rule with why and how to fix, every form and product with its worst finding, the copied scripts with a line diff against the version most copies share, every script with its findings marked on the line, and the variable library.

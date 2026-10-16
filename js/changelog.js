@@ -18,6 +18,12 @@
 
   const ENTRIES = [
     {
+      version: '2026.10.14', date: '2026-10-16',
+      changes: [
+        'Rule proposals name the field the data really has. A contract attribute without an ExternalId but with a Code (titles often are) was proposed as \u201cTitle.ExternalId, one of: <code>\u201d, which matches nobody in HelloID: on the demo set 77 of 98 pyramid rules, 75 of 98 coverage-first rules and every cohort rule selected no one. Proposals now write Title.Code (or .Name when there is no id), Department.DisplayName when a department has no ExternalId, and Type.Code / Type.Description for the contract type; the rule check understands Division, Team and Organization by ExternalId and Code as well. Pinned by test/pyramid.test.js.'
+      ]
+    },
+    {
       version: '2026.10.13', date: '2026-10-15',
       changes: [
         'Scripts & forms: a quality check over a whole tenant\u2019s Service Automation \u2014 every delegated form, product, data source, task script and library variable \u2014 read from one file the new helloid-sa-export.py writes (HelloID API key, read access). It opens with what to fix first and where the problems sit, then the findings per rule with why and how to fix, every form and product with its worst finding, the copied scripts with a line diff against the version most copies share, every script with its findings marked on the line, and the variable library.',

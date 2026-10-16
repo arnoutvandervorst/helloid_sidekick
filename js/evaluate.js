@@ -45,8 +45,14 @@
     'employer.externalid': c => [c.employer.externalId],
     'employer.name': c => [c.employer.name],
     'division.name': c => [c.division.name],
+    'division.externalid': c => [c.division.externalId],
+    'division.code': c => [c.division.code],
     'team.name': c => [c.team.name],
-    'organization.name': c => [c.organization.name]
+    'team.externalid': c => [c.team.externalId],
+    'team.code': c => [c.team.code],
+    'organization.name': c => [c.organization.name],
+    'organization.externalid': c => [c.organization.externalId],
+    'organization.code': c => [c.organization.code]
   };
 
   const PERSON_FACETS = {
