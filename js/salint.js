@@ -710,6 +710,233 @@
       else if (!s.runInCloud && s.agentPoolId && !pools.has(lc(s.agentPoolId))) add('agent.pool', 'high', s.target, { script: s.name, pool: s.agentPoolId }, { script: s.id });
     });
 
+    /* ------------------------------------------------- safety and robustness */
+    const AD_READ = /\b(?:Get-AD(?:User|Group|Object|Computer|OrganizationalUnit)|Search-ADAccount|Get-ADGroupMember)\b/i;
+    const AD_CALL = /\b(?:Get|Set|New|Remove|Add|Move|Enable|Disable|Unlock|Rename|Search|Clear)-AD\w+|\bImport-Module\s+['"]?ActiveDirectory/i;
+    const PRIV_OP = /\b(?:Set-ADAccountPassword|Add-ADGroupMember|Add-ADPrincipalGroupMembership|Enable-ADAccount|Unlock-ADAccount)\b/i;
+    const MUTATE = /\b(?:Remove|Disable|Set|Revoke|Delete|Clear)-\w+|-Method\s+['"]?(?:Delete|Post|Put|Patch)|\.Remove\(/i;
+    /* Data sources that feed something a person selects from (not lookups of one object or uniqueness checks). */
+    const selecting = new Set();
+    forms.forEach(f => f.fields.forEach(({ field }) => {
+      if (!['grid', 'dropdown', 'duallist', 'multiselectgrid', 'radio'].includes(field.type)) return;
+      bindingsOf(field).forEach(({ cfg: bc }) => { const d = dsByGuid.get(lc(bc.dataSourceGuid)); if (d) selecting.add(d); });
+    }));
+    const DESTRUCT = /\b(?:Remove-AD(?:User|Group|Object|Computer)|Disable-ADAccount|Remove-Mailbox|Remove-DistributionGroup|Remove-Mg(?:User|Group))\b/i;
+    const BROAD = /^(?:users|everyone|all users|domain users|iedereen|alle gebruikers|gebruikers)$/i;
+    const PROTECTED = /adminCount|Domain Admins|Enterprise Admins|Schema Admins|Administrators|Account Operators|isCriticalSystemObject|protected/i;
+    const lineOfIn = (code, re) => { const m = re.exec(code); return m ? lineAt(code, m.index) : null; };
+
+    /* Which variables carry what the person filling in the form typed or picked. */
+    function tainted(code) {
+      const t = new Set();
+      const ASSIGN = /\$(\w+)\s*=(?!=)([^\n;]*)/g;
+      for (let pass = 0; pass < 3; pass++) {
+        let m; ASSIGN.lastIndex = 0;
+        while ((m = ASSIGN.exec(code))) {
+          const rhs = m[2];
+          if (/\$(?:datasource|form)\./i.test(rhs) || [...t].some(v => new RegExp('\\$' + v + '\\b', 'i').test(rhs))) t.add(m[1].toLowerCase());
+        }
+      }
+      ['datasource', 'form', 'psitem', '_'].forEach(x => t.delete(x));
+      return t;
+    }
+
+    /* Data sources whose searches are not bounded to an OU. */
+    const unscoped = new Set();
+    scripts.forEach(s => {
+      const code = s.vars.code, raw = blank(s.script, false);
+      /* 5. A cloud script calling the AD module: there is no AD in the cloud. */
+      if (s.runInCloud && AD_CALL.test(code)) add('script.cloud.ad', 'high', s.target, { script: s.name }, { script: s.id, line: lineOfIn(code, new RegExp(AD_CALL.source, 'i')) });
+
+      /* 1a. Searches without a SearchBase look through the whole domain, admins included. */
+      /* A search (wildcard, everything, an LDAP filter), not a lookup of one known object. */
+      const wildcard = /-like\s|-Filter\s*(?:\*|['"]\*['"])|-LDAPFilter|Name\s+-like/i.test(raw);
+      const searches = AD_READ.test(code) && wildcard;
+      const hasBase = /SearchBase/i.test(code);
+      /* A uniqueness check must search the whole domain, or it misses the duplicate in another OU. */
+      const uniqueness = s.ds && !selecting.has(s.ds) && /\bunique\b|Measure-Object|\.Count\s*-(?:gt|ge|eq)\s*[01]\b/i.test(code);
+      if (uniqueness) { /* deliberate */ } else if (searches && !/SearchBase/i.test(code) || searches && /SearchBase\s*[=]?\s*['"]\s*DC=[^'"]*['"]/i.test(raw) && !/SearchBase\s*[=]?\s*['"][^'"]*OU=/i.test(raw)) {
+        const base = hasBase;
+        const root = /SearchBase\s*[=]?\s*['"]\s*DC=[^'"]*['"]/i.test(raw) && !/SearchBase\s*[=]?\s*['"][^'"]*OU=/i.test(raw);
+        if (!base || root) { if (s.ds) unscoped.add(s.ds); add('script.scope', 'medium', s.target, { script: s.name, how: root ? 'root' : 'none' }, { script: s.id, line: lineOfIn(code, new RegExp(AD_READ.source, 'i')) }); }
+      }
+
+      /* 2. What someone typed, pasted into a filter string or an expression. */
+      const t = tainted(code);
+      const usesTaint = text => /\$(?:datasource|form)\./i.test(text) || [...t].some(v => new RegExp('\\$\\(?\\$?' + v + '\\b|\\$' + v + '\\b', 'i').test(text));
+      const escaped = /-replace\s*["']'["']\s*,\s*["']''["']|\.Replace\(\s*["']'["']\s*,\s*["']''["']\s*\)|ConvertTo-LdapEscaped|\[System\.Security\.SecurityElement\]::Escape|EscapeDataString/i.test(raw);
+      let m;
+      const FILTER = /-(?:LDAP)?Filter\s+"([^"]*)"/gi;
+      let flagged = false;
+      while ((m = FILTER.exec(raw)) && !flagged) {
+        if (usesTaint(m[1]) && !escaped) { flagged = true; add('script.inject', s.kind === 'datasource' ? 'low' : 'high', s.target, { script: s.name, how: 'filter' }, { script: s.id, line: lineAt(raw, m.index) }); }
+      }
+      const SPLATF = /\bFilter\s*=\s*"([^"]*)"/gi;
+      while (!flagged && (m = SPLATF.exec(raw))) {
+        if (usesTaint(m[1]) && !escaped) { flagged = true; add('script.inject', s.kind === 'datasource' ? 'low' : 'high', s.target, { script: s.name, how: 'filter' }, { script: s.id, line: lineAt(raw, m.index) }); }
+      }
+      const FVAR = /\$(\w+)\s*=\s*"([^"]*)"/gi;
+      while (!flagged && (m = FVAR.exec(raw))) {
+        if (usesTaint(m[2]) && !escaped && new RegExp('-(?:LDAP)?Filter\\s+\\$' + m[1] + '\\b|Filter\\s*=\\s*\\$' + m[1] + '\\b', 'i').test(raw)) {
+          flagged = true; add('script.inject', s.kind === 'datasource' ? 'low' : 'high', s.target, { script: s.name, how: 'filter' }, { script: s.id, line: lineAt(raw, m.index) });
+        }
+      }
+      const IEX = /\b(?:Invoke-Expression|iex)\b([^\n]*)/gi;
+      while ((m = IEX.exec(code))) if (usesTaint(m[1])) { add('script.inject', 'high', s.target, { script: s.name, how: 'iex' }, { script: s.id, line: lineAt(code, m.index) }); break; }
+
+      /* 3b. Secrets into the log. */
+      const LOG = /\bWrite-(?:Information|Verbose|Host|Warning|Debug|Error)\b([^\n]*)/gi;
+      while ((m = LOG.exec(raw))) {
+        const arg = m[1];
+        if (/\$form\b(?!\.)|ConvertTo-Json[^\n]*\$form\b|\$(?:form\.)?\w*(?:password|passwd|wachtwoord|secret|apikey|token)\w*\b/i.test(arg) &&
+            !/-Tags\s+['"]?Audit/i.test(arg)) {
+          add('script.log.secret', 'high', s.target, { script: s.name }, { script: s.id, line: lineAt(raw, m.index) });
+          break;
+        }
+      }
+
+      /* 7. A catch that swallows the error: the activity shows success. */
+      const catches = s.vars.catches;
+      for (const [a, b] of catches) {
+        const body = code.slice(a, b);
+        if (!/\b(?:throw|Write-Error|exit\s+\d)|IsError\s*=\s*\$true|Write-Warning/i.test(body)) {
+          add('script.swallow', s.kind === 'datasource' ? 'low' : 'medium', s.target, { script: s.name }, { script: s.id, line: lineAt(code, a) });
+          break;
+        }
+      }
+
+      /* 9. Loads the whole directory for one dropdown. */
+      /* No search value: everything, every time the field opens — or a "*" that means everything. */
+      if (s.kind === 'datasource' && searches && !/ResultSetSize|-First\s+\d/i.test(code)) {
+        const readsInput = /\$datasource\.\w+/i.test(code);
+        const all = /-Filter\s*(?:\*|['"]\*['"]|\{\s*Name\s+-like\s+['"]\*['"]\s*\})|-like\s+['"]\*['"]/i.test(raw);
+        const star = /-eq\s+['"]\*['"]/i.test(raw);
+        if (all && (!readsInput || star)) {
+          add('script.unbounded', hasBase ? 'low' : 'medium', s.target, { script: s.name }, { script: s.id, line: lineOfIn(raw, /-Filter\s*(?:\*|['"]\*['"]|\{)|-like\s+['"]\*['"]/i) });
+        }
+      }
+    });
+
+    entries.forEach(e => {
+      const tgt = tgtEntry(e);
+      const fields = e.form ? e.form.fields.map(x => x.field) : [];
+      const byKey = new Map(fields.map(f => [lc(f.key), f]));
+      const taskCode = e.scripts.map(s => s.vars.code).join('\n');
+      const taskRaw = e.scripts.map(s => blank(s.script, false)).join('\n');
+
+      /* 3a. A password field shown in the activity summary. */
+      fields.forEach(f => {
+        const label = lc((f.templateOptions || {}).label);
+        if ((f.type === 'password' || /password|wachtwoord/.test(lc(f.key)) && f.type === 'input' || /password|wachtwoord/.test(label) && f.type === 'input') &&
+            !/hide/i.test(String(f.summaryVisibility || ''))) {
+          add('form.password.shown', 'high', tgt, { field: f.key, vis: f.summaryVisibility || 'Show' });
+        }
+      });
+      if (!e.scripts.length) return;
+
+      /* 1b. Can touch privileged accounts or groups: the operation is sensitive, a lookup is unscoped, nothing filters protected objects. */
+      if (e.type === 'delegated' && PRIV_OP.test(taskCode)) {
+        const dss = new Set();
+        if (e.form) e.form.fields.forEach(({ field }) => bindingsOf(field).forEach(({ cfg: bc }) => { const d = dsByGuid.get(lc(bc.dataSourceGuid)); if (d) dss.add(d); }));
+        const open = [...dss].filter(d => unscoped.has(d));
+        const guarded = PROTECTED.test(taskRaw) || [...dss].some(d => PROTECTED.test(d.script || ''));
+        if (open.length && !guarded) add('entry.privileged', 'high', tgt, { op: (taskCode.match(PRIV_OP) || [''])[0].split(/\s/)[0], ds: open.map(d => d.name).join(', ') });
+      }
+
+      /* 4. Destructive without a brake. */
+      if (e.type === 'delegated' && DESTRUCT.test(taskCode)) {
+        const confirm = fields.some(f => f.type === 'boolean' && (f.templateOptions || {}).required);
+        const broad = e.accessGroups.some(g => BROAD.test(String(g).trim()));
+        if (!confirm || broad) add('entry.destructive', broad ? 'high' : 'medium', tgt, { op: (taskCode.match(DESTRUCT) || [''])[0], why: broad ? 'broad' : 'noconfirm',
+          groups: e.accessGroups.join(', ') || '—' });
+      }
+      if (!e.form || e.type !== 'delegated') return;
+
+      /* 8. Fields the task never reads. */
+      const wholeForm = /\$form\b(?!\.)|\$form\.PSObject/i.test(taskCode);
+      const readKeys = new Set(); taskCode.replace(/\$form\.(\w+)/gi, (_, k) => { readKeys.add(lc(k)); return _; });
+      const feeds = new Set();
+      e.form.fields.forEach(({ field }) => {
+        bindingsOf(field).forEach(({ cfg: bc }) => ((bc.input && bc.input.propertyInputs) || []).forEach(pi => { const o = pi && pi.otherFieldValue && pi.otherFieldValue.otherFieldKey; if (o) feeds.add(lc(o)); }));
+        if (typeof field.hideExpression === 'string') field.hideExpression.replace(/model\[\s*["']([^"']+)["']\s*\]/g, (_, k) => { feeds.add(lc(k)); return _; });
+        const dep = (field.templateOptions || {}).dependOn; if (dep) feeds.add(lc(dep));
+      });
+      if (!wholeForm) fields.forEach(f => {
+        if (['label', 'text', 'html', 'formrow', 'divider'].includes(f.type)) return;
+        const to = f.templateOptions || {};
+        /* Display and validation fields a data source fills are there to be read by people, not by the task. */
+        if (to.readonly || (bindingsOf(f).length && !to.required)) return;
+        const k = lc(f.key);
+        if (readKeys.has(k) || feeds.has(k)) return;
+        add('form.field.unused', 'low', tgt, { field: f.key });
+      });
+
+      /* 6. An optional field written straight into AD: left empty, it clears the attribute. */
+      if (/\b(?:Set-AD\w+|Set-Mailbox|Set-MgUser)\b/i.test(taskCode)) {
+        const aliases = new Map();   // alias → form key
+        taskCode.replace(/\$(\w+)\s*=\s*\$form\.(\w+)\s*(?=[;\n]|$)/gi, (_, a, k) => { aliases.set(lc(a), lc(k)); return _; });
+        const checks = key => {
+          const names = [key].concat([...aliases].filter(([, k]) => k === key).map(([a]) => a));
+          return names.some(n => new RegExp('IsNullOr(?:Empty|WhiteSpace)\\(\\s*\\$(?:form\\.)?' + n + '\\b|\\bif\\s*\\(\\s*(?:-not\\s+|!\\s*)?\\$(?:form\\.)?' + n + '\\s*\\)|\\$(?:form\\.)?' + n + '\\s*-(?:ne|eq)\\s*(?:\\$null|""|\'\')|\\$null\\s*-(?:ne|eq)\\s*\\$(?:form\\.)?' + n + '\\b', 'i').test(taskCode));
+        };
+        const seen = new Set();
+        const USE = /-(\w+)\s+\$(?:form\.)?(\w+)\b|(?<![$\w.])(\w+)\s*=\s*\$(?:form\.)?(\w+)\s*(?=[;\n}])/gi;
+        let m;
+        while ((m = USE.exec(taskCode))) {
+          const param = m[1] || m[3], ref = lc(m[2] || m[4]);
+          const key = byKey.has(ref) && /\$form\./i.test(m[0]) ? ref : aliases.get(ref);
+          if (!key || seen.has(key)) continue;
+          const f = byKey.get(key);
+          if (!f || !['input', 'textarea', 'email', 'datetime', 'number'].includes(f.type) || (f.templateOptions || {}).required || checks(key)) continue;
+          /* Shown by a checkbox the task branches on: the empty case is handled there. */
+          const toggle = typeof f.hideExpression === 'string' && (f.hideExpression.match(/model\[\s*["']([^"']+)["']\s*\]/) || [])[1];
+          if (toggle && (readKeys.has(lc(toggle)))) continue;
+          if (/^(?:Identity|Filter|SearchBase|Server|Credential|ErrorAction|Properties)$/i.test(param)) continue;
+          seen.add(key);
+          add('script.clears', 'medium', e.scripts[0].target, { field: f.key, param }, { script: e.scripts[0].id, line: lineAt(taskCode, m.index) });
+        }
+      }
+
+      /* 10. Free text that AD will refuse or store wrong. */
+      const LIMITS = [
+        { re: /^(?:sam(?:account)?name|samaccountname|username|accountname)$/, need: 'max', max: 20 },
+        { re: /^(?:mail|email|emailaddress|e-?mail)$/, need: 'pattern' },
+        { re: /^(?:phone|telephone|telephonenumber|mobile|mobilephone|officephone|homephone)$/, need: 'pattern' },
+        { re: /^(?:userprincipalname|upn)$/, need: 'pattern' }
+      ];
+      fields.forEach(f => {
+        if (f.type !== 'input' || !readKeys.has(lc(f.key))) return;
+        const rule = LIMITS.find(r => r.re.test(lc(f.key)));
+        if (!rule) return;
+        const to = f.templateOptions || {};
+        const ok = rule.need === 'max' ? (to.maxLength && +to.maxLength <= rule.max) || to.pattern : !!to.pattern;
+        if (!ok) add('form.validation', 'low', tgt, { field: f.key, need: rule.need, max: rule.max || '' });
+      });
+    });
+
+    /* 3c. A credential in a variable that is not marked secret. */
+    variables.forEach(v => {
+      if (v.secret || v.isSystem) return;
+      if (/pass(?:word)?|pwd|secret|token|api_?key|apisecret|clientsecret|wachtwoord/i.test(v.name) && v.value != null && String(v.value).trim() !== '') {
+        add('var.secret.plain', 'high', { type: 'variable', id: v.name, name: v.name }, { name: v.name });
+      }
+    });
+
+    /* 11. Products that grant without taking back, or grant risky things at once. */
+    entries.filter(e => e.type === 'product').forEach(e => {
+      const tgt = tgtEntry(e);
+      const grants = e.tasks.some(t => t.event === 'onApprove' && t.script) || e.actions.length;
+      const returns = e.tasks.filter(t => t.event === 'onReturn');
+      const revokes = returns.some(t => t.script && MUTATE.test(blank(t.script, true)));
+      const pr = (cfg.products || []).find(x => x.productId === e.id) || {};
+      if (grants && !revokes) add(returns.length ? 'product.return.empty' : 'product.norevoke', pr.hasTimeLimit ? 'high' : 'medium', tgt,
+        { limit: pr.hasTimeLimit ? 'yes' : 'no', task: returns.map(t => t.name).join(', ') || '\u2014' });
+      if (grants && pr.returnOnUserDisable === false) add('product.leaver', 'low', tgt, {});
+      const wf = lc(pr.approvalWorkflow && pr.approvalWorkflow.name);
+      const risky = (pr.hasRiskFactor && +pr.riskFactor >= 5) || (pr.showPrice && pr.price && parseFloat(String(pr.price).replace(',', '.')) > 0);
+      if (/instant|direct|auto/.test(wf) && risky) add('product.instant', 'medium', tgt, { wf: pr.approvalWorkflow.name, risk: pr.hasRiskFactor ? pr.riskFactor : '—', price: pr.showPrice && pr.price ? pr.price : '—' });
+    });
+
     /* -------------------------------------------------------- variable rules */
     const spellings = new Map();   // lc → Map(spelling → count)
     scripts.forEach(s => s.vars.spell.forEach((m, k) => {

@@ -198,6 +198,81 @@ ok('varsOf: escaped and drive variables skipped', !v.reads.has('h') && !v.reads.
 ok('severity order', a.findings.every((f, i) => !i || a.findings[i - 1].order <= f.order));
 ok('summary counts', a.summary.delegated === 4 && a.summary.products === 2 && a.summary.forms === 3);
 
+/* safety and robustness rules */
+const S = (guid, name, script, extra) => Object.assign({ dataSourceGUID: guid, name, type: 4, runInCloud: false, script,
+  model: [{ key: 'DisplayName' }, { key: 'ObjectGuid' }], input: [{ key: 'searchValue' }] }, extra || {});
+const selF = (key, g, extra) => Object.assign({ key, type: 'grid', templateOptions: { required: true, grid: { columns: [{ field: 'DisplayName' }] },
+  dataSourceConfig: { dataSourceGuid: g, input: { propertyInputs: [{ propertyName: 'searchValue', otherFieldValue: { otherFieldKey: 'searchValue' } }] } } } }, extra || {});
+const WILD = 'try {\n  $s = $datasource.searchValue\n  $f = "Name -like \'*$s*\'"\n  Get-ADUser -Filter $f | Select-Object DisplayName, ObjectGuid\n} catch { Write-Error $_ }';
+const t2 = L.analyse({ kind: 'helloid-sa-config', agentPools: [{ agentPoolGUID: 'p' }],
+  variables: [{ name: 'ApiPassword', value: 'hunter22', secret: false }, { name: 'SafePassword', value: '***', secret: true }, { name: 'SearchOU', value: 'OU=x', secret: false }],
+  dataSources: [
+    S('w1', 'wide', WILD),
+    S('w2', 'scoped', WILD.replace('Get-ADUser -Filter $f', 'Get-ADUser -Filter $f -SearchBase $SearchOU').replace('$f = "Name', '$s = $s -replace "\'", "\'\'"\n  $f = "Name')),
+    S('w3', 'cloudy', 'try { Get-ADUser -Filter * -SearchBase $SearchOU -ResultSetSize 50 | Select-Object DisplayName } catch { Write-Error $_ }', { runInCloud: true }),
+    S('w4', 'everything', 'try {\n  Get-ADGroup -Filter * -SearchBase $SearchOU | Select-Object DisplayName\n} catch { }'),
+    S('w5', 'lookup-one', 'try { Get-ADUser -Identity $datasource.searchValue | Select-Object DisplayName } catch { Write-Error $_ }')
+  ],
+  dynamicForms: [
+    { dynamicFormGUID: 'fa', name: 'Reset', formSchema: [
+      { key: 'searchValue', type: 'input', templateOptions: { required: true } }, selF('gridUsers', 'w1'),
+      { key: 'password', type: 'password', templateOptions: { required: true }, summaryVisibility: 'Show' },
+      { key: 'mobile', type: 'input', templateOptions: {} },
+      { key: 'samAccountName', type: 'input', templateOptions: { required: true } },
+      { key: 'notes', type: 'input', templateOptions: {} },
+      { key: 'shown', type: 'input', templateOptions: { readonly: true } }
+    ] },
+    { dynamicFormGUID: 'fb', name: 'Delete', formSchema: [{ key: 'searchValue', type: 'input', templateOptions: { required: true } }, selF('gridUsers', 'w2'),
+      { key: 'sure', type: 'boolean', templateOptions: { required: true } }] },
+    { dynamicFormGUID: 'fc', name: 'Delete2', formSchema: [{ key: 'searchValue', type: 'input', templateOptions: { required: true } }, selF('gridUsers', 'w2')] }
+  ],
+  delegatedForms: [
+    { delegatedFormGUID: 'r', name: 'Reset form', dynamicFormGUID: 'fa', isEnabled: true, accessGroups: [{ name: 'SD' }], categoryGuids: ['c'],
+      task: { id: 'tr', script: 'try {\n  $mob = $form.mobile\n  Set-ADAccountPassword -Identity $form.gridUsers.ObjectGuid -NewPassword $form.password\n  Set-ADUser -Identity $form.gridUsers.ObjectGuid -MobilePhone $mob -SamAccountName $form.samAccountName\n  Write-Information "Reset to $($form.password)"\n  Write-Information -Tags "Audit" -MessageData @{ IsError = $false }\n} catch {\n  Write-Information "failed"\n}' } },
+    { delegatedFormGUID: 'd', name: 'Delete form', dynamicFormGUID: 'fb', isEnabled: true, accessGroups: [{ name: 'SD' }], categoryGuids: ['c'],
+      task: { id: 'td', script: 'try { Remove-ADUser -Identity $form.gridUsers.ObjectGuid -Confirm:$false; Write-Information -Tags "Audit" -MessageData @{} } catch { Write-Error $_ }', runInCloud: false } },
+    { delegatedFormGUID: 'd2', name: 'Delete open', dynamicFormGUID: 'fc', isEnabled: true, accessGroups: [{ name: 'Users' }], categoryGuids: ['c'],
+      task: { id: 'td2', script: 'try { Remove-ADUser -Identity $form.gridUsers.ObjectGuid -Confirm:$false; Write-Information -Tags "Audit" -MessageData @{} } catch { Write-Error $_ }' } }
+  ],
+  products: [
+    { productId: 'pa', name: 'Grant only', visibility: 'All', categories: [{ id: 'x' }], actions: [], returnOnUserDisable: true,
+      approvalWorkflow: { name: 'Instant approve' }, hasRiskFactor: true, riskFactor: 8,
+      onApprove: [{ id: 'a1', name: 'Add', script: 'try { Add-ADGroupMember -Identity G -Members $requester.userName } catch { Write-Error $_ }' }] },
+    { productId: 'pb', name: 'Empty return', visibility: 'All', categories: [{ id: 'x' }], actions: [], returnOnUserDisable: false,
+      approvalWorkflow: { name: 'Manager' },
+      onApprove: [{ id: 'b1', name: 'Add', script: 'try { Add-ADGroupMember -Identity G -Members $requester.userName } catch { Write-Error $_ }' }],
+      onReturn: [{ id: 'b2', name: 'Log only', script: 'Write-Information "returned"' }] },
+    { productId: 'pc', name: 'Good product', visibility: 'All', categories: [{ id: 'x' }], actions: [], returnOnUserDisable: true,
+      approvalWorkflow: { name: 'Instant approve' }, hasRiskFactor: false, riskFactor: 1,
+      onApprove: [{ id: 'c1', name: 'Add', script: 'try { Add-ADGroupMember -Identity G -Members $requester.userName } catch { Write-Error $_ }' }],
+      onReturn: [{ id: 'c2', name: 'Remove', script: 'try { Remove-ADGroupMember -Identity G -Members $requester.userName -Confirm:$false } catch { Write-Error $_ }' }] }
+  ] });
+const h2 = (rule, name, pred) => t2.findings.some(f => f.rule === rule && (!name || f.target.name === name) && (!pred || pred(f)));
+ok('script.scope on the unscoped wildcard search, not a scoped one or a lookup', h2('script.scope', 'wide') && !h2('script.scope', 'scoped') && !h2('script.scope', 'lookup-one'));
+ok('entry.privileged: password reset fed by an unscoped search', h2('entry.privileged', 'Reset form', f => /Set-ADAccountPassword/.test(f.p.op)));
+ok('script.inject low in a lookup, not when escaped', h2('script.inject', 'wide', f => f.sev === 'low') && !h2('script.inject', 'scoped'));
+ok('script.cloud.ad', h2('script.cloud.ad', 'cloudy') && !h2('script.cloud.ad', 'wide'));
+ok('form.password.shown', h2('form.password.shown', 'Reset form', f => f.p.field === 'password'));
+ok('script.log.secret on Write-Information of the password', h2('script.log.secret', 'Reset form'));
+ok('var.secret.plain', h2('var.secret.plain', 'ApiPassword') && !h2('var.secret.plain', 'SafePassword') && !h2('var.secret.plain', 'SearchOU'));
+ok('entry.destructive without confirmation, high when open to Users', !h2('entry.destructive', 'Delete form') && h2('entry.destructive', 'Delete open', f => f.sev === 'high'));
+ok('script.clears: optional mobile through an alias', h2('script.clears', 'Reset form', f => f.p.field === 'mobile' && f.p.param === 'MobilePhone'));
+ok('script.clears: required field is fine', !h2('script.clears', 'Reset form', f => f.p.field === 'samAccountName'));
+ok('script.swallow in the task, not where Write-Error is', h2('script.swallow', 'Reset form') && !h2('script.swallow', 'Delete form'));
+ok('script.swallow low in a data source', h2('script.swallow', 'everything', f => f.sev === 'low'));
+ok('form.field.unused: notes, not a readonly display field', h2('form.field.unused', 'Reset form', f => f.p.field === 'notes') && !h2('form.field.unused', 'Reset form', f => f.p.field === 'shown'));
+ok('form.field.unused: fields feeding a data source count as used', !h2('form.field.unused', 'Reset form', f => f.p.field === 'searchValue'));
+ok('script.unbounded on -Filter * without input or limit (low when scoped)', h2('script.unbounded', 'everything', f => f.sev === 'low') && !h2('script.unbounded', 'cloudy'));
+const t3 = L.analyse({ kind: 'helloid-sa-config', dataSources: [S('u1', 'star', 'try {\n  $s = $datasource.searchValue\n  if ($s -eq "*") { $f = "Name -like \'*\'" } else { $f = "Name -like \'*$s*\'" }\n  Get-ADUser -Filter $f | Select-Object DisplayName\n} catch { Write-Error $_ }')],
+  dynamicForms: [], delegatedForms: [], products: [], variables: [] });
+ok('script.unbounded medium on the "*" path without OU', t3.findings.some(f => f.rule === 'script.unbounded' && f.sev === 'medium'));
+ok('script.scope also when no selection is fed', t3.findings.some(f => f.rule === 'script.scope'));
+ok('form.validation on samAccountName without length', h2('form.validation', 'Reset form', f => f.p.field === 'samAccountName'));
+ok('product.norevoke on grant without return', h2('product.norevoke', 'Grant only') && !h2('product.norevoke', 'Good product'));
+ok('product.return.empty on a return that only logs', h2('product.return.empty', 'Empty return'));
+ok('product.leaver when return on disable is off', h2('product.leaver', 'Empty return') && !h2('product.leaver', 'Good product'));
+ok('product.instant on a risky product', h2('product.instant', 'Grant only') && !h2('product.instant', 'Good product'));
+
 console.log(fails.join('\n'));
 console.log(`salint: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
