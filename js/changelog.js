@@ -18,8 +18,11 @@
 
   const ENTRIES = [
     {
-      version: '2026.10.14', date: '2026-10-16',
+      version: '2026.10.14', date: '2026-10-18',
       changes: [
+        'Scripts & forms checks safety and robustness too. Searches without an OU (wildcard or list searches over the whole domain are slow and bad practice; single-object lookups and uniqueness checks are left alone) and searches without a search value that return everything; form or data-source input written into an AD filter without escaping (low in a data source, high in a task, where the filter decides which object is changed) and Invoke-Expression; a password field shown in the request summary, $form or a password written to a log, and secret library variables stored in plain text; tasks that delete or disable without a required confirmation box or that broad groups can run; cloud tasks calling AD cmdlets; tasks that reset passwords or add members on accounts found by an unscoped search with no protected-account filter.',
+        'Fewer silent failures: an optional form field passed straight to Set-ADUser, Set-Mailbox or Set-MgUser clears the attribute when left empty (fields a checkbox reveals and the task branches on are skipped); catch blocks that swallow the error; form fields the task never reads; account name, mail, phone and UPN fields without length or pattern validation.',
+        'Product lifecycle: products that grant on approval but never revoke (no return task, or one that only logs), that stay when the user is disabled, and that are approved instantly while carrying a high risk factor or a price.',
         'Rule proposals name the field the data really has. A contract attribute without an ExternalId but with a Code (titles often are) was proposed as \u201cTitle.ExternalId, one of: <code>\u201d, which matches nobody in HelloID: on the demo set 77 of 98 pyramid rules, 75 of 98 coverage-first rules and every cohort rule selected no one. Proposals now write Title.Code (or .Name when there is no id), Department.DisplayName when a department has no ExternalId, and Type.Code / Type.Description for the contract type; the rule check understands Division, Team and Organization by ExternalId and Code as well. Pinned by test/pyramid.test.js.'
       ]
     },
