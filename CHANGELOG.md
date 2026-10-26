@@ -3,6 +3,12 @@
 Versions are CalVer (`YYYY.M.N` — Nth release of that month). This file is
 generated from `js/changelog.js` by `make-changelog.js`; edit there, not here.
 
+## [2026.10.15] — 2026-10-26
+
+- Scripts & forms, checked against a second tenant: far fewer false alarms. A delegated form that points at an older version of its dynamic form is no longer reported as pointing at a form that does not exist (HelloID serves the latest version; the export now records those version GUIDs, so export again). Defects in forms no delegated form or product uses count as low, since nobody runs into them. What a helper function writes is no longer taken for the data source’s output, and the fallback in a helper’s catch block is not a swallowed error.
+- Product checks: only approve tasks that add, create or enable something count as handing out access (a password reset or removing a group does not), and a REST call with Method = "DELETE" in its parameters counts as taking it back. Also quieter: AD password attributes such as ChangePasswordAtLogon as secrets, portal links as deprecated endpoints, Graph @odata.bind as hard-coded mail addresses, a filter for objects without members as an unbounded search, confirmation fields as unused, read-only tasks without an audit line; a variable that only appears in a log message is low.
+- helloid-sa-export.py keeps going when the audit-log key is rejected: the configuration is written, only the activity is skipped.
+
 ## [2026.10.14] — 2026-10-18
 
 - Scripts & forms checks safety and robustness too. Searches without an OU (wildcard or list searches over the whole domain are slow and bad practice; single-object lookups and uniqueness checks are left alone) and searches without a search value that return everything; form or data-source input written into an AD filter without escaping (low in a data source, high in a task, where the filter decides which object is changed) and Invoke-Expression; a password field shown in the request summary, $form or a password written to a log, and secret library variables stored in plain text; tasks that delete or disable without a required confirmation box or that broad groups can run; cloud tasks calling AD cmdlets; tasks that reset passwords or add members on accounts found by an unscoped search with no protected-account filter.
