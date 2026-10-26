@@ -217,6 +217,22 @@
    * says every output statement was understood; only then can the script be said not
    * to return something.
    */
+  /* A task that changes something (AD, Exchange, Graph, HelloID or any REST write). */
+  const MUTATE_ANY = /\b(?:Add|New|Remove|Disable|Enable|Set|Revoke|Grant|Delete|Clear|Move|Rename|Unlock|Update)-(?!Object\b|Type\b|Member\b|Variable\b|TimeSpan\b)\w+|-Method\s+['"]?(?:Delete|Post|Put|Patch)|\bMethod\s*=\s*['"](?:Delete|Post|Put|Patch)/i;
+
+  /** [start, end] of every `function Name { … }` body in comment-blanked code. */
+  function functionBodies(code) {
+    const out = [];
+    const FN = /\bfunction\s+[\w-]+\s*(?:\([^)]*\))?\s*\{/gi;
+    let m;
+    while ((m = FN.exec(code))) {
+      let depth = 0, i = m.index + m[0].length - 1;
+      for (; i < code.length; i++) { if (code[i] === '{') depth++; else if (code[i] === '}' && --depth === 0) break; }
+      out.push([m.index, i]);
+    }
+    return out;
+  }
+
   function outputsOf(src) {
     const code = blank(src, false);
     const props = new Map();
@@ -283,9 +299,12 @@
     /* Add-Member note properties, wherever they are added. */
     code.replace(/Add-Member\b[^\n]*?-(?:NotePropertyName|Name)\s+['"]?([\w-]+)/gi, (_, n) => { put(n, true); return _; });
 
+    /* What a function writes goes back to its caller, not to the form. */
+    const fnBodies = functionBodies(code);
     const OUT = /\b(?:Write-Output|return)\b[ \t]*(?:-InputObject\s+)?([^\n;]*)/gi;
     let m;
     while ((m = OUT.exec(code))) {
+      if (fnBodies.some(([a, b]) => m.index > a && m.index < b)) continue;
       const expr = m[1].trim().replace(/[\s})]+$/, '');
       if (!expr) continue;
       if (/^\(?\s*(?:\[pscustomobject\]\s*)?@\{/i.test(expr)) {
@@ -411,6 +430,7 @@
         version: f.version, fields: fieldsOf(f.formSchema), usedBy: [] };
       formByGuid.set(lc(form.guid), form);
       if (form.original) formByGuid.set(lc(form.original), form);
+      (f.versionGUIDs || []).forEach(g => formByGuid.set(lc(g), form));   // older versions entries still point at
       return form;
     });
 
@@ -673,7 +693,9 @@
         /* Read only behind an emptiness check: an optional library variable this tenant never created. */
         const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const guarded = new RegExp('IsNullOr(?:Empty|WhiteSpace)\\(\\s*\\$' + esc + '\\s*\\)|\\bif\\s*\\(\\s*(?:-not\\s+|!\\s*)?\\$' + esc + '\\s*\\)', 'i').test(code);
-        const inCatch = (s.vars.readsAt.get(name) || []).every(i => s.vars.catches.some(([a, b]) => i > a && i < b));
+        const lineText = i => code.slice(code.lastIndexOf('\n', i) + 1, (code.indexOf('\n', i) + 1 || code.length + 1) - 1);
+        const inCatch = (s.vars.readsAt.get(name) || []).every(i => s.vars.catches.some(([a, b]) => i > a && i < b) ||
+          /^\s*(?:Write-(?:Information|Warning|Verbose|Host|Debug|Error)\b|\$?\w*Message\s*=)/i.test(lineText(i)));
         if (guarded) add('script.optional', 'low', s.target, { name: shown, script: s.name }, { script: s.id, line });
         else if (inCatch) add('script.undefined.log', 'low', s.target, { name: shown, script: s.name }, { script: s.id, line });
         else add('script.undefined', 'high', s.target, { name: shown, script: s.name }, { script: s.id, line });
@@ -695,15 +717,15 @@
       /* Patterns. */
       let ln;
       if ((ln = lineOf(/SecurityProtocolType\]::(?:Tls\b|Tls11|Ssl3)|SecurityProtocol\s*=\s*['"]?(?:Tls|Ssl3)\b(?!12|13)/i))) add('script.tls', 'low', s.target, { script: s.name }, { script: s.id, line: ln });
-      if ((ln = lineOfRaw(/\/(?:api\/v1\/)?(?:selfservice\/products(?!\/request)\b|productownership\b)/i))) add('script.endpoint', 'high', s.target, { script: s.name }, { script: s.id, line: ln });
+      if ((ln = lineOfRaw(/api\/v1\/(?:selfservice\/products(?:\/(?:\$\w+|\$\([^)]*\)|[0-9a-f-]{36}))?(?=["'`?\s)]|$)|productownership\b)/im))) add('script.endpoint', 'high', s.target, { script: s.name }, { script: s.id, line: ln });
       if ((ln = lineOfRaw(/ConvertTo-SecureString\s+(?:-String\s+)?["'][^"'$]{3,}["']\s+-AsPlainText|\$\w*(?:password|passwd|pwd|secret|apikey|token)\w*\s*=\s*["'][^"'$\s]{6,}["']/i))) {
         add('script.secret', 'critical', s.target, { script: s.name }, { script: s.id, line: ln });
       }
-      if ((ln = lineOfRaw(/["'][^"'\n]*\bDC=\w+[^"'\n]*["']|["'][\w.+-]+@[\w-]+\.[\w.-]+["']/i))) add('script.hardcoded', 'medium', s.target, { script: s.name }, { script: s.id, line: ln });
+      if ((ln = lineOfRaw(/["'][^"'\n]*\bDC=\w+[^"'\n]*["']|["'][\w.+-]+@(?!odata\.)[\w-]+\.[\w.-]+["']/i))) add('script.hardcoded', 'medium', s.target, { script: s.name }, { script: s.id, line: ln });
       if ((ln = lineOf(/\bWrite-Host\b/i))) add('script.writehost', 'low', s.target, { script: s.name }, { script: s.id, line: ln });
       const calls = /\b(?:Get|Set|New|Remove|Add|Move|Enable|Disable|Unlock|Rename)-(?:AD|Mg|Mailbox|DistributionGroup)\w*|\bInvoke-(?:RestMethod|WebRequest)\b/i;
       if (calls.test(code) && !/\btry\s*\{/i.test(code)) add('script.notry', s.kind === 'datasource' ? 'low' : 'medium', s.target, { script: s.name }, { script: s.id, line: lineOf(new RegExp(calls.source, 'i')) });
-      if (s.kind !== 'datasource' && !/-Tags\s+['"]?Audit/i.test(code)) add('script.noaudit', 'low', s.target, { script: s.name }, { script: s.id });
+      if (s.kind !== 'datasource' && MUTATE_ANY.test(code) && !/-Tags\s+['"]?Audit/i.test(code)) add('script.noaudit', 'low', s.target, { script: s.name }, { script: s.id });
 
       /* Agent: an on-prem script with no pool to run it, or a pool that is gone. */
       if (!s.runInCloud && !pools.size) add('agent.none', 'critical', s.target, { script: s.name }, { script: s.id });
@@ -714,7 +736,9 @@
     const AD_READ = /\b(?:Get-AD(?:User|Group|Object|Computer|OrganizationalUnit)|Search-ADAccount|Get-ADGroupMember)\b/i;
     const AD_CALL = /\b(?:Get|Set|New|Remove|Add|Move|Enable|Disable|Unlock|Rename|Search|Clear)-AD\w+|\bImport-Module\s+['"]?ActiveDirectory/i;
     const PRIV_OP = /\b(?:Set-ADAccountPassword|Add-ADGroupMember|Add-ADPrincipalGroupMembership|Enable-ADAccount|Unlock-ADAccount)\b/i;
-    const MUTATE = /\b(?:Remove|Disable|Set|Revoke|Delete|Clear)-\w+|-Method\s+['"]?(?:Delete|Post|Put|Patch)|\.Remove\(/i;
+    const MUTATE = /\b(?:Remove|Disable|Set|Revoke|Delete|Clear)-\w+|-Method\s+['"]?(?:Delete|Post|Put|Patch)|\bMethod\s*=\s*['"](?:Delete|Post|Put|Patch)|\.Remove\(/i;
+    /* What hands something out: adds, creates, enables (helpers like New-Object or a generated password do not). */
+    const GRANT = /\b(?:Add-(?!Member|Type|Content)|New-(?!Object|\w*Password|TimeSpan|Guid|Variable)|Enable-|Grant-)\w+|-Method\s+['"]?(?:Post|Put|Patch)|\bMethod\s*=\s*['"](?:Post|Put|Patch)/i;
     /* Data sources that feed something a person selects from (not lookups of one object or uniqueness checks). */
     const selecting = new Set();
     forms.forEach(f => f.fields.forEach(({ field }) => {
@@ -788,7 +812,9 @@
       const LOG = /\bWrite-(?:Information|Verbose|Host|Warning|Debug|Error)\b([^\n]*)/gi;
       while ((m = LOG.exec(raw))) {
         const arg = m[1];
-        if (/\$form\b(?!\.)|ConvertTo-Json[^\n]*\$form\b|\$(?:form\.)?\w*(?:password|passwd|wachtwoord|secret|apikey|token)\w*\b/i.test(arg) &&
+        const secretVar = (arg.match(/\$(?:form\.)?\w*(?:password|passwd|wachtwoord|secret|apikey|token)\w*\b/gi) || [])
+          .some(v => !/(?:change|cannotchange)password|password(?:neverexpires|lastset|expired|notrequired|policy|age|atlogon)/i.test(v));
+        if ((/\$form\b(?!\.)|ConvertTo-Json[^\n]*\$form\b/i.test(arg) || secretVar) &&
             !/-Tags\s+['"]?Audit/i.test(arg)) {
           add('script.log.secret', 'high', s.target, { script: s.name }, { script: s.id, line: lineAt(raw, m.index) });
           break;
@@ -797,7 +823,9 @@
 
       /* 7. A catch that swallows the error: the activity shows success. */
       const catches = s.vars.catches;
+      const fns = functionBodies(code);
       for (const [a, b] of catches) {
+        if (fns.some(([x, y]) => a > x && a < y)) continue;   // a helper's fallback; its caller handles the error
         const body = code.slice(a, b);
         if (!/\b(?:throw|Write-Error|exit\s+\d)|IsError\s*=\s*\$true|Write-Warning/i.test(body)) {
           add('script.swallow', s.kind === 'datasource' ? 'low' : 'medium', s.target, { script: s.name }, { script: s.id, line: lineAt(code, a) });
@@ -809,7 +837,7 @@
       /* No search value: everything, every time the field opens — or a "*" that means everything. */
       if (s.kind === 'datasource' && searches && !/ResultSetSize|-First\s+\d/i.test(code)) {
         const readsInput = /\$datasource\.\w+/i.test(code);
-        const all = /-Filter\s*(?:\*|['"]\*['"]|\{\s*Name\s+-like\s+['"]\*['"]\s*\})|-like\s+['"]\*['"]/i.test(raw);
+        const all = /-Filter\s*(?:\*|['"]\*['"]|\{\s*Name\s+-like\s+['"]\*['"]\s*\})|(?<!-not\s*\(\s*\w+\s+)-like\s+['"]\*['"]/i.test(raw);
         const star = /-eq\s+['"]\*['"]/i.test(raw);
         if (all && (!readsInput || star)) {
           add('script.unbounded', hasBase ? 'low' : 'medium', s.target, { script: s.name }, { script: s.id, line: lineOfIn(raw, /-Filter\s*(?:\*|['"]\*['"]|\{)|-like\s+['"]\*['"]/i) });
@@ -867,7 +895,7 @@
         /* Display and validation fields a data source fills are there to be read by people, not by the task. */
         if (to.readonly || (bindingsOf(f).length && !to.required)) return;
         const k = lc(f.key);
-        if (readKeys.has(k) || feeds.has(k)) return;
+        if (readKeys.has(k) || feeds.has(k) || /confirm|repeat|verify|bevestig|herhaal/.test(k)) return;
         add('form.field.unused', 'low', tgt, { field: f.key });
       });
 
@@ -925,7 +953,8 @@
     /* 11. Products that grant without taking back, or grant risky things at once. */
     entries.filter(e => e.type === 'product').forEach(e => {
       const tgt = tgtEntry(e);
-      const grants = e.tasks.some(t => t.event === 'onApprove' && t.script) || e.actions.length;
+      const grants = e.tasks.some(t => t.event === 'onApprove' && t.script && GRANT.test(blank(t.script, true))) ||
+        e.actions.some(a => !/\b(?:remove|disable|delete|revoke|reset|unlock)\b/i.test(a.name || ''));
       const returns = e.tasks.filter(t => t.event === 'onReturn');
       const revokes = returns.some(t => t.script && MUTATE.test(blank(t.script, true)));
       const pr = (cfg.products || []).find(x => x.productId === e.id) || {};
@@ -978,6 +1007,8 @@
     /* ------------------------------------------------------------ runtime */
     const activity = cfg.activity ? runtime(cfg.activity, entries, add) : null;
 
+    /* A form no delegated form or product uses breaks nobody's request: its defects wait for cleanup. */
+    if (entries.length) findings.forEach(f => { if (f.target.type === 'form' && f.rule !== 'orphan.form' && SEV_ORDER[f.sev] < SEV_ORDER.low) f.sev = 'low'; });
     findings.forEach(f => { f.order = SEV_ORDER[f.sev]; });
     findings.sort((a, b) => a.order - b.order || a.rule.localeCompare(b.rule));
 

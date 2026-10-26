@@ -164,7 +164,12 @@ def collect_activity(args):
     start = end - dt.timedelta(days=args.log_days)
     out = {'from': audit.iso(start), 'to': audit.iso(end), 'days': args.log_days}
     for pattern, bucket in SA_LOG_SOURCES:
-        rows = es.window(pattern, start, end, None, {'rows': 0, 'splits': 0})
+        try:
+            rows = es.window(pattern, start, end, None, {'rows': 0, 'splits': 0})
+        except (Exception, SystemExit) as e:
+            # A rejected audit-log key must not cost the configuration export.
+            print(f'  activity: skipped ({e}); check the Elastic URL, key and secret with helloid-audit.py --setup')
+            return None
         if sys.stdout.isatty():
             print('\r' + ' ' * 100 + '\r', end='')
         out[bucket] = [trim(r) for r in rows]
@@ -231,6 +236,20 @@ def main():
         products.append(merged)
         progress('products', i, len(product_list))
     product_categories = unwrap(api.get('/selfservice/categories', missing_ok=True))
+
+    # A delegated form or product can point at an older version of its dynamic form; the
+    # list only names the latest and the original GUID, HelloID serves the latest for any.
+    by_guid = {}
+    for f in dynamic_forms:
+        for k in ('dynamicFormGUID', 'formOriginalGUID'):
+            if f.get(k): by_guid[f[k].lower()] = f
+    wanted = [d.get('dynamicFormGUID') for d in delegated_forms] + \
+             [(pr.get('dynamicForm') or {}).get('id') or (pr.get('dynamicForm') or {}).get('dynamicFormGUID') for pr in products]
+    for guid in {g.lower() for g in wanted if g} - set(by_guid):
+        latest = api.get(f'/forms/{guid}', missing_ok=True)
+        hit = isinstance(latest, dict) and by_guid.get((latest.get('dynamicFormGUID') or '').lower())
+        if hit:
+            hit.setdefault('versionGUIDs', []).append(guid)
 
     # Scheduled tasks, including disabled ones (the API hides those by default).
     task_list = unwrap(api.get('/automationtasks', {'includeDisabledTasks': 'true'}))
