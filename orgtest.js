@@ -1,5 +1,5 @@
 const fs=require('fs'),vm=require('vm'),path=require('path');
-const base='/Users/arnoutvandervorst/Projects/helloid_analytics';
+const base='/Users/arnoutvandervorst/Projects/helloid_sidekick';
 const store={};const sandbox={console,navigator:{language:'en-GB'},localStorage:{getItem:k=>store[k]??null,setItem:(k,v)=>store[k]=v,removeItem:k=>delete store[k]},document:{createElement:()=>({style:{},appendChild(){},addEventListener(){},append(){}}),createTextNode:()=>({}),getElementById:()=>({style:{},hidden:true,appendChild(){},addEventListener(){}})},setTimeout,clearTimeout,TextDecoder,performance};
 sandbox.window=sandbox;vm.createContext(sandbox);
 ['i18n','util','parse','config','model','risk','findings','cost','diff','mine','rules','compare','roles','vault','evaluate','correlate','activity','products','org','pyramid','explain'].forEach(f=>vm.runInContext(fs.readFileSync(path.join(base,'js',f+'.js'),'utf8'),sandbox,{filename:f+'.js'}));
