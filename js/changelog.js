@@ -18,6 +18,12 @@
 
   const ENTRIES = [
     {
+      version: '2026.11.2', date: '2026-11-16',
+      changes: [
+        "A published dashboard for a role without cost figures no longer carries each department's cost per head."
+      ]
+    },
+    {
       version: '2026.11.1', date: '2026-11-16',
       changes: [
         "Safer with files from others: an imported settings file can no longer change how the page is built, Complex field mappings run in a sealed sandbox that cannot read any workspace, logos must be embedded images, and CSV exports cannot carry spreadsheet formulas. The page carries its own content security policy, also in the single-file build. A published dashboard holds only what its role shows (an HR dashboard no longer carries logins, admin decisions, licences or prices) and viewers keep it in memory only.",
