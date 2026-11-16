@@ -432,7 +432,8 @@
     return c;
   }
   function deepMerge(base, over) {
-    for (const k in over) {
+    for (const k of Object.keys(over)) {
+      if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;   // imported file must not reach Object.prototype
       if (Array.isArray(over[k])) base[k] = over[k];
       else if (over[k] && typeof over[k] === 'object') base[k] = deepMerge(base[k] || {}, over[k]);
       else base[k] = over[k];
@@ -502,7 +503,11 @@
     adoptKeys(current);
     save(current);
     if (data.branding && HR.brand) {
-      HR.brand.set(data.branding);
+      /* Images from a file someone sent: inline base64 images or this app's own assets/ only. */
+      const okImg = v => !v || /^data:image\/(png|jpeg|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=\s]+$/.test(v) || /^assets\/[\w.-]+$/.test(v);
+      const branding = Object.assign({}, data.branding);
+      ['icon', 'logo', 'logoLight'].forEach(k => { if (typeof branding[k] !== 'string' || !okImg(branding[k])) delete branding[k]; });
+      HR.brand.set(branding);
       HR.brand.apply();
     }
     if (data.language && HR.i18n) HR.i18n.setLang(data.language);

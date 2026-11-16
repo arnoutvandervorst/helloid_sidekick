@@ -1,13 +1,18 @@
 # Exports never enter the image. The generated demo set is the exception: it is
-# fiction, and the hosted copy is useless without it.
-!demo/
+# fiction, and the hosted copy is useless without it (re-included at the end, since
+# the last matching rule wins).
 *.csv
+**/*.csv
 vault*.json
 Vault*.json
 *-vault.json
 helloid-audit*.json
 helloid-service-automation*.json
 helloid-sa-config*.json
+**/helloid-sa-config*.json
+products.json
+sa-demo/
+exports/
 directory*.json
 .env
 helloid-config.json
@@ -17,3 +22,5 @@ dist/
 .DS_Store
 # dashboard bundles the partner publishes: customer data
 published/
+!demo/
+!demo/**

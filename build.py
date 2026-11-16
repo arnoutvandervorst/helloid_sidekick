@@ -9,6 +9,7 @@ dropped on a share, or opened straight from disk. The zip keeps the folder layou
 for anyone who wants to serve it over http (needed for snapshot storage).
 """
 import base64
+import hashlib
 import mimetypes
 import re
 import shutil
@@ -69,9 +70,19 @@ def build_single_file() -> Path:
                 inlined.append(f'window.{var} = {data_uri(path)!r};')
                 break
     if inlined:
-        html = html.replace('</head>', '<script>\n' + '\n'.join(inlined) + '\n</script>\n</head>')
+        # count=1: board.js carries a '</head>' of its own inside a string
+        html = html.replace('</head>', '<script>\n' + '\n'.join(inlined) + '\n</script>\n</head>', 1)
 
-    html = html.replace('</head>', f'<meta name="generator" content="{NAME} {VERSION}">\n</head>')
+    html = html.replace('</head>', f'<meta name="generator" content="{NAME} {VERSION}">\n</head>', 1)
+
+    # Every script is inline now: the page's CSP allows each one by its hash, on top of
+    # what index.html's policy already lists (the mapping sandbox's hash among them).
+    # The HTML parser reads a NUL in script text as U+FFFD (correlate.js keys use NUL), so hash that.
+    hashes = [f"'sha256-{base64.b64encode(hashlib.sha256(m.group(1).replace(chr(0), chr(0xFFFD)).encode('utf-8')).digest()).decode('ascii')}'"
+              for m in re.finditer(r'<script>(.*?)</script>', html, re.S)]
+    csp = re.compile(r'(<meta http-equiv="Content-Security-Policy" content="[^"]*script-src [^;"]*)')
+    assert csp.search(html), 'index.html lost its CSP meta'
+    html = csp.sub(lambda m: m.group(1) + ' ' + ' '.join(hashes), html, count=1)
 
     DIST.mkdir(exist_ok=True)
     out = DIST / f'{NAME}.html'

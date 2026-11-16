@@ -1,7 +1,8 @@
 # The app is static: no build, no runtime, no back end. nginx serves the folder so the
 # browser gets a real origin, which is what enables snapshot storage — opened from a file
 # path the same page gets an opaque origin and IndexedDB is refused.
-FROM nginx:1.30-alpine
+# Unprivileged variant: master and workers run as uid 101, listening on 8080.
+FROM nginxinc/nginx-unprivileged:1.30.6-alpine
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY index.html /usr/share/nginx/html/

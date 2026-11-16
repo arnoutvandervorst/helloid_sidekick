@@ -55,6 +55,7 @@
   /** RFC4180 parser: quoted fields, embedded delimiters/newlines, CRLF, BOM. */
   function parseDelimited(text, delim) {
     if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    text = text.replace(SEP_LINE, '');
     const rows = [];
     let row = [], field = '', i = 0, inQ = false;
     const n = text.length;
@@ -69,17 +70,24 @@
       }
       if (c === '"' && field === '') { inQ = true; i++; continue; }
       if (c === delim) { row.push(field); field = ''; i++; continue; }
-      if (c === '\r') { i++; continue; }
-      if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; i++; continue; }
+      if (c === '\r' && text[i + 1] === '\n') { i++; continue; }
+      if (c === '\n' || c === '\r') { row.push(field); rows.push(row); row = []; field = ''; i++; continue; }
       field += c; i++;
     }
     if (field !== '' || row.length) { row.push(field); rows.push(row); }
     return rows;
   }
 
+  /* Excel's "sep=;" hint line: it names the delimiter and is not the header. */
+  const SEP_LINE = /^sep=(.)\r?\n?/i;
+  /** The header line, past a BOM and a sep= hint, whatever the line endings. */
+  const headerLine = text => String(text || '').replace(/^\uFEFF/, '').replace(SEP_LINE, '').split(/\r\n?|\n/, 1)[0] || '';
+
   /** Guess the delimiter from the header line — Dutch exports often use ';'. */
   function sniffDelim(text) {
-    const line = text.split(/\r?\n/, 1)[0] || '';
+    const hint = SEP_LINE.exec(String(text || '').replace(/^\uFEFF/, ''));
+    if (hint) return hint[1];
+    const line = headerLine(text);
     const cands = [',', ';', '\t', '|'];
     let best = ',', bestN = -1;
     for (const d of cands) {
@@ -106,10 +114,16 @@
   const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
   function mapHeaders(header) {
-    const map = {};
+    const map = {}, rank = {};
     header.forEach((h, idx) => {
       const k = norm(h);
-      for (const field in ALIASES) if (ALIASES[field].includes(k)) { map[field] = idx; return; }
+      for (const field in ALIASES) {
+        const r = ALIASES[field].indexOf(k);
+        if (r < 0) continue;
+        // The best alias wins; on a tie the first column, so a later duplicate cannot override it.
+        if (!(field in rank) || r < rank[field]) { map[field] = idx; rank[field] = r; }
+        return;
+      }
     });
     return map;
   }
@@ -173,11 +187,12 @@
 
     const g = (row, f) => map[f] == null ? '' : (row[map[f]] || '').trim();
     const records = [];
-    const health = { dataRows: 0, kept: 0, skippedEmpty: 0, shortRows: 0 };
+    const health = { dataRows: 0, kept: 0, skippedEmpty: 0, shortRows: 0, longRows: 0 };
     for (let i = 1; i < grid.length; i++) {
       const row = grid[i];
       health.dataRows++;
       if (row.length < header.length) health.shortRows++;
+      else if (row.length > header.length) health.longRows++;
       const userName = g(row, 'accountUserName');
       const issue = g(row, 'issue');
       if (!userName && !issue) { health.skippedEmpty++; continue; }
@@ -214,6 +229,9 @@
     if (health.shortRows) {
       warnings.push(health.shortRows + ' row(s) carry fewer columns than the header — usually an unquoted delimiter inside a value.');
     }
+    if (health.longRows) {
+      warnings.push(health.longRows + ' row(s) carry more columns than the header — usually an unquoted delimiter inside a value; later columns may be shifted.');
+    }
     /* The findings match the reconciliation vocabulary; an export whose Issue column
        says something else entirely would produce silent zeros everywhere. */
     const KNOWN_ISSUES = ['Account unmanaged', 'Permission unmanaged', 'Permission missing'];
@@ -239,5 +257,5 @@
     };
   }
 
-  HR.parse = { parse, parseDelimited, sniffDelim, splitParenthetical, splitPath, parseBool, decode, looksLikeRecon };
+  HR.parse = { parse, parseDelimited, sniffDelim, headerLine, splitParenthetical, splitPath, parseBool, decode, looksLikeRecon };
 })(window.HR);

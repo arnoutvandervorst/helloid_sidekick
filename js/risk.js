@@ -24,7 +24,7 @@
     const bands = U.counts(accs, a => a.riskBand);
     const tailN = Math.max(10, Math.ceil(live.length * 0.005));
     const tailSet = live.map(a => a.riskScore).sort((x, y) => y - x).slice(0, tailN);
-    const tail = tailSet.length ? U.sum(tailSet, x => x) / tailN : 0;
+    const tail = tailSet.length ? U.sum(tailSet, x => x) / tailSet.length : 0;
     const highLive = live.filter(a => a.riskBand === 'critical' || a.riskBand === 'high').length;
     const exposure = 100 * (1 - Math.exp(-highLive / 10));
     const coverage = accs.length ? accs.filter(a => !a.orphan).length / accs.length : 1;

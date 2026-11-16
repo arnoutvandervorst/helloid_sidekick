@@ -271,11 +271,11 @@
     const persons = HR.fieldmap.personObjects(st).persons;
     const labelOf = p => (p.DisplayName || '') + (p.ExternalId && !String(p.DisplayName || '').includes(p.ExternalId) ? ' (' + p.ExternalId + ')' : '');
     const byLabel = new Map(persons.map(p => [labelOf(p), p.PersonId]));
-    const run = () => {
+    const run = async () => {
       const label = who.value.trim();
       const personId = label ? byLabel.get(label) : null;
       if (label && !personId) { U.toast(T('fm.personPick'), 4000); return; }
-      SIM = HR.fieldmap.simulate(fm, st, { action: sel.value, personId });
+      SIM = await HR.fieldmap.simulate(fm, st, { action: sel.value, personId });
       SIM_STAMP = stamp + '|' + sel.value + '|' + (personId || '');
       draw(SIM);
     };

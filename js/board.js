@@ -126,7 +126,7 @@
     const snap = st.snapshots.find(x => x.id === st.currentSnapshotId);
     const rows = [];
     if (snap || st.parsed) rows.push({ kind: T('src.recon'), file: snap ? snap.fileName : (st.parsed ? st.parsed.meta.fileName : '—'),
-      loaded: snap ? snap.importedAt : st.importedAt.recon, asOf: null });
+      loaded: snap ? snap.importedAt : st.importedAt.recon, asOf: snap && snap.dataDate || null });
     const one = (k, src, asOf) => { if (src) rows.push({ kind: T('src.' + k), file: src.meta.fileName, loaded: st.importedAt[k], asOf: asOf || null }); };
     one('rules', st.ruleSet);
     if (st.vault) {
@@ -233,6 +233,8 @@
 
     const paper = el('div', { class: 'paper' });
     f.appendChild(paper);
+    /* An empty cover field says where it is filled in — on screen only, never on paper. */
+    const blank = () => [document.createTextNode('\u2014 '), el('span', { class: 'screen-only note', text: T('bd.setAbove') })];
 
     function paint() {
       const s = m.summary, c = m.cost, st = HR.app.state;
@@ -249,9 +251,9 @@
           ])
         ]),
         el('dl', { class: 'cover-meta' }, [
-          el('dt', { text: T('bd.org') }), el('dd', { text: B.org || '—' }),
+          el('dt', { text: T('bd.org') }), el('dd', {}, B.org || blank()),
           el('dt', { text: T('bd.date') }), el('dd', { text: HR.brand.reportDate() }),
-          el('dt', { text: T('bd.prepared') }), el('dd', { text: B.preparedBy || '—' }),
+          el('dt', { text: T('bd.prepared') }), el('dd', {}, B.preparedBy || blank()),
           B.contact ? el('dt', { text: T('bd.contact') }) : null,
           B.contact ? el('dd', { text: B.contact }) : null,
           el('dt', { text: T('bd.source') }), el('dd', {
@@ -745,10 +747,10 @@
     const css = Array.from(document.styleSheets).map(sh => {
       try { return Array.from(sh.cssRules).map(r => r.cssText).join('\n'); } catch (e) { return ''; }
     }).join('\n');
-    const theme = document.documentElement.getAttribute('data-theme') || 'light';
+    const theme = document.documentElement.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     return '<!doctype html>\n<html lang="' + HR.i18n.lang + '" data-theme="' + theme + '"><head><meta charset="utf-8">' +
       '<title>' + U.esc(T('bd.title')) + ' \u2014 ' + U.esc(HR.brand.reportDate()) + '</title>' +
-      '<style>' + css + '\nbody{margin:0;background:#fff}.board-controls{display:none}</style></head>' +
+      '<style>' + css + '\nbody{margin:0;background:var(--plane)}.board-controls,.screen-only{display:none}</style></head>' +
       '<body><div class="view-board"><div class="paper">' + paper.innerHTML + '</div></div></body></html>';
   }
 

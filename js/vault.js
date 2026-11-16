@@ -16,11 +16,7 @@
   const U = HR.util;
 
   const str = v => (v == null ? '' : String(v)).trim();
-  const date = v => {
-    if (!v) return null;
-    const d = new Date(v);
-    return isNaN(d.getTime()) ? null : d;
-  };
+  const date = v => U.parseDate(v);
 
   /** Flatten a HelloID reference object ({ExternalId, Code, Name/DisplayName}) */
   function ref(o) {
@@ -92,9 +88,8 @@
         ? normaliseContract(p.PrimaryContract, -1) : (contracts[0] || null);
 
       /* A contract counts as current when today sits inside its window; an open end date
-         means it is still running. */
-      const active = contracts.filter(c =>
-        (!c.startDate || c.startDate <= now) && (!c.endDate || c.endDate >= now));
+         means it is still running. A model built for another day recomputes this (setActiveAt). */
+      const active = contracts.filter(c => runs(c, now));
 
       const accounts = (p.Accounts || []).map(a => {
         const d = a.Data || {};
@@ -150,7 +145,7 @@
     if (health.badDates) warnings.push(health.badDates + ' contract date(s) could not be read.');
 
     return {
-      persons, departments, warnings,
+      persons, departments, warnings, activeAt: +now,
       byExternalId: new Map(persons.map(p => [p.externalId, p])),
       byDisplayName: new Map(persons.map(p => [p.displayName, p])),
       meta: {
@@ -179,6 +174,15 @@
   }
 
   const DAY = 86400000;
+  /** An end date covers its whole day (UTC): a contract ending on the 1st still runs on the 1st. */
+  const endOfDay = d => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) + DAY - 1);
+  function runs(c, when) { return (!c.startDate || c.startDate <= when) && (!c.endDate || endOfDay(c.endDate) >= when); }
+  /** Recompute every person's running contracts for the day a model is about. */
+  function setActiveAt(vault, when) {
+    for (const p of vault.persons) p.activeContracts = (p.contracts || []).filter(c => runs(c, when));
+    vault.activeAt = +when;
+    return vault;
+  }
 
   /**
    * Where a person sits relative to their contracts, and by how far.
@@ -190,26 +194,25 @@
     const now = when || new Date();
     if (!person.contracts.length) return { state: 'unknown', days: null, date: null };
 
-    const running = person.contracts.filter(c =>
-      (!c.startDate || c.startDate <= now) && (!c.endDate || c.endDate >= now));
+    const running = person.contracts.filter(c => runs(c, now));
     if (running.length) {
       const ends = running.filter(c => c.endDate).map(c => c.endDate);
       if (!ends.length) return { state: 'current', days: null, date: null };
-      const last = new Date(Math.max.apply(null, ends));
+      const last = new Date(ends.reduce((x, y) => (y > x ? y : x)));
       return { state: 'current', days: Math.round((last - now) / DAY), date: last };
     }
 
     const starts = person.contracts.filter(c => c.startDate && c.startDate > now).map(c => c.startDate);
     if (starts.length) {
-      const first = new Date(Math.min.apply(null, starts));
+      const first = new Date(starts.reduce((x, y) => (y < x ? y : x)));
       return { state: 'future', days: Math.round((first - now) / DAY), date: first };
     }
 
     const ends = person.contracts.filter(c => c.endDate).map(c => c.endDate);
     if (!ends.length) return { state: 'unknown', days: null, date: null };
-    const last = new Date(Math.max.apply(null, ends));
+    const last = new Date(ends.reduce((x, y) => (y > x ? y : x)));
     return { state: 'past', days: Math.round((now - last) / DAY), date: last };
   }
 
-  HR.vault = { parse, looksLikeVault, accountIndex, normaliseContract, lifecycle };
+  HR.vault = { parse, looksLikeVault, accountIndex, normaliseContract, lifecycle, setActiveAt, endOfDay };
 })(window.HR);

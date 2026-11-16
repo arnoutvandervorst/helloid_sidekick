@@ -29,8 +29,18 @@
   }
   const tipText = full => () => '<div class="t-text">' + U.esc(full) + '</div>';
   /** The ⓘ that carries the full text. */
+  let infoSeq = 0;
   function info(full) {
-    return U.tip(el('span', { class: 'info', role: 'img', 'aria-label': T('c.more'), text: '\u24d8' }), tipText(full));
+    /* A button, so keyboard and touch reach it too; the full text is its description. */
+    const id = 'info-' + (++infoSeq);
+    const b = U.tip(el('button', { type: 'button', class: 'info', 'aria-label': T('c.more'), 'aria-describedby': id, text: '\u24d8' }), tipText(full));
+    b.appendChild(el('span', { id, class: 'sr-only', text: full }));
+    const at = () => { const r = b.getBoundingClientRect(); return { clientX: r.left, clientY: r.bottom - 8 }; };
+    b.addEventListener('focus', () => U.showTip(tipText(full)(), at()));
+    b.addEventListener('blur', U.hideTip);
+    b.addEventListener('click', e => { e.stopPropagation(); U.showTip(tipText(full)(), at()); });
+    b.addEventListener('keydown', e => { if (e.key === 'Escape') U.hideTip(); });
+    return b;
   }
   /** Fill `node` with `text`, collapsed behind ⓘ when long. Returns the node. */
   function explainInto(node, text) {
@@ -52,6 +62,38 @@
       explainInto(n, n.textContent);
     });
   }
+
+  /* The net under every form control, whichever view drew it: one without a name gets
+     its placeholder, its column header and row, or the text just before it. */
+  function labelControls(root) {
+    if (!root) return;
+    root.querySelectorAll('input:not([type=hidden]):not([aria-label]), select:not([aria-label]), textarea:not([aria-label])').forEach(c => {
+      if ((c.labels && c.labels.length) || c.title) return;
+      let name = c.placeholder || '';
+      const td = c.closest('td');
+      if (!name && td) {
+        const tbl = td.closest('table'), head = tbl && tbl.tHead && tbl.tHead.rows[0];
+        const th = head && head.cells[td.cellIndex], first = td.parentElement.cells[0];
+        name = [th && th.textContent.trim(), first && first !== td && first.textContent.trim()].filter(Boolean).join(' — ');
+      }
+      if (!name) { const prev = c.previousElementSibling; if (prev && !prev.matches('input, select, textarea, button')) name = prev.textContent.trim(); }
+      /* Last resort: the words around it, without the control's own options. */
+      if (!name) {
+        const host = c.closest('tr') || c.parentElement;
+        name = Array.from(host.querySelectorAll('td, th, span, strong, b, div')).filter(n => !n.contains(c) && !n.querySelector('input, select, textarea'))
+          .map(n => n.textContent.trim()).filter(Boolean).slice(0, 2).join(' — ');
+      }
+      if (name) c.setAttribute('aria-label', name.slice(0, 120));
+    });
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    let queued = 0;
+    const mo = new MutationObserver(() => {
+      if (queued) return;
+      queued = requestAnimationFrame(() => { queued = 0; labelControls(document.getElementById('view-root')); labelControls(document.getElementById('drawer-body')); });
+    });
+    ['view-root', 'drawer-body'].forEach(id => { const n = document.getElementById(id); if (n) mo.observe(n, { childList: true, subtree: true }); });
+  });
 
   /** What the role may see; a facet-less thing always. */
   const can = facet => !HR.access || HR.access.can(facet);
@@ -83,7 +125,11 @@
       footRow.append(document.createTextNode(foot ? ' · ' : ''), deltaBadge(opts.delta, opts.deltaFormat, opts.inverse));
     }
     if (footRow.childNodes.length) t.appendChild(footRow);
-    if (opts.onClick) t.addEventListener('click', opts.onClick);
+    if (opts.onClick) {
+      t.addEventListener('click', opts.onClick);
+      t.tabIndex = 0; t.setAttribute('role', 'link');
+      t.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target === t) opts.onClick(e); });
+    }
     return t;
   }
 
@@ -257,8 +303,10 @@
         el('p', { class: 'note', text: T('src.slot.' + k + '.where') })
       ]));
     }));
-    rows.push(el('p', { style: 'margin-top:12px' },
-      el('button', { class: 'btn primary', text: T('empty.sources'), onclick: () => HR.app.go('sources') })));
+    rows.push(el('p', { class: 'row', style: 'margin-top:12px' }, [
+      el('button', { class: 'btn primary', text: T('empty.sources'), onclick: () => HR.app.go('sources') }),
+      HR.app.demoAvailable() && !HR.app.state.demo ? el('button', { class: 'btn', text: T('demo.load'), onclick: () => HR.demo.load() }) : null
+    ]));
     f.appendChild(card(T('gate.title'), null, rows));
     return f;
   }
@@ -292,7 +340,7 @@
     /* The arc is vector; the numbers are HTML on top of it so they render as crisp as
        any other text on the page, and the caption sits under the ring, never inside it. */
     const wrap = el('div', { class: 'k-ring ' + (score == null ? 'wait' : (opts.band || 'good')) + (opts.size === 'lg' ? ' lg' : '') });
-    const s = svgN('svg', { viewBox: '0 0 100 100', class: 'k-arc' });
+    const s = svgN('svg', { viewBox: '0 0 100 100', class: 'k-arc', 'aria-hidden': 'true' });   // the value is the text on top
     const C = 2 * Math.PI * 45;
     s.appendChild(svgN('circle', { cx: 50, cy: 50, r: 45 }));
     const fill = score == null ? 0 : Math.max(Math.min(1, score), opts.min || 0);
@@ -311,7 +359,7 @@
    */
   function ringCard(o) {
     if (o.facet && !can(o.facet)) return null;
-    const c = el('div', { class: 'card ring-card' + (o.onClick ? ' click' : ''), tabindex: o.onClick ? '0' : null,
+    const c = el('div', { class: 'card ring-card' + (o.onClick ? ' click' : ''), tabindex: o.onClick ? '0' : null, role: o.onClick ? 'link' : null,
       onclick: o.onClick || null, onkeydown: o.onClick ? (e => { if (e.key === 'Enter') o.onClick(); }) : null }, [
       ring(o.score, o.value, o.sub, { band: o.band, min: o.min }),
       el('div', { class: 'rc-body' }, [
@@ -404,6 +452,7 @@
     return bits.length ? bits.join(' \u00b7 ') : null;
   }
 
+  const shortDate = ts => new Date(ts).toLocaleDateString(HR.i18n.locale, { day: 'numeric', month: 'short', year: 'numeric' });
   function sourcesCard(m, opts) {
     const st = HR.app.state;
     const now = Date.now();
@@ -469,8 +518,8 @@
     const dataDates = rows.map(r => r.dataDate).filter(Boolean);
     const loadDates = rows.map(r => r.loaded).filter(Boolean);
     const spreadDays = loadDates.length > 1
-      ? Math.round((Math.max.apply(null, loadDates) - Math.min.apply(null, loadDates)) / 86400000) : 0;
-    const oldest = dataDates.length ? Math.min.apply(null, dataDates) : null;
+      ? Math.round((loadDates.reduce((a, b) => Math.max(a, b), -Infinity) - loadDates.reduce((a, b) => Math.min(a, b), Infinity)) / 86400000) : 0;
+    const oldest = dataDates.length ? dataDates.reduce((a, b) => Math.min(a, b), Infinity) : null;
 
     const missing = [];
     if (!st.parsed && !st.currentSnapshotId) missing.push(T('src.recon'));
@@ -505,7 +554,7 @@
 
     const notes = [];
     if (spreadDays > 7) notes.push(T('src.spread', { n: spreadDays }));
-    if (oldest && days(oldest) > 30) notes.push(T('src.stale', { n: U.fmtInt(days(oldest)) }));
+    if (oldest && days(oldest) > 30) notes.push(T('src.stale', { n: U.fmtInt(days(oldest)), date: shortDate(oldest) }));
     if (missing.length) notes.push(T('src.missing', { list: missing.join(', ') }));
 
     const full = card(T('src.title'), T('src.note'), [
@@ -516,7 +565,11 @@
     ].filter(Boolean));
     if (!opts || !opts.compact) return full;
     /* On the Overview: one remark line, the table behind a fold — the numbers come first. */
-    const line = rows.map(r => r.kind + ' ' + (r.loaded ? T('src.daysAgo', { n: U.fmtInt(days(r.loaded)) }) : '')).join(' \u00b7 ')
+    /* When it came in and how old what it describes is: "imported today, data to 4 Sep". */
+    const line = rows.map(r => r.kind + ' ' + [
+      r.loaded ? (days(r.loaded) ? T('src.importedAgo', { n: U.fmtInt(days(r.loaded)) }) : T('src.importedToday')) : '',
+      r.dataDate ? T('src.dataTo', { date: shortDate(r.dataDate) }) : ''
+    ].filter(Boolean).join(', ')).join(' \u00b7 ')
       + (missing.length ? ' \u00b7 ' + T('src.missing', { list: missing.join(', ') }) : '');
     const warn = notes.filter(n => !n.startsWith(T('src.missing', { list: '' }).slice(0, 8)));
     const d = el('details', { class: 'sources-fold' }, [
@@ -849,7 +902,7 @@
         T('ov.stillEnabled', { n: s.orphanEnabled }), { severity: s.orphanEnabled ? 'critical' : 'good', delta: bDelta('orphanAccounts'), onClick: () => HR.app.go('accounts', { filter: 'orphan' }) }),
       tile(T('ov.unmanagedEnt'), U.fmtInt(s.unmanagedPermissionRows),
         T('ov.outsideModel'), { severity: 'medium', delta: bDelta('unmanagedPermissionRows'), onClick: () => HR.app.go('permissions') }),
-      tile(T('ov.recoverable'), U.fmtMoney(s.wasteMonthly) + '/mo',
+      tile(T('ov.recoverable'), T('c.amountPerMonth', { amount: U.fmtMoney(s.wasteMonthly) }),
         T('ov.perYear', { amount: U.fmtMoney(m.cost.wasteAnnual) }), { severity: s.wasteMonthly > 0 ? 'high' : 'good', onClick: () => HR.app.go('cost') })
     );
     f.appendChild(kpis);
@@ -858,7 +911,7 @@
     kpis2.style.marginTop = '14px';
     kpis2.append(
       tile(T('ov.accounts'), U.fmtInt(s.accounts), T('ov.enabledDisabled', { e: s.enabledAccounts, d: s.disabledAccounts }), { small: true, delta: bDelta('accounts'), onClick: () => HR.app.go('accounts') }),
-      tile(T('ov.licenceSpend'), U.fmtMoney(s.monthlyCost) + '/mo', T('ov.pricedGroups', { n: m.cost.pricedPermissions }), { small: true, delta: bDelta('monthlyCost'), deltaFormat: U.fmtMoney, onClick: () => HR.app.go('cost', { tab: 'spend' }) }),
+      tile(T('ov.licenceSpend'), T('c.amountPerMonth', { amount: U.fmtMoney(s.monthlyCost) }), T('ov.pricedGroups', { n: m.cost.pricedPermissions }), { small: true, delta: bDelta('monthlyCost'), deltaFormat: U.fmtMoney, onClick: () => HR.app.go('cost', { tab: 'spend' }) }),
       tile(T('ov.cleanup'), U.fmtMoney(m.cost.remediationCost), T('ov.cleanupFoot', { h: Math.round(m.cost.remediation.hours), rate: U.fmtMoney(m.cost.remediation.rate) }), { small: true, onClick: () => HR.app.go('cost', { tab: 'case' }) })
     );
     f.appendChild(kpis2);
@@ -944,7 +997,7 @@
         tip: '<div class="t-title">' + U.esc(a.userName) + '</div>' +
           '<div class="t-row"><span>' + T('dr.permsHeld') + '</span><b>' + a.permCount + '</b></div>' +
           '<div class="t-row"><span>' + T('app.riskShort') + '</span><b>' + a.riskScore + '</b></div>' +
-          '<div class="t-row"><span>' + T('dr.monthlyCost') + '</span><b>' + U.fmtMoney(a.monthlyCost) + '/mo</b></div>'
+          '<div class="t-row"><span>' + T('dr.monthlyCost') + '</span><b>' + T('c.amountPerMonth', { amount: U.fmtMoney(a.monthlyCost) }) + '</b></div>'
       })), { xLabel: T('ov.scatterX'), yLabel: T('app.riskShort'), maxY: 100, height: 300 })));
 
     /* class × band heatmap */
@@ -1317,7 +1370,7 @@
       fd.entities.length ? el('span', { class: 'pill solid', text: countText(fd) }) : null,
       fd.accepted ? el('span', { class: 'pill', title: fd.accepted.why || '', text: T('rk.acceptedUntil', { date: U.fmtDate(fd.accepted.until).split(',')[0] }) }) : null,
       fd.acceptExpired ? el('span', { class: 'pill warn', text: T('rk.acceptExpired', { date: U.fmtDate(fd.acceptExpired).split(',')[0] }) }) : null,
-      fd.impactMonthly ? el('span', { class: 'pill', text: U.fmtMoney(fd.impactMonthly) + '/mo · ' + T(fd.recoverable ? 'rk.recoverable' : 'rk.atStake') }) : null,
+      fd.impactMonthly ? el('span', { class: 'pill', text: T('c.amountPerMonth', { amount: U.fmtMoney(fd.impactMonthly) }) + ' · ' + T(fd.recoverable ? 'rk.recoverable' : 'rk.atStake') }) : null,
       (() => {
         const seen = HR.app.state.findingsSeen && HR.app.state.findingsSeen[fd.id];
         if (!seen || opts.ageChip === false) return null;
@@ -1392,8 +1445,8 @@
     row(T('md.mCoverage'), U.fmtPct(s.coverage, 0));
     row(T('md.mUnmanaged'), U.fmtInt(s.unmanagedPermissionRows));
     row(T('md.mMissing'), U.fmtInt(s.missingPermissionRows));
-    row(T('md.mSpend'), U.fmtMoney(c.totalMonthly) + '/mo · ' + U.fmtMoney(c.totalAnnual) + '/yr');
-    row(T('md.mRecoverable'), U.fmtMoney(c.wasteMonthly) + '/mo · ' + U.fmtMoney(c.wasteAnnual) + '/yr');
+    row(T('md.mSpend'), T('c.amountPerMonth', { amount: U.fmtMoney(c.totalMonthly) }) + ' · ' + T('c.amountPerYear', { amount: U.fmtMoney(c.totalAnnual) }));
+    row(T('md.mRecoverable'), T('c.amountPerMonth', { amount: U.fmtMoney(c.wasteMonthly) }) + ' · ' + T('c.amountPerYear', { amount: U.fmtMoney(c.wasteAnnual) }));
     row(T('md.mCleanup'), U.fmtNum(c.remediation.hours, 0) + ' h ≈ ' + U.fmtMoney(c.remediationCost));
     if (c.paybackMonths) row(T('md.mPayback'), T('md.mPaybackVal', { n: U.fmtNum(c.paybackMonths, 1) }));
     L.push('');
@@ -1403,8 +1456,8 @@
       L.push('### [' + T('c.' + f.severity).toUpperCase() + '] ' + f.title);
       L.push('');
       L.push('- **' + T('md.affected') + ':** ' + f.count);
-      if (f.impactMonthly) L.push('- **' + T('md.money') + ':** ' + U.fmtMoney(f.impactMonthly) + '/mo · ' +
-        U.fmtMoney(f.annualImpact) + '/yr (' + T(f.recoverable ? 'rk.recoverable' : 'rk.atStake') + ')');
+      if (f.impactMonthly) L.push('- **' + T('md.money') + ':** ' + T('c.amountPerMonth', { amount: U.fmtMoney(f.impactMonthly) }) + ' · ' +
+        T('c.amountPerYear', { amount: U.fmtMoney(f.annualImpact) }) + ' (' + T(f.recoverable ? 'rk.recoverable' : 'rk.atStake') + ')');
       L.push('- **' + T('md.what') + ':** ' + f.what);
       L.push('- **' + T('md.why') + ':** ' + f.why);
       L.push('- **' + T('md.fix') + ':** ' + f.fix);
@@ -1455,14 +1508,14 @@
     const wasteShare = c.totalMonthly > 0 ? c.wasteMonthly / c.totalMonthly : null;
     k.append(
       ringCard({ title: T('ct.recoverableNow'), kicker: T('ct.recoverableKicker'), score: wasteShare, value: wasteShare == null ? '—' : U.fmtPct(wasteShare, wasteShare < 0.1 ? 1 : 0),
-        sub: U.fmtMoney(c.wasteMonthly) + '/mo', band: !c.wasteMonthly ? 'good' : wasteShare > 0.1 ? 'high' : 'medium', min: c.wasteMonthly ? 0.03 : 0,
+        sub: T('c.amountPerMonth', { amount: U.fmtMoney(c.wasteMonthly) }), band: !c.wasteMonthly ? 'good' : wasteShare > 0.1 ? 'high' : 'medium', min: c.wasteMonthly ? 0.03 : 0,
         foot: T('ov.perYear', { amount: U.fmtMoney(c.wasteAnnual) }), facet: 'money', onClick: () => HR.app.go('cost', { tab: 'waste' }) }),
-      tile(T('ov.licenceSpend'), U.fmtMoney(c.totalMonthly) + '/mo', T('ov.perYear', { amount: U.fmtMoney(c.totalAnnual) }), { delta: bDelta('monthlyCost'), deltaFormat: U.fmtMoney, onClick: () => HR.app.go('cost', { tab: 'spend' }) }),
-      c.hidden ? tile(T('ct.hidden'), U.fmtMoney(c.hidden.hiddenMonthly) + '/mo', T('ct.hiddenFoot', { amount: U.fmtMoney(c.hidden.hiddenMonthly * 12) }),
+      tile(T('ov.licenceSpend'), T('c.amountPerMonth', { amount: U.fmtMoney(c.totalMonthly) }), T('ov.perYear', { amount: U.fmtMoney(c.totalAnnual) }), { delta: bDelta('monthlyCost'), deltaFormat: U.fmtMoney, onClick: () => HR.app.go('cost', { tab: 'spend' }) }),
+      c.hidden ? tile(T('ct.hidden'), T('c.amountPerMonth', { amount: U.fmtMoney(c.hidden.hiddenMonthly) }), T('ct.hiddenFoot', { amount: U.fmtMoney(c.hidden.hiddenMonthly * 12) }),
         { severity: c.hidden.hiddenMonthly ? 'medium' : 'good', onClick: () => HR.app.go('cost', { tab: 'waste' }) })
-        : tile(T('ct.outsideControl'), U.fmtMoney(c.unmanagedSpend) + '/mo', T('ct.outsideControlFoot'), { severity: 'medium', onClick: () => HR.app.go('permissions') }),
+        : tile(T('ct.outsideControl'), T('c.amountPerMonth', { amount: U.fmtMoney(c.unmanagedSpend) }), T('ct.outsideControlFoot'), { severity: 'medium', onClick: () => HR.app.go('permissions') }),
       c.hidden && c.hidden.trueup.rows.length
-        ? tile(T('ct.shelfware'), U.fmtMoney(c.hidden.trueup.shelfware) + '/mo', T('ct.shelfwareFoot', { n: U.fmtInt(c.hidden.trueup.rows.length), under: U.fmtInt(c.hidden.trueup.under) }),
+        ? tile(T('ct.shelfware'), T('c.amountPerMonth', { amount: U.fmtMoney(c.hidden.trueup.shelfware) }), T('ct.shelfwareFoot', { n: U.fmtInt(c.hidden.trueup.rows.length), under: U.fmtInt(c.hidden.trueup.under) }),
             { severity: c.hidden.trueup.under ? 'high' : c.hidden.trueup.shelfware ? 'medium' : 'good', onClick: () => HR.app.go('cost', { tab: 'spend' }) })
         : tile(T('ov.cleanup'), U.fmtMoney(c.remediationCost), T('ct.cleanupFoot', { h: Math.round(c.remediation.hours) }) + (c.paybackMonths ? ' \u00b7 ' + T('ct.payback', { n: U.fmtNum(c.paybackMonths, 1) }) : ''), { small: true, onClick: () => HR.app.go('cost', { tab: 'case' }) })
     );
@@ -2183,7 +2236,7 @@
               render: x => el('span', {}, [
                 x.reasons.indexOf('sensitive') >= 0
                   ? el('span', { class: 'sev high', text: T('pe.flagSensitive') }) : null,
-                x.price ? el('span', { class: 'pill', text: U.fmtMoney(x.price) + '/mo' }) : null
+                x.price ? el('span', { class: 'pill', text: T('c.amountPerMonth', { amount: U.fmtMoney(x.price) }) }) : null
               ].filter(Boolean)) }
           ],
           rows, pageSize: 8, exportName: 'copy-' + cls
@@ -2214,8 +2267,8 @@
         el('span', { class: 'sev ' + STATE_SEV[row.life.state], text: stateLabel(row.life.state) }),
         el('span', { class: 'pill', text: offsetText(row.life) }),
         el('span', { class: 'pill', text: T('dr.accountsN', { n: row.accounts.length }) }),
-        p.blocked ? el('span', { class: 'pill removed', text: 'blocked' }) : null,
-        p.excluded ? el('span', { class: 'pill removed', text: 'excluded' }) : null
+        p.blocked ? el('span', { class: 'pill removed', text: T('p3.blocked') }) : null,
+        p.excluded ? el('span', { class: 'pill removed', text: T('p3.excluded') }) : null
       ])
     ]);
     const body = el('div', { class: 'stack' });
@@ -2349,9 +2402,11 @@
     }
 
     if (!st.diff) {
-      f.appendChild(card(null, null, el('p', {
-        text: T(st.snapshots && st.snapshots.length > 1 ? 'df.pickBaseline' : 'df.importSecond')
-      })));
+      const pick = st.snapshots && st.snapshots.length > 1;
+      f.appendChild(card(null, null, [
+        el('p', { text: T(pick ? 'df.pickBaseline' : 'df.importSecond') }),
+        pick ? null : el('p', {}, el('button', { class: 'btn primary', text: T('empty.sources'), onclick: () => HR.app.go('sources') }))
+      ]));
       return f;
     }
 
@@ -2718,7 +2773,7 @@
           'published/dashboards.json:\n{ "hr": { "name": "HR \u2014 ' + wsName + '", "source": "published/' + slug + '.json" } }\n\n' +
           T('db.publishOpen') + ':  ' + location.origin + HR.dashboard.url('hr') + '   (' + T('db.publishAlt') + ': ' + location.origin + '/?dashboard=hr)')]),
         el('div', { class: 'slot-actions' }, el('button', { class: 'btn primary', text: T('db.publish'), onclick: async () => {
-          const json = await HR.store.exportBundle(wsName);
+          const json = await HR.store.exportBundle(wsName, HR.dashboard.facetsOf('hr'));
           U.download(slug + '.json', json, 'application/json');
           HR.usage.exported('dashboard-bundle');
         } }))
@@ -2883,7 +2938,7 @@
           } else {
             tr.appendChild(el('td', {}));
           }
-          tr.appendChild(el('td', {}, el('button', { class: 'btn sm danger', text: '✕', onclick: () => { list.splice(idx, 1); draw(); } })));
+          tr.appendChild(el('td', {}, el('button', { class: 'btn sm danger', text: '✕', 'aria-label': T('c.remove'), title: T('c.remove'), onclick: () => { list.splice(idx, 1); draw(); } })));
           tb.appendChild(tr);
         });
         t.appendChild(tb);
@@ -3276,17 +3331,19 @@
           ? ['recon', 'vault', 'rules', 'granted', 'history', 'products', 'assignments', 'directory', 'fieldMapping', 'audit', 'saconfig']
               .filter(k => ctx[k]).length
           : 0;
+        /* Settings, branding and nav are per workspace; theme and language are global. */
+        const wk = k => HR.workspace ? HR.workspace.key(k) : k;
         const rows = [
-          { name: T('st.storeConfig'), what: T('st.storeConfigWhat'), size: fmtSize(lsSize('hr.config.v1')),
+          { name: T('st.storeConfig'), what: T('st.storeConfigWhat'), size: fmtSize(lsSize(wk('hr.config.v1'))),
             clear: async () => { if (!confirm(T('st.resetConfirm'))) return; settingsDraft = null; HR.config.reset(); await HR.app.rebuildBusy(); HR.app.go('settings', { tab: 'storage' }); } },
-          { name: T('st.storeBrand'), what: T('st.storeBrandWhat'), size: fmtSize(lsSize('hr.brand')),
-            clear: () => { try { localStorage.removeItem('hr.brand'); } catch (e) { /* ignore */ }
+          { name: T('st.storeBrand'), what: T('st.storeBrandWhat'), size: fmtSize(lsSize(wk('hr.brand'))),
+            clear: () => { try { localStorage.removeItem(wk('hr.brand')); } catch (e) { /* ignore */ }
               Object.assign(HR.brand.state, { icon: null, logo: null, logoLight: null, productName: '', org: '', preparedBy: '', date: '',
                 accent: '', defaultTheme: '', welcome: '', footerText: '', contact: '' });
               HR.brand.detectAuto().then(() => { HR.brand.apply(); HR.app.applyChrome(); HR.app.go('settings', { tab: 'storage' }); }); } },
           { name: T('st.storePrefs'), what: T('st.storePrefsWhat'),
-            size: fmtSize(lsSize('hr.nav.v1') + lsSize('hr.theme') + lsSize('hr.lang')),
-            clear: () => { ['hr.nav.v1', 'hr.theme', 'hr.lang'].forEach(k => { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } });
+            size: fmtSize(lsSize(wk('hr.nav.v1')) + lsSize('hr.theme') + lsSize('hr.lang')),
+            clear: () => { [wk('hr.nav.v1'), 'hr.theme', 'hr.lang'].forEach(k => { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } });
               HR.app.go('settings', { tab: 'storage' }); } },
           { name: T('st.storeSnapshots'), what: T('st.storeSnapshotsWhat', { n: U.fmtInt(snaps.length) }), size: snaps.length ? U.fmtInt(snaps.length) : '—',
             clear: async () => { if (!confirm(T('st.clearSnapshotsConfirm', { n: U.fmtInt(snaps.length) }))) return;
@@ -3437,13 +3494,31 @@
     if (h) {
       const gr = el('div', { class: 'grid g2', style: 'margin-top:14px' });
 
-      /* Grants and revokes per day: the shape of how the tenant actually moves. */
-      const labels = h.timeline.map(d => d.day.slice(5));
-      gr.appendChild(card(T('act.timeline'), T('act.timelineNote'), C.line([
-        { label: T('act.opGrant'), color: C.slot(3), points: h.timeline.map((d, i) => ({ x: i, y: d.grant })) },
-        { label: T('act.opRevoke'), color: C.slot(2), points: h.timeline.map((d, i) => ({ x: i, y: d.revoke })) },
-        { label: T('act.opFailed'), color: C.STATUS.critical, points: h.timeline.map((d, i) => ({ x: i, y: d.failed })) }
-      ], labels, { height: 220 })));
+      /* Grants and revokes per week, or per month over a long export: hundreds of days of
+         single-day marks overlapped into noise. */
+      const tl = h.timeline;
+      const span = tl.length ? (Date.parse(tl[tl.length - 1].day) - Date.parse(tl[0].day)) / 86400000 : 0;
+      const monthly = span > 120;
+      const bucketOf = day => {
+        const d = new Date(day + 'T00:00:00Z');
+        if (monthly) return day.slice(0, 7) + '-01';
+        d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));   // the Monday of its week
+        return d.toISOString().slice(0, 10);
+      };
+      const buckets = new Map();
+      tl.forEach(d => {
+        const k = bucketOf(d.day);
+        if (!buckets.has(k)) buckets.set(k, { grant: 0, revoke: 0, failed: 0 });
+        const b = buckets.get(k); b.grant += d.grant; b.revoke += d.revoke; b.failed += d.failed;
+      });
+      const keys = Array.from(buckets.keys()).sort();
+      const fmtB = k => new Date(k + 'T00:00:00Z').toLocaleDateString(HR.i18n.locale,
+        monthly ? { month: 'short', year: 'numeric', timeZone: 'UTC' } : { day: 'numeric', month: 'short', year: '2-digit', timeZone: 'UTC' });
+      gr.appendChild(card(T(monthly ? 'act.timelineMonth' : 'act.timelineWeek'), T('act.timelineNote'), C.columns([
+        { label: T('act.opGrant'), color: C.slot(3), values: keys.map(k => buckets.get(k).grant) },
+        { label: T('act.opRevoke'), color: C.slot(2), values: keys.map(k => buckets.get(k).revoke) },
+        { label: T('act.opFailed'), color: C.STATUS.critical, values: keys.map(k => buckets.get(k).failed) }
+      ], keys.map(fmtB), { height: 220 })));
 
       gr.appendChild(card(T('act.origins'), T('act.originsNote'), C.barList(
         h.origins.map(([name, n], i) => ({ label: name, value: n, color: C.slot((i % 8) + 1) })),
@@ -4253,12 +4328,31 @@
     /* The net under every drawer: anything marked with a facet the role lacks goes. */
     if (HR.access) { HR.access.sweep(document.getElementById('drawer-title')); HR.access.sweep(b); }
     collapseNotes(b);
+    /* A dialog: focus goes in, Tab stays in, and Esc / close hands it back to the opener. */
+    if (d.hidden) drawerOpener = document.activeElement;
     d.hidden = false; document.getElementById('drawer-scrim').hidden = false;
+    d.focus();
   }
+  let drawerOpener = null;
   function closeDrawer() {
-    document.getElementById('drawer').hidden = true;
+    const d = document.getElementById('drawer');
+    if (d.hidden) return;
+    d.hidden = true;
     document.getElementById('drawer-scrim').hidden = true;
+    if (drawerOpener && drawerOpener.isConnected) drawerOpener.focus();
+    drawerOpener = null;
   }
+  document.addEventListener('keydown', e => {
+    const d = document.getElementById('drawer');
+    if (e.key !== 'Tab' || !d || d.hidden) return;
+    const f = Array.from(d.querySelectorAll('a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])'))
+      .filter(n => !n.disabled && n.offsetParent !== null);
+    if (!f.length) { e.preventDefault(); return; }
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && (document.activeElement === first || document.activeElement === d)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    else if (!d.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+  });
 
   /* Release history straight from js/changelog.js — the same data the
      generated CHANGELOG.md is written from. */
@@ -4422,7 +4516,7 @@
       el('div', { class: 'row' }, [
         el('span', { class: 'pill', text: T('sy.accountsN', { n: s.accountCount }) }),
         el('span', { class: 'pill', text: T('sy.permsN', { n: s.permissionCount }) }),
-        s.monthlySpend ? el('span', { class: 'pill', text: U.fmtMoney(s.monthlySpend) + '/mo' }) : null,
+        s.monthlySpend ? el('span', { class: 'pill', text: T('c.amountPerMonth', { amount: U.fmtMoney(s.monthlySpend) }) }) : null,
         el('span', { class: 'sev ' + HR.config.severityOf(s.meanRisk), text: T('app.riskShort') + ' ' + Math.round(s.meanRisk) })
       ])
     ]);
@@ -4517,7 +4611,7 @@
         el('span', { class: 'sev ' + p.riskBand, 'data-facet': 'risk', text: T('app.riskShort') + ' ' + p.riskScore }),
         el('span', { class: 'pill', text: p.categoryLabel }),
         p.rare ? el('span', { class: 'pill removed', 'data-facet': 'risk', text: T('c.rare') }) : null,
-        p.monthlyPrice ? el('span', { class: 'pill', 'data-facet': 'money', text: U.fmtMoney(p.monthlyPrice) + '/holder/mo' }) : null,
+        p.monthlyPrice ? el('span', { class: 'pill', 'data-facet': 'money', text: T('c.amountPerHolderMonth', { amount: U.fmtMoney(p.monthlyPrice) }) }) : null,
         dirMeta && dirMeta.dynamic ? el('span', { class: 'pill warn', title: dirMeta.membershipRule,
           text: T('pm.badgeDynamic') }) : null,
         dirMeta && dirMeta.kind === 'resource' ? el('span', { class: 'pill ok',
@@ -4589,7 +4683,7 @@
       el('h2', { text: per.name }),
       el('div', { class: 'row' }, [
         el('span', { class: 'pill', text: T('dr.accountsN', { n: per.accountCount }) }),
-        el('span', { class: 'pill', text: U.fmtMoney(per.monthlyCost) + '/mo' })
+        el('span', { class: 'pill', text: T('c.amountPerMonth', { amount: U.fmtMoney(per.monthlyCost) }) })
       ])
     ]);
     const body = el('div', { class: 'stack' });

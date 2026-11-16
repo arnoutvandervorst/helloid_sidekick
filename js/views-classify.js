@@ -224,9 +224,9 @@
       tr.appendChild(el('td', { class: 'num' }, el('a', { href: '#', class: 'pill' + (wins ? ' ok' : hits ? ' warn' : ' muted'), text: U.fmtInt(wins),
         title: hits && !wins ? T('cw.shadowed') : T('cw.winsTip'), onclick: e => { e.preventDefault(); HR.app.go('classify', { tab: kind === 'categories' ? 'perms' : 'accounts', filter: 'rule:' + i }); } })));
       tr.appendChild(el('td', {}, el('div', { class: 'row', style: 'gap:2px;flex-wrap:nowrap' }, [
-        el('button', { class: 'btn sm ghost', text: '↑', title: T('cw.up'), disabled: i === 0, onclick: () => { rows.splice(i - 1, 0, rows.splice(i, 1)[0]); touch('hints'); onChange(); } }),
-        el('button', { class: 'btn sm ghost', text: '↓', title: T('cw.down'), disabled: i === rows.length - 1, onclick: () => { rows.splice(i + 1, 0, rows.splice(i, 1)[0]); touch('hints'); onChange(); } }),
-        el('button', { class: 'btn sm danger', text: '✕', onclick: () => { rows.splice(i, 1); touch('hints'); onChange(); } })
+        el('button', { class: 'btn sm ghost', text: '↑', title: T('cw.up'), 'aria-label': T('cw.up'), disabled: i === 0, onclick: () => { rows.splice(i - 1, 0, rows.splice(i, 1)[0]); touch('hints'); onChange(); } }),
+        el('button', { class: 'btn sm ghost', text: '↓', title: T('cw.down'), 'aria-label': T('cw.down'), disabled: i === rows.length - 1, onclick: () => { rows.splice(i + 1, 0, rows.splice(i, 1)[0]); touch('hints'); onChange(); } }),
+        el('button', { class: 'btn sm danger', text: '✕', 'aria-label': T('c.remove'), title: T('c.remove'), onclick: () => { rows.splice(i, 1); touch('hints'); onChange(); } })
       ])));
       tb.appendChild(tr);
     });

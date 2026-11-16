@@ -14,7 +14,8 @@
   'use strict';
 
   const KEY = 'hr.storage.v1';
-  const OWNED = ['hr.config.v1', 'hr.brand', 'hr.nav.v1', 'hr.edition', 'hr.theme', 'hr.lang'];
+  const OWNED = ['hr.config.v1', 'hr.brand', 'hr.nav.v1', 'hr.edition', 'hr.theme', 'hr.lang',
+    'hr.dashboard', 'hr.dashboard.stamp', 'policy.showRefs'];
 
   let flags = { enabled: true, noticeSeen: false, usage: true };
   try {
@@ -26,11 +27,24 @@
     try { localStorage.setItem(KEY, JSON.stringify(flags)); } catch (e) { /* not fatal */ }
   }
 
+  /** Every owned key in every workspace (base or base@workspace), registered or not. */
+  function wipeKeys() {
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && OWNED.includes(k.split('@')[0])) localStorage.removeItem(k);
+      }
+    } catch (e) { /* storage blocked */ }
+  }
+  /* Storage off: what some modules write anyway is cleared at every start, before they read it. */
+  if (!flags.enabled) wipeKeys();
+
   /** Remove every store this app owns; the flag object itself survives. */
   function wipe() {
     /* Every workspace's copy of every owned key, not just the active one's. */
     const keys = HR.workspace ? OWNED.flatMap(k => HR.workspace.allKeys(k)) : OWNED;
     keys.forEach(k => { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } });
+    wipeKeys();
     try { localStorage.removeItem('hr.workspaces'); } catch (e) { /* ignore */ }
     /* store.js knows how to close its own connection first; fall back to a
        raw delete when it is not loaded (early boot). */

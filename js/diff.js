@@ -10,7 +10,7 @@
     const acc = diffAccounts(current, baseline);
     const perm = diffPermissions(current, baseline);
     const findings = diffFindings(current, baseline);
-    const persons = (current.vault && baseline.vault) ? diffPersons(current.vault, baseline.vault) : null;
+    const persons = (current.vault && baseline.vault) ? diffPersons(current.vault, baseline.vault, current.asOf, baseline.asOf) : null;
     const controls = (HR.policy && current.hasRecon && baseline.hasRecon) ? diffControls(current, baseline) : null;
     const summary = diffSummary(current.summary, baseline.summary);
     const cost = {
@@ -60,18 +60,20 @@
   /* Two vaults, one question: who joined, who left, who moved. Keyed by the HR
      external id (the person id when HR has none). "Left" is absence from the later
      vault; a contract that ended shows as a lifecycle change, not as a leaver. */
-  function diffPersons(cur, base) {
+  function diffPersons(cur, base, curAsOf, baseAsOf) {
     const key = p => p.externalId || p.personId;
     const byKey = list => new Map(list.map(p => [key(p), p]));
     const baseMap = byKey(base.persons), curMap = byKey(cur.persons);
     const joined = [], left = [], changed = [];
     const pc = p => p.primaryContract || p.contracts[0] || null;
     const name = r => (r && r.name) || '';
-    const life = p => HR.vault.lifecycle(p).state;
+    /* Each side on its own day; one vault shared by both is read on one day, or every ended contract would look like a change. */
+    const day = w => (w ? new Date(w) : undefined);
+    const life = (p, w) => HR.vault.lifecycle(p, day(cur === base ? curAsOf : w)).state;
     const fields = (a, b) => {
       const ca = pc(a), cb = pc(b), out = [];
       const push = (field, from, to) => { if ((from || '') !== (to || '')) out.push({ field, from: from || '—', to: to || '—' }); };
-      push('lifecycle', life(b), life(a));
+      push('lifecycle', life(b, baseAsOf), life(a, curAsOf));
       push('department', cb && name(cb.department), ca && name(ca.department));
       push('title', cb && name(cb.title), ca && name(ca.title));
       push('employer', cb && name(cb.employer), ca && name(ca.employer));

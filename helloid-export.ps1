@@ -13,7 +13,7 @@
   helloid-config.json next to this script. After that it just runs.
 
 .PARAMETER OutDir
-  Output directory. Default: next to the script.
+  Output directory. Default: exports\ next to the script (files are owner-only on Linux/macOS).
 
 .PARAMETER Legacy
   Also write the two older files, products.json and product-assignments.csv.
@@ -41,7 +41,7 @@
   Justification = 'Interactive console script; progress belongs on the host, never in the pipeline.')]
 [CmdletBinding()]
 param(
-  [string]$OutDir = $PSScriptRoot,
+  [string]$OutDir = (Join-Path $PSScriptRoot 'exports'),
   [switch]$Legacy,
   [string]$ProfileName = '',
   [switch]$Setup,
@@ -60,6 +60,7 @@ if ($Forget) { Remove-HelloIDProfile $Forget; return }
 $PageSize = 500   # variables are case-insensitive: not $Page, which the loop below reuses
 $creds = Resolve-HelloIDCredential -Kind api -ProfileName $ProfileName -Setup:$Setup -EnvFile $EnvFile
 $base = $creds.Url.TrimEnd('/')
+if ($base -notmatch '^https://') { throw "The tenant URL must start with https:// (got '$base'): plain http would send the API secret in clear." }
 if (-not $base.EndsWith('/api/v1')) { $base += '/api/v1' }
 $headers = @{ Authorization = (Get-HelloIDBasicAuth $creds.Key $creds.Secret); Accept = 'application/json' }
 $tenant = ([Uri]$base).Host
@@ -153,6 +154,7 @@ if ($Legacy) {
     ConvertTo-Json -Depth 12 | Set-Content -Path (Join-Path $OutDir 'products.json') -Encoding UTF8
   $rows | ForEach-Object { [PSCustomObject]$_ } | Export-Csv -Path (Join-Path $OutDir 'product-assignments.csv') -NoTypeInformation -Encoding UTF8
 }
+if ($IsLinux -or $IsMacOS) { & chmod 600 (@($merged) + @(if ($Legacy) { (Join-Path $OutDir 'products.json'), (Join-Path $OutDir 'product-assignments.csv') })) }
 
 $withActions = @($products | Where-Object { $_.actions }).Count
 $native = @($products | ForEach-Object { $_.actions } | Where-Object { $_.executionType -eq 'native' }).Count

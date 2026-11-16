@@ -11,7 +11,7 @@ three ways or never given a value.
     python3 helloid-sa-export.py
 
 Same credentials as helloid-export.py (the 'api' profile in helloid-config.json; read
-access is enough). Writes one file, next to this script unless -o says otherwise:
+access is enough). Writes one file, in exports/ next to this script unless -o says otherwise:
 
     helloid-sa-config.json
 
@@ -35,6 +35,7 @@ import datetime as dt
 import importlib.util
 import json
 import os
+import re
 import ssl
 import sys
 import time
@@ -125,6 +126,37 @@ def mask_variables(items):
     return out
 
 
+# A hardcoded secret in a script body, as js/salint.js (rule script.secret) recognises it. Only
+# the literal is replaced, by a value the same rule still matches: the finding survives, the secret does not.
+SECRET_LITERALS = [
+    re.compile(r'''(\$\w*(?:password|passwd|pwd|secret|apikey|token)\w*\s*=\s*)(["'])[^"'$\s]{6,}\2''', re.I),
+    re.compile(r'''(ConvertTo-SecureString\s+(?:-String\s+)?)(["'])[^"'$]{3,}\2(?=\s+-AsPlainText)''', re.I),
+]
+
+
+def redact_scripts(node, key=''):
+    """Every string under a key named like *script*, with its hardcoded secrets masked. Returns (node, count)."""
+    if isinstance(node, dict):
+        n = 0
+        for k, v in node.items():
+            node[k], c = redact_scripts(v, k)
+            n += c
+        return node, n
+    if isinstance(node, list):
+        n = 0
+        for i, v in enumerate(node):
+            node[i], c = redact_scripts(v, key)
+            n += c
+        return node, n
+    if isinstance(node, str) and 'script' in key.lower():
+        n = 0
+        for rx in SECRET_LITERALS:
+            node, c = rx.subn(lambda m: m.group(1) + m.group(2) + MASK + 'REDACTED' + MASK + m.group(2), node)
+            n += c
+        return node, n
+    return node, 0
+
+
 def elastic_creds(args):
     """The Elastic audit-log credentials, only when they are already saved or in the
     environment: the configuration export never stops to ask for a second key."""
@@ -180,7 +212,7 @@ def collect_activity(args):
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('-o', '--out', default=os.path.dirname(os.path.abspath(__file__)), help='output directory (default: next to the script)')
+    p.add_argument('-o', '--out', default=helloid_creds.EXPORTS, help='output directory (default: exports/ next to the script)')
     p.add_argument('--insecure', action='store_true', help='skip TLS verification (test tenants)')
     p.add_argument('--log-days', type=int, default=90, help='days of Service Automation audit-log events to include (default 90; 0 skips)')
     helloid_creds.add_arguments(p)
@@ -267,8 +299,7 @@ def main():
 
     os.makedirs(args.out, exist_ok=True)
     out_file = os.path.join(args.out, 'helloid-sa-config.json')
-    with open(out_file, 'w', encoding='utf-8') as fh:
-        json.dump({
+    config, redacted = redact_scripts({
             'kind': 'helloid-sa-config',
             'version': 1,
             'collectedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
@@ -283,7 +314,11 @@ def main():
             'scheduledTasks': scheduled_tasks,
             'agentPools': agent_pools,
             'activity': activity
-        }, fh, indent=1, ensure_ascii=False)
+        })
+    with open(out_file, 'w', encoding='utf-8', opener=helloid_creds.private) as fh:
+        json.dump(config, fh, indent=1, ensure_ascii=False)
+    if redacted:
+        print(f'  {redacted} hardcoded secret(s) in scripts replaced by ***REDACTED*** (the Scripts view still flags them).')
 
     scripts = (sum(1 for d in data_sources if d.get('script'))
                + sum(1 for f in delegated_forms if (f.get('task') or {}).get('script'))

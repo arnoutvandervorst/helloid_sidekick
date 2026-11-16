@@ -138,7 +138,7 @@
     return el('li', { class: 'rail-sub-row' }, [
       el('button', {
         class: 'rail-sub-item' + (view === current ? ' active' : '') + (missing.length ? ' gated' : ''),
-        'data-view': view,
+        'data-view': view, 'aria-current': view === current ? 'page' : null,
         title: T('nav.' + view) + (missing.length ? ' \u2014 ' + T('nav.needs', { list: needs }) : ''),
         onclick: () => HR.app.go(view)
       }, [
@@ -147,7 +147,9 @@
       ].filter(Boolean)),
       dash ? null : el('button', {
         class: 'nav-star' + (isFavourite(view) ? ' on' : ''),
-        title: T(isFavourite(view) ? 'nav.unfavourite' : 'nav.favourite'),
+        title: T(isFavourite(view) ? 'nav.unfavouriteView' : 'nav.favouriteView', { view: T('nav.' + view) }),
+        'aria-label': T(isFavourite(view) ? 'nav.unfavouriteView' : 'nav.favouriteView', { view: T('nav.' + view) }),
+        'aria-pressed': isFavourite(view) ? 'true' : 'false',
         onclick: e => { e.stopPropagation(); toggleFavourite(view); }
       }, icon('star'))
     ].filter(Boolean));
@@ -157,6 +159,7 @@
   function topItem(view, current) {
     return el('button', {
       class: 'rail-item' + (view === current ? ' active' : ''), 'data-view': view, title: T('nav.' + view),
+      'aria-label': T('nav.' + view), 'aria-current': view === current ? 'page' : null,
       onclick: () => HR.app.go(view)
     }, [el('span', { class: 'nav-label', text: T('nav.' + view) }), badge(view)]);
   }
@@ -164,10 +167,12 @@
   /** A group: its row, and — when open — the band of its pages. */
   function group(key, views, current) {
     const holds = views.includes(current);
-    const open = (OPEN || groupOf(current)) === key;
+    /* The group of the page on screen stays open beside one the reader opened. */
+    const open = OPEN === '\u0000' ? false : (OPEN === key || groupOf(current) === key);
+    const subId = 'rail-sub-' + key;
     const head = el('button', {
       class: 'rail-item' + (holds ? ' active' : '') + (open ? ' open' : ''), title: T('nav.g.' + key),
-      'aria-expanded': open ? 'true' : 'false',
+      'aria-label': T('nav.g.' + key), 'aria-expanded': open ? 'true' : 'false', 'aria-controls': open && !state.collapsed ? subId : null,
       onclick: () => {
         /* Collapsed, a badge is all there is: open the rail and the group together. */
         if (state.collapsed) { OPEN = key; toggleCollapsed(); return; }
@@ -176,7 +181,7 @@
       }
     }, [el('span', { class: 'nav-label', text: T('nav.g.' + key) }), chevron(), badge(GROUP_ICON[key] || 'overview')]);
     const out = [head];
-    if (open && !state.collapsed) out.push(el('ul', { class: 'rail-sub' }, views.map(v => subItem(v, current))));
+    if (open && !state.collapsed) out.push(el('ul', { class: 'rail-sub', id: subId }, views.map(v => subItem(v, current))));
     return out;
   }
 
@@ -204,6 +209,9 @@
     const current = HR.app.state.view;
     nav.innerHTML = '';
     nav.classList.toggle('collapsed', state.collapsed);
+    /* Before an edition is picked the chooser is the page; a full rail beside it competes. */
+    if (HR.edition && !HR.edition.chosen() && !HR.app.state.model && !(HR.dashboard && HR.dashboard.active())) return;
+    nav.setAttribute('aria-label', T('nav.label'));
     const L = layout();
     L.top.forEach(v => nav.appendChild(topItem(v, current)));
     L.groups.forEach(g => group(g.key, g.views, current).forEach(n => nav.appendChild(n)));
@@ -212,7 +220,7 @@
        where the ones you use constantly are. */
     nav.appendChild(el('button', {
       class: 'nav-toggle',
-      title: T(state.collapsed ? 'nav.expand' : 'nav.collapse'),
+      title: T(state.collapsed ? 'nav.expand' : 'nav.collapse'), 'aria-label': T(state.collapsed ? 'nav.expand' : 'nav.collapse'),
       onclick: toggleCollapsed
     }, [
       el('span', { class: 'nav-label', text: T('nav.collapse') }),
@@ -220,13 +228,51 @@
     ]));
   }
   /** A new page opens its own group again, even after the reader closed one. */
-  function onNavigate() { OPEN = null; }
+  function onNavigate() {
+    OPEN = null;
+    if (document.body.classList.contains('nav-open')) { closeMenu(false); document.getElementById('view-root').focus(); }
+  }
+
+  /* ---- narrow screens: the rail is a drawer behind the menu button ---- */
+  const menuBtn = () => document.getElementById('btn-menu');
+  function openMenu() {
+    document.body.classList.add('nav-open');
+    document.getElementById('nav-scrim').hidden = false;
+    menuBtn().setAttribute('aria-expanded', 'true');
+    const first = document.querySelector('#sidenav [aria-current="page"]') || document.querySelector('#sidenav button');
+    if (first) setTimeout(() => first.focus(), 0);   // once the rail is visible again
+  }
+  function closeMenu(refocus) {
+    if (!document.body.classList.contains('nav-open')) return;
+    document.body.classList.remove('nav-open');
+    document.getElementById('nav-scrim').hidden = true;
+    menuBtn().setAttribute('aria-expanded', 'false');
+    if (refocus) menuBtn().focus();
+  }
 
   function init() {
     load();
     document.body.classList.toggle('nav-collapsed', state.collapsed);
     render();
+    /* The skip link focuses the page without touching the hash, which names the view. */
+    document.getElementById('skip-link').addEventListener('click', e => { e.preventDefault(); document.getElementById('view-root').focus(); });
+    menuBtn().addEventListener('click',() => document.body.classList.contains('nav-open') ? closeMenu(true) : openMenu());
+    document.getElementById('nav-scrim').addEventListener('click', () => closeMenu(true));
+    document.addEventListener('keydown', e => {
+      if (!document.body.classList.contains('nav-open')) return;
+      if (e.key === 'Escape') { closeMenu(true); return; }
+      /* Tab cycles inside the open drawer, the way the account drawer does. */
+      if (e.key !== 'Tab') return;
+      const f = Array.from(document.querySelectorAll('#rail button')).filter(n => n.offsetParent !== null);
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      else if (!document.getElementById('rail').contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    });
+    /* Widening past the breakpoint with the drawer open would leave the scrim behind. */
+    matchMedia('(max-width: 720px)').addEventListener('change', e => { if (!e.matches) closeMenu(false); });
   }
 
-  HR.nav = { init, render, toggleFavourite, toggleCollapsed, groupOf, onNavigate, state: () => state, ICONS, icon };
+  HR.nav = { init, render, toggleFavourite, toggleCollapsed, groupOf, onNavigate, openMenu, closeMenu, state: () => state, ICONS, icon };
 })(window.HR);

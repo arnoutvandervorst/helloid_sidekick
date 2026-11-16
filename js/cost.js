@@ -100,7 +100,7 @@
     const eff = cfg.effort;
     const c = model.cost || compute(model);
     const DAY = 86400000;
-    const now = new Date();
+    const now = new Date(model.asOf || Date.now());   // dormancy is measured on the data's day
     const h = {};
 
     /* Dormant licences: an enabled directory user nobody has seen sign in for the
@@ -111,8 +111,8 @@
       const rows = [];
       for (const u of model.directory.users) {
         if (u.enabled === false || !u.lastLogon) continue;
-        const days = Math.round((now - u.lastLogon) / DAY);
-        if (days < dormantDays) continue;
+        const days = Math.round((now - Date.parse(u.lastLogon)) / DAY);   // lastLogon is an ISO string
+        if (!Number.isFinite(days) || days < dormantDays) continue;
         const a = byUser.get(String(u.userName || '').toLowerCase());
         if (a && a.monthlyCost > 0) rows.push({ account: a, days, monthly: a.monthlyCost });
       }
@@ -174,7 +174,7 @@
         const late = lat.rows.filter(r => r.days > joinerDays);
         const idleDays = U.sum(late, r => r.days - joinerDays);
         h.onboarding = { available: true, rate: eff.idleDayCost || 0, joinerDays, late: late.length, idleDays,
-          monthly: (eff.idleDayCost || 0) * idleDays / Math.max(1, (model.history.meta.to - model.history.meta.from) / (DAY * 30.4) || 12), rows: late };
+          monthly: (eff.idleDayCost || 0) * idleDays / Math.max(1, (model.history.meta.to - model.history.meta.from) / (DAY * 30.4) || 1), rows: late };
       } else h.onboarding = { available: false, rate: eff.idleDayCost || 0, joinerDays, late: 0, idleDays: 0, monthly: 0, rows: [] };
     } else h.onboarding = { available: false, rate: eff.idleDayCost || 0, joinerDays, late: 0, idleDays: 0, monthly: 0, rows: [] };
 

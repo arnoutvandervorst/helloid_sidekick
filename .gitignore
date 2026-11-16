@@ -25,6 +25,8 @@ helloid-sa-config*.json
 
 # Collector output — real directories carry personal data. demo/ stays the exception.
 directory*.json
+# Default output folder of every collector.
+exports/
 
 # The audit log pulled from a tenant (helloid-audit.py): names, decisions, logins.
 helloid-audit*.json
@@ -42,3 +44,5 @@ __pycache__/
 *.pyc
 # dashboard bundles the partner publishes: customer data
 published/
+# Browser-automation scratch (Playwright MCP): screenshots of real data.
+.playwright-mcp/

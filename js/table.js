@@ -31,7 +31,7 @@
     const bulkBar = el('span', { class: 'row', hidden: true });
     if (o.bulkActions) toolbar.appendChild(bulkBar);
     const searchBox = el('input', {
-      type: 'search', placeholder: o.searchPlaceholder || U.t('c.search'),
+      type: 'search', placeholder: o.searchPlaceholder || U.t('c.search'), 'aria-label': o.searchPlaceholder || U.t('c.search'),
       oninput: e => { state.q = e.target.value.trim().toLowerCase(); state.page = 0; render(); }
     });
     searchBox.style.minWidth = '220px';
@@ -39,6 +39,7 @@
 
     (o.filters || []).forEach(f => {
       const sel = el('select', {
+        'aria-label': f.label,
         onchange: e => { state.filters[f.key] = e.target.value; state.page = 0; render(); }
       });
       sel.appendChild(el('option', { value: '', text: f.label + ': ' + U.t('c.all') }));
@@ -111,7 +112,7 @@
       const thead = el('thead'), htr = el('tr');
       if (o.bulkActions) {
         const all = rows.length > 0 && rows.every(r => state.selected.has(r));
-        const head = el('input', { type: 'checkbox' });
+        const head = el('input', { type: 'checkbox', 'aria-label': U.t('c.selectAll') });
         head.checked = all;
         head.addEventListener('change', () => {
           if (all) rows.forEach(r => state.selected.delete(r));
@@ -126,15 +127,24 @@
         const active = state.sort.key === c.key;
         const th = el('th', {
           class: (c.num ? 'num ' : '') + (c.sortable === false ? 'no-sort' : ''),
-          title: c.hint || ''
+          title: c.hint || '', scope: 'col',
+          'aria-sort': c.sortable !== false ? (active ? (state.sort.dir > 0 ? 'ascending' : 'descending') : 'none') : null
         });
-        th.append(document.createTextNode(c.label));
-        if (active) th.append(el('span', { class: 'arrow', text: state.sort.dir > 0 ? ' ▲' : ' ▼' }));
-        if (c.sortable !== false) th.addEventListener('click', () => {
-          if (state.sort.key === c.key) state.sort.dir *= -1;
-          else state.sort = { key: c.key, dir: c.num ? -1 : 1 };
-          render();
-        });
+        /* The sort is a button inside the header, so it is reachable and announced. */
+        const sortable = c.sortable !== false;
+        const lbl = sortable ? el('button', { type: 'button', class: 'th-sort' }) : th;
+        lbl.append(document.createTextNode(c.label));
+        if (active) lbl.append(el('span', { class: 'arrow', 'aria-hidden': 'true', text: state.sort.dir > 0 ? ' ▲' : ' ▼' }));
+        if (sortable) {
+          th.appendChild(lbl);
+          th.addEventListener('click', () => {
+            if (state.sort.key === c.key) state.sort.dir *= -1;
+            else state.sort = { key: c.key, dir: c.num ? -1 : 1 };
+            render();
+            const again = wrap.querySelectorAll('th')[th.cellIndex];
+            if (again && again.querySelector('.th-sort')) again.querySelector('.th-sort').focus();
+          });
+        }
         htr.appendChild(th);
       });
       thead.appendChild(htr); table.appendChild(thead);
@@ -143,7 +153,7 @@
       slice.forEach(r => {
         const tr = el('tr', { class: o.onRowClick ? 'click' : '' });
         if (o.bulkActions) {
-          const box = el('input', { type: 'checkbox' });
+          const box = el('input', { type: 'checkbox', 'aria-label': U.t('c.selectRow') });
           box.checked = state.selected.has(r);
           box.addEventListener('change', () => {
             if (box.checked) state.selected.add(r); else state.selected.delete(r);
@@ -154,11 +164,17 @@
           td.appendChild(box);
           tr.appendChild(td);
         }
-        o.columns.forEach(c => {
+        o.columns.forEach((c, ci) => {
           const td = el('td', { class: c.num ? 'num' : '' });
           const v = c.render ? c.render(r) : raw(c, r);
-          if (v instanceof Node) td.appendChild(v);
-          else td.textContent = (typeof v === 'number') ? U.fmtInt(v) : (v == null ? '' : String(v));
+          /* A clickable row opens from its first cell by keyboard too: that cell is the button,
+             unless what the column drew is itself interactive. */
+          const host = o.onRowClick && ci === 0 && !(v instanceof Node && v.matches && v.matches('a, button, input, select, :has(a, button, input, select)'))
+            ? el('button', { type: 'button', class: 'row-open', onclick: e => { e.stopPropagation(); o.onRowClick(r); } }) : null;
+          if (host) td.appendChild(host);
+          const into = host || td;
+          if (v instanceof Node) into.appendChild(v);
+          else into.textContent = (typeof v === 'number') ? U.fmtInt(v) : (v == null ? '' : String(v));
           tr.appendChild(td);
         });
         if (o.onRowClick) tr.addEventListener('click', () => o.onRowClick(r));

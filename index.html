@@ -1,19 +1,25 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- Same policy as nginx.conf (frame-ancestors cannot be set here). The sha256 is the
+     Complex-mapping sandbox's script (js/fieldmap.js sandboxMain); build.py adds one per
+     inlined script. The sandbox frame inherits this policy, hence 'unsafe-eval'. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval' 'sha256-hNT8beoJeoldc3gfjhhv24Gj7hNfpmbHtzJruq1Eqp8='; connect-src 'self'; form-action 'none'; base-uri 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HelloID Sidekick</title>
 <link rel="stylesheet" href="css/app.css">
+<link rel="icon" href="assets/icon.png">
 </head>
 <body>
+<a class="skip-link" id="skip-link" href="#view-root">Skip to content</a>
 
 <div id="drop-veil" hidden><div id="drop-veil-text"></div></div>
 
 <!-- The chrome follows the HelloID portal: a dark rail the full height of the page with
      the logo on top, a white bar beside it, and the copyright line under the content. -->
 <div class="shell">
-  <aside class="rail">
+  <aside class="rail" id="rail">
     <div class="brand rail-head">
       <span class="mark-host"></span>
       <strong id="topbar-title">HelloID Sidekick</strong>
@@ -22,20 +28,23 @@
   </aside>
   <div class="main-col">
     <header class="topbar">
-      <select id="workspace-select" class="topbar-ws" title="Workspace"></select>
+      <button class="btn ghost nav-menu" id="btn-menu" aria-controls="rail" aria-expanded="false" aria-label="Menu">
+        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <select id="workspace-select" class="topbar-ws" title="Workspace" aria-label="Workspace"></select>
       <span class="topbar-spacer"></span>
       <div class="topbar-actions">
         <button class="btn primary" id="btn-import">
           <span id="btn-import-label">Import</span>
         </button>
         <a class="btn ghost" id="link-repo" href="https://github.com/arnoutvandervorst/helloid_sidekick"
-           target="_blank" rel="noopener noreferrer">GitHub</a>
-        <select id="lang-select" title="Language"></select>
-        <button class="btn ghost" id="btn-theme" title="Toggle light/dark">◐</button>
+           target="_blank" rel="noopener noreferrer"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 5l-3 14"/></svg><span id="link-repo-label">GitHub</span></a>
+        <select id="lang-select" title="Language" aria-label="Language"></select>
+        <button class="btn ghost" id="btn-theme" title="Toggle light/dark" aria-label="Toggle light/dark">◐</button>
       </div>
     </header>
     <div id="demo-host"></div>
-    <main id="view-root">
+    <main id="view-root" tabindex="-1">
     </main>
     <footer class="app-foot" id="app-foot">
       <div class="sub" id="topbar-sub"></div>
@@ -43,16 +52,17 @@
     </footer>
   </div>
 </div>
-<div id="drawer" class="drawer" hidden>
+<div id="nav-scrim" hidden></div>
+<div id="drawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" tabindex="-1" hidden>
   <div class="drawer-head">
     <div id="drawer-title"></div>
-    <button class="btn ghost" id="drawer-close">✕</button>
+    <button class="btn ghost" id="drawer-close" aria-label="Close">✕</button>
   </div>
   <div id="drawer-body"></div>
 </div>
 <div id="drawer-scrim" hidden></div>
-<div id="tooltip" class="tooltip" hidden></div>
-<div id="toast" class="toast" hidden></div>
+<div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="js/i18n.js"></script>
 <script src="js/util.js"></script>

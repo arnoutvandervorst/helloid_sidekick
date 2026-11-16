@@ -45,6 +45,7 @@
     (state.model.vault && state.model.vault.persons.length > 500) ||
     (state.model.summary && state.model.summary.rows > 20000)));
   function render() {
+    if (navHold) return;
     const cost = renderCost.get(renderKey());
     const heavy = cost === undefined ? largeModel() : cost > HEAVY_MS;
     if (!heavy) { renderNow(); return; }
@@ -111,9 +112,11 @@
       const g = HR.nav.groupOf(state.view);
       const light = g && g !== 'favourites' && g !== 'dashboard' ? T('nav.g.' + g) : (HR.brand.state.productName || T('app.titleShort'));
       const page = h1.textContent;
-      if (light && light.toLowerCase() !== page.toLowerCase()) {
+      /* "Data Data points" says the section twice: a page already named after it stands alone. */
+      if (light && !page.toLowerCase().startsWith(light.toLowerCase())) {
         h1.textContent = '';
-        h1.append(el('span', { class: 'h-light', text: light + ' ' }), el('strong', { text: page }));
+        /* The section word is decoration for the eye; the heading a reader hears is the page. */
+        h1.append(el('span', { class: 'h-light', 'aria-hidden': 'true', text: light + ' ' }), el('strong', { text: page }));
       }
     }
     /* The net under every view: anything marked with a facet the role lacks goes. */
@@ -168,6 +171,7 @@
     if (!sel || !HR.workspace) return;
     sel.innerHTML = '';
     sel.title = T('ws.title');
+    sel.setAttribute('aria-label', T('ws.title'));
     const active = HR.workspace.active();
     /* A dashboard's workspace is chosen by the dashboard, not here. */
     HR.workspace.list().filter(w => !w.dashboard || w.id === active.id).forEach(w => sel.appendChild(el('option', { value: w.id, text: w.name, selected: w.id === active.id })));
@@ -230,22 +234,32 @@
     }
     /* No edition chosen yet: the choice comes before the first import. */
     if (HR.edition && !HR.edition.chosen()) { root.appendChild(HR.views.choose(null, {})); return; }
+    /* A view opened before any import keeps its own name and says what it needs. */
+    const missing = state.view !== 'overview' && HR.views[state.view] && HR.views.missingFor ? HR.views.missingFor(state.view) : [];
+    if (missing.length) { root.appendChild(HR.views.gatePage(state.view, missing)); if (HR.nav) HR.nav.render(); return; }
     const ed = HR.edition ? HR.edition.get() : 'all';
     root.appendChild(el('section', { class: 'empty-state' }, [
       el('h1', { text: T('empty.title') }),
       HR.brand.state.welcome ? el('p', { text: HR.brand.state.welcome }) : null,
       el('p', { text: ed && ed !== 'all' ? T('ed.' + ed + '.start') : T('empty.body') }),
-      el('p', {}, [
+      el('p', { class: 'row', style: 'justify-content:center' }, [
         el('button', { class: 'btn primary', text: T('empty.sources'), onclick: () => go('sources') }),
-        sampleFile ? el('button', { class: 'btn', style: 'margin-left:8px',
+        demoManifest ? el('button', { class: 'btn', text: T('demo.load'), onclick: () => HR.demo.load() }) : null,
+        sampleFile ? el('button', { class: 'btn',
           text: T('src.sampleFile', { name: sampleFile }), onclick: loadSample }) : null
       ])
     ]));
+    if (HR.nav) HR.nav.render();
   }
 
   /* The hash names the view and, when the view is about one thing, that thing:
      "#person/500107" survives a reload and can be sent to a colleague. */
+  /* A multi-file load (the demo) holds navigation and painting until it is done, so the
+     page does not flash through every import's own view or count those as visits. */
+  let navHold = false;
+  const holdNav = on => { navHold = !!on; };
   function go(view, params) {
+    if (navHold) return;
     if (view !== state.view && HR.nav && HR.nav.onNavigate) HR.nav.onNavigate();
     state.view = view; state.params = params || {};
     location.hash = view + (state.params.id ? '/' + encodeURIComponent(state.params.id) : '');
@@ -304,6 +318,8 @@
     }
     return result;
   }
+  /* Fire-and-forget imports end here, not as an unhandled rejection the user never sees. */
+  const importFailed = err => { console.error(err); U.toast(T('toast.importFail', { msg: (err && err.message) || String(err) }), 8000); };
 
   async function importTextNow(text, fileName, opts) {
     opts = opts || {};
@@ -352,7 +368,11 @@
       state.currentSnapshotId = dup.id;
       U.toast(T('toast.duplicate', { name: dup.name }));
     } else {
-      if (vaultOnly) { snap.dataDate = vaultOnly.dataDate; await HR.store.remove(vaultOnly.id); }
+      if (vaultOnly) {
+        /* The reconciliation's own file-name date wins; the vault's only fills a gap. */
+        if (!HR.store.dateFromName(parsed.meta.fileName)) snap.dataDate = vaultOnly.dataDate;
+        await HR.store.remove(vaultOnly.id);
+      }
       const res = await HR.store.put(snap);
       state.currentSnapshotId = snap.id;
       if (!res.persisted) U.toast(T('toast.noStorage'), 5000);
@@ -443,7 +463,7 @@
       if (encoding !== 'utf-8' && encoding !== 'utf-8 (BOM)') {
         U.toast(T('toast.encoding', { encoding: encoding }), 4000);
       }
-      importText(text, file.name);
+      importText(text, file.name).catch(importFailed);
     });
   }
 
@@ -490,7 +510,7 @@
 
   function headerOf(text) {
     try {
-      const firstLine = text.split(/\r?\n/, 1)[0] || '';
+      const firstLine = HR.parse.headerLine(text);
       return HR.parse.parseDelimited(firstLine + '\n', HR.parse.sniffDelim(text))[0] || [];
     } catch (e) { return []; }
   }
@@ -574,7 +594,7 @@
       HR.usage.imported('products', pMeta.rowCount);
     }
     if (rows.length) {
-      const text = U.toCSV(rows);
+      const text = U.toCSV(rows, null, { raw: true });
       try { state.assignments = HR.products.parseAssignments(text, fileName); } catch (err) { U.toast(err.message, 7000); return; }
       state.raw.assignments = text; state.importedAt.assignments = Date.now(); state.fileNames.assignments = fileName; ctx.assignments = text;
       aMeta = state.assignments.meta;
@@ -608,7 +628,7 @@
 
   function looksLikeRuleExport(text) {
     try {
-      const firstLine = text.split(/\r?\n/, 1)[0] || '';
+      const firstLine = HR.parse.headerLine(text);
       const header = HR.parse.parseDelimited(firstLine + '\n', HR.parse.sniffDelim(text))[0] || [];
       return HR.rules.looksLikeRules(header);
     } catch (e) { return false; }
@@ -1005,7 +1025,7 @@
       if (encoding !== 'utf-8' && encoding !== 'utf-8 (BOM)') {
         U.toast(T('toast.encoding', { encoding: encoding }), 4000);
       }
-      importText(text, file.name);
+      importText(text, file.name).catch(importFailed);
     });
   }
 
@@ -1038,7 +1058,7 @@
         if (!res.ok) continue;
         const text = HR.parse.decode(await res.arrayBuffer()).text;
         if (/^\s*</.test(text)) continue;          // a 404 page, not a CSV
-        importText(text, name);
+        importText(text, name).catch(importFailed);
         return;
       } catch (e) { /* not served, or file:// — try the next name */ }
     }
@@ -1149,9 +1169,8 @@
     const src = HR.dashboard.source();
     state.dashboardError = null;
     if (!src) return false;
-    const stampKey = HR.workspace ? HR.workspace.key('hr.dashboard.stamp') : 'hr.dashboard.stamp';
-    let stored = 0;
-    try { stored = Number(localStorage.getItem(stampKey) || 0); } catch (e) { /* ignore */ }
+    /* The bundle lives in this tab's memory only (store.js), so the stamp does too. */
+    const stored = state.dashboardLoaded || 0;
     try {
       const res = await fetch(src, { cache: 'no-store' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1163,7 +1182,6 @@
         await HR.store.clear();
         await HR.store.clearContext();
         await HR.store.importJSON(data);
-        try { localStorage.setItem(stampKey, String(stamp)); } catch (e) { /* ignore */ }
       });
       state.dashboardLoaded = stamp;
       U.toast(T('db.loaded', { date: U.fmtDate(stamp) }), 6000);
@@ -1264,6 +1282,8 @@
     /* The audit log's provisioning actions stand in for the historic-actions export;
        the export wins when both are loaded — it carries the origins, the audit log does not. */
     return { ruleSet: state.ruleSet, vault: vaultOverride || effVault(),
+      /* Another data point built on today's vault must not re-date that vault's contracts. */
+      vaultBorrowed: !vaultOverride && !!asOf && asOf !== curAsOf(),
       granted: state.granted, history: state.history || (state.audit ? HR.audit.asHistory(state.audit) : null),
       audit: state.audit,
       products: state.products, assignments: state.assignments,
@@ -1279,9 +1299,21 @@
       state.granted || state.history || state.products || state.assignments || state.audit;
     state.model = anySource ? HR.model.build(effRecords(), opts) : null;
     if (state.baselineSnapshot) state.baselineModel = HR.model.build(state.baselineSnapshot.records, buildOpts(snapshotVault(state.baselineSnapshot), state.baselineSnapshot.dataDate || state.baselineSnapshot.importedAt));
-    recomputeDiff();
+    recomputeDiff().catch(e => console.error(e));
+    syncCurrentSummary().catch(e => console.error(e));
     updateTopbar();
     render();
+  }
+
+  /* The loaded data point's summary follows its model: a companion arriving after the
+     reconciliation must not leave archived findings and trends depending on import order. */
+  async function syncCurrentSummary() {
+    if (!state.model || !state.currentSnapshotId) return;
+    const cur = await HR.store.get(state.currentSnapshotId);
+    if (!cur || JSON.stringify(cur.summary) === JSON.stringify(state.model.summary)) return;
+    cur.summary = state.model.summary;
+    await HR.store.put(cur);
+    await refreshSnapshots();
   }
 
   function updateTopbar() {
@@ -1367,12 +1399,17 @@
       btn.title = T('db.reloadTip');
       btn.onclick = () => syncDashboardData(true).then(changed => { if (changed) location.reload(); else U.toast(T('db.upToDate'), 4000); });
     }
-    document.getElementById('btn-theme').title = T('app.theme');
+    const theme = document.getElementById('btn-theme');
+    theme.title = T('app.theme'); theme.setAttribute('aria-label', T('app.theme'));
     const repo = document.getElementById('link-repo');
-    repo.textContent = T('app.repo');
+    document.getElementById('link-repo-label').textContent = T('app.repo');
     repo.title = T('app.repoTitle');
+    repo.setAttribute('aria-label', T('app.repo'));
+    document.getElementById('skip-link').textContent = T('app.skip');
+    document.getElementById('btn-menu').setAttribute('aria-label', T('app.menu'));
+    document.getElementById('drawer-close').setAttribute('aria-label', T('c.close'));
     const ls = document.getElementById('lang-select');
-    ls.title = T('app.language');
+    ls.title = T('app.language'); ls.setAttribute('aria-label', T('app.language'));
     ls.value = HR.i18n.lang;
     document.getElementById('drop-veil-text').textContent = T('app.drop');
     if (HR.nav) HR.nav.render();
@@ -1400,7 +1437,7 @@
     HR.brand.detectAuto().then(found => { HR.brand.apply(); if (found) render(); });
     /* Repaint once we know whether a sample is reachable, the same way the logo does. */
     findSample().then(name => { if (name && (state.view === 'sources' || !state.model)) render(); });
-    HR.demo.available().then(m => { demoManifest = m; if (m && state.view === 'sources') render(); });
+    HR.demo.available().then(m => { demoManifest = m; if (m && (state.view === 'sources' || !state.model)) render(); });
     HR.brand.apply();
     applyChrome();
 
@@ -1413,7 +1450,8 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape') HR.views.closeDrawer(); });
 
     document.getElementById('btn-theme').addEventListener('click', () => {
-      const cur = document.documentElement.getAttribute('data-theme');
+      // No attribute yet means the OS theme is showing.
+      const cur = document.documentElement.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
       const next = cur === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
       if (!HR.storageMode || HR.storageMode.enabled()) {
@@ -1507,6 +1545,6 @@
   HR.app = {
     tenantKeep, tenantDelete, tenantMove, deleteDataPoint, vocabAck, recomputeDiff, REPO_URL, state, go, rebuild, rebuildBusy, batch, loadSnapshot, setBaseline, refreshSnapshots, rescoreDataPoints, importText, render, applyChrome, updateTopbar,
     importFileAs, clearSource, clearRecon, detectKind, loadSample, findSample, sampleName: () => sampleFile || null,
-    demoAvailable: () => demoManifest };
+    demoAvailable: () => demoManifest, holdNav };
   document.addEventListener('DOMContentLoaded', init);
 })(window.HR);

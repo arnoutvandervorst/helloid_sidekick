@@ -294,7 +294,7 @@
         el('span', { class: 'sev ' + f.severity, text: T('c.' + f.severity) }),
         el('span', { class: 'f-title', text: f.title }),
         el('span', { class: 'pill solid', text: T('p3.forThisPerson', { n: U.fmtInt(rows.length) }) }),
-        f.impactMonthly ? el('span', { class: 'pill', text: U.fmtMoney(f.impactMonthly) + '/mo' }) : null,
+        f.impactMonthly ? el('span', { class: 'pill', text: T('c.amountPerMonth', { amount: U.fmtMoney(f.impactMonthly) }) }) : null,
         el('a', { href: '#', class: 'note', text: T('p3.allInFinding', { n: U.fmtInt(f.count) }), onclick: e => { e.preventDefault(); e.stopPropagation(); HR.app.go('risk', { tab: 'findings', finding: f.id }); } })
       ].filter(Boolean));
       det.appendChild(sum);

@@ -38,7 +38,8 @@
   (Install-Module Microsoft.Graph -Scope CurrentUser)
 
 .PARAMETER OutFile
-  Where to write the JSON envelope. Default: directory-entra.json
+  Where to write the JSON envelope. Default: exports\directory-entra.json next to the script
+  (kept out of the script folder, which is what gets zipped and served; owner-only on Linux/macOS).
 
 .PARAMETER IncludeSignInActivity
   Also read each user's last sign-in (adds AuditLog.Read.All; needs Entra ID P1).
@@ -71,7 +72,7 @@
   Justification = 'The client secret comes from the saved profile and is wrapped for Connect-MgGraph in memory only.')]
 [CmdletBinding()]
 param(
-  [string]$OutFile = "directory-entra.json",
+  [string]$OutFile = (Join-Path $PSScriptRoot 'exports/directory-entra.json'),
   [switch]$IncludeSignInActivity,
   [string[]]$ExtraAttributes = @(),
   [switch]$AppOnly,
@@ -279,7 +280,9 @@ $envelope = [ordered]@{
 }
 
 Write-Step "Writing JSON..."
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent ($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutFile))) | Out-Null
 $envelope | ConvertTo-Json -Depth 8 -Compress | Out-File -FilePath $OutFile -Encoding utf8
+if ($IsLinux -or $IsMacOS) { & chmod 600 $OutFile }
 
 Disconnect-MgGraph | Out-Null
 Write-Step "Disconnected from Graph. Done in $([math]::Round($sw.Elapsed.TotalSeconds)) s."

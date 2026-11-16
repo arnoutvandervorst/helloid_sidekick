@@ -443,7 +443,7 @@
           type: 'permission', key: u.perm.key, label: u.perm.name,
           detail: T('fi.rule-unmodelled.detail', {
             rows: u.unmanagedRows, holders: u.perm.holderCount,
-            cost: u.perm.monthlyTotal ? U.fmtMoney(u.perm.monthlyTotal) + '/mo' : '—'
+            cost: u.perm.monthlyTotal ? T('c.amountPerMonth', { amount: U.fmtMoney(u.perm.monthlyTotal) }) : '—'
           })
         })),
         impactMonthly: U.sum(hits, u => u.perm.monthlyTotal || 0)
@@ -916,7 +916,7 @@
     /* Someone left, and their self-service holdings did not. */
     function heldByFormerEmployee(m) {
       if (!m.productHolders || !m.vault) return null;
-      const now = new Date();
+      const now = new Date(m.asOf || Date.now());
       const hits = [];
       for (const a of m.assignments.open) {
         const link = m.productHolders.byUser.get(a.userName.toLowerCase());
@@ -1198,7 +1198,7 @@
     function activePersonsWithoutAccount(m) {
       if (!m.vault) return null;
       const index = HR.correlate.personAccountIndex(m, m.vault, m.correlation);
-      const now = new Date();
+      const now = new Date(m.asOf || Date.now());
       const hits = m.vault.persons.filter(p => {
         if (!p.contracts.length) return false;
         const life = HR.vault.lifecycle(p, now);

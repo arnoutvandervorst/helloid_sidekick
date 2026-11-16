@@ -742,7 +742,7 @@
 
     wrap.appendChild(el('div', { class: 'grid g4' }, [
       tile(T('sc.kDepartments'), U.fmtInt(s.departments), T('sc.kDepartmentsFoot', { n: U.fmtInt(s.people) })),
-      noMoney ? null : tile(T('sc.kSpend'), U.fmtMoney(s.monthlyCost) + '/mo',
+      noMoney ? null : tile(T('sc.kSpend'), T('c.amountPerMonth', { amount: U.fmtMoney(s.monthlyCost) }),
         sc.medianCostPerHead != null
           ? T('sc.kSpendFoot', { median: U.fmtMoney(sc.medianCostPerHead) }) : ''),
       tile(T('sc.kDrift'), U.fmtInt(s.driftRows), T('sc.kDriftFoot')),
@@ -1875,13 +1875,13 @@
       chips.appendChild(el('span', { class: 'pill solid' }, [
         el('span', { class: 'mono', text: 'L' + (i + 1) + ' ' }),
         document.createTextNode(T('py.attr.' + attr) || attr),
-        el('button', { class: 'btn sm ghost', text: '↑', title: T('py.up'), onclick: () => {
+        el('button', { class: 'btn sm ghost', text: '↑', title: T('py.up'), 'aria-label': T('py.up'), onclick: () => {
           if (!i) return;
           const next = P.levels.slice();
           next[i - 1] = P.levels[i]; next[i] = P.levels[i - 1];
           setLevels(next);
         } }),
-        el('button', { class: 'btn sm ghost', text: '✕', title: T('py.remove'),
+        el('button', { class: 'btn sm ghost', text: '✕', title: T('py.remove'), 'aria-label': T('py.remove'),
           onclick: () => setLevels(P.levels.filter((_, j) => j !== i)) })
       ]));
     });
@@ -1955,7 +1955,7 @@
           val.style.flex = '1';
           val.onchange = () => { spec.value = val.value; apply(); };
           list.appendChild(el('div', { class: 'row', style: 'gap:6px' }, [sel, val,
-            el('button', { class: 'btn sm ghost', text: '×', onclick: () => {
+            el('button', { class: 'btn sm ghost', text: '×', 'aria-label': T('c.remove'), title: T('c.remove'), onclick: () => {
               cfg.mining.excluded.splice(i, 1); apply();
             } })]));
         });

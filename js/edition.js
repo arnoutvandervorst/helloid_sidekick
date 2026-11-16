@@ -15,7 +15,8 @@
 
   const KEY = HR.workspace ? HR.workspace.key('hr.edition') : 'hr.edition';
 
-  /* Group keys reuse nav.g.* labels; view ids are the registered views. Overlap is
+  /* Each edition lands on the first page its rail lists, so where you arrive is where the
+     rail says you are. Group keys reuse nav.g.* labels; view ids are the registered views. Overlap is
      deliberate: mining serves the optimiser and the designer, evidence serves the
      reporter and the health checker. */
   const EDITIONS = {
@@ -36,7 +37,7 @@
         ['data', ['diff', 'snapshots', 'sources']],
         ['out', ['board', 'settings']]
       ],
-      landing: 'rules', firstSlots: ['recon', 'rules', 'history', 'audit', 'vault']
+      landing: 'overview', firstSlots: ['recon', 'rules', 'history', 'audit', 'vault']
     },
     consult: {
       groups: [
@@ -45,7 +46,7 @@
         ['data', ['sources', 'snapshots']],
         ['out', ['settings']]
       ],
-      landing: 'sources', firstSlots: ['vault', 'directory', 'recon', 'rules']
+      landing: 'mining', firstSlots: ['vault', 'directory', 'recon', 'rules']
     },
     all: {
       groups: [

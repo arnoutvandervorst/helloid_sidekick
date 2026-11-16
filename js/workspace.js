@@ -49,8 +49,10 @@
 
   function create(name) {
     load();
-    let id = slug(name), k = 2;
-    while (reg.list.some(w => w.id === id)) id = slug(name) + '-' + k++;
+    /* dash-<id> is a dashboard's workspace, which its sync replaces wholesale: never a customer's. */
+    const base = slug(name).replace(/^dash(-|$)/, 'ws-dash$1');
+    let id = base, k = 2;
+    while (reg.list.some(w => w.id === id)) id = base + '-' + k++;
     reg.list.push({ id, name: String(name || id).trim() || id, createdAt: Date.now() });
     persist();
     return id;
@@ -63,7 +65,7 @@
   async function remove(id) {
     load();
     if (id === DEFAULT.id || !reg.list.some(w => w.id === id)) return false;
-    const bases = ['hr.config.v1', 'hr.brand', 'hr.nav.v1', 'hr.edition'];
+    const bases = ['hr.config.v1', 'hr.brand', 'hr.nav.v1', 'hr.edition', 'hr.dashboard.stamp'];
     bases.forEach(b => { try { localStorage.removeItem(b + suffix(id)); } catch (e) { /* ignore */ } });
     await new Promise(res => { try { const r = indexedDB.deleteDatabase(dbName('helloid-recon', id)); r.onsuccess = r.onerror = r.onblocked = () => res(); } catch (e) { res(); } });
     reg.list = reg.list.filter(w => w.id !== id);

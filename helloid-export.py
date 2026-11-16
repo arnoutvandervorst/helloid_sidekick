@@ -14,7 +14,7 @@ this script, owner-only. After that it just runs; --profile NAME picks another t
 --setup asks again, --list-profiles and --forget NAME manage the file. Environment
 variables and a .env file still work as before.
 
-Writes one file, next to this script unless -o says otherwise:
+Writes one file, in exports/ next to this script unless -o says otherwise:
 
     helloid-service-automation.json   the products (with their tasks) and who holds which
                                       product, since when, approved by whom
@@ -138,7 +138,7 @@ def fetch_products(api):
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('-o', '--out', default=os.path.dirname(os.path.abspath(__file__)), help='output directory (default: next to the script)')
+    p.add_argument('-o', '--out', default=helloid_creds.EXPORTS, help='output directory (default: exports/ next to the script)')
     p.add_argument('--legacy', action='store_true', help='also write products.json and product-assignments.csv')
     p.add_argument('--insecure', action='store_true', help='skip TLS verification (test tenants)')
     helloid_creds.add_arguments(p)
@@ -156,7 +156,7 @@ def main():
     tenant = urllib.parse.urlparse(api.base).netloc
     rows = [assignment_row(a) for a in assignments]
     merged_file = os.path.join(args.out, 'helloid-service-automation.json')
-    with open(merged_file, 'w', encoding='utf-8') as fh:
+    with open(merged_file, 'w', encoding='utf-8', opener=helloid_creds.private) as fh:
         json.dump({
             'kind': 'helloid-service-automation',
             'version': 1,
@@ -169,10 +169,10 @@ def main():
     products_file = os.path.join(args.out, 'products.json')
     assignments_file = os.path.join(args.out, 'product-assignments.csv')
     if args.legacy:
-        with open(products_file, 'w', encoding='utf-8') as fh:
+        with open(products_file, 'w', encoding='utf-8', opener=helloid_creds.private) as fh:
             json.dump({'kind': 'helloid-products', 'source': product_path, 'tenant': tenant, 'products': products},
                       fh, indent=1, ensure_ascii=False)
-        with open(assignments_file, 'w', encoding='utf-8', newline='') as fh:
+        with open(assignments_file, 'w', encoding='utf-8', newline='', opener=helloid_creds.private) as fh:
             writer = csv.DictWriter(fh, fieldnames=ASSIGNMENT_COLUMNS)
             writer.writeheader()
             for r in rows:

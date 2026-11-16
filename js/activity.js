@@ -184,8 +184,9 @@
   /* ------------------------------------------------------------------ history */
   function buildHistory(rows, fileName, text) {
     const dated = rows.filter(r => r.createdOn);
-    const from = dated.length ? new Date(Math.min.apply(null, dated.map(r => +r.createdOn))) : null;
-    const to = dated.length ? new Date(Math.max.apply(null, dated.map(r => +r.createdOn))) : null;
+    // reduce, not Math.min.apply: spreading 120k+ rows overflows the call stack
+    const from = dated.length ? new Date(dated.reduce((m, r) => Math.min(m, +r.createdOn), Infinity)) : null;
+    const to = dated.length ? new Date(dated.reduce((m, r) => Math.max(m, +r.createdOn), -Infinity)) : null;
 
     const failed = rows.filter(r => /fail/i.test(r.result));
     const blocked = rows.filter(r => r.origins.some(o => /blocked/i.test(o)));

@@ -54,7 +54,8 @@
     /* One batch for the whole set: the files are companions to the same reconciliation,
        so the model is worth building once they are all in rather than once per file. */
     let failed = null;
-    await HR.app.batch(async () => {
+    HR.app.holdNav(true);
+    try { await HR.app.batch(async () => {
       for (const entry of m.files) {
         let text;
         try {
@@ -69,8 +70,8 @@
            are compared against it. */
         await HR.app.importText(text, 'demo-' + entry.file, { quiet: true });
       }
-    });
-    if (failed) { U.toast(T('demo.loadFail', failed), 8000); return false; }
+    }); } finally { HR.app.holdNav(false); }
+    if (failed) { U.toast(T('demo.loadFail', failed), 8000); HR.app.render(); return false; }
 
     HR.store.saveContext({ demo: HR.app.state.demo });
     HR.usage.action('demo-load');

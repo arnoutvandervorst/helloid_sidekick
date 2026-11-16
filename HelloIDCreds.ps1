@@ -77,8 +77,14 @@ function Save-HelloIDConfig([hashtable]$Data) {
   $tmp = "$($script:HelloIDConfigPath).tmp"
   $out | ConvertTo-Json -Depth 5 | Set-Content -Path $tmp -Encoding UTF8
   if ($PSVersionTable.PSEdition -eq 'Core' -and -not $IsWindows) { & chmod 600 $tmp 2>$null }
+  else {
+    # Windows: drop the inherited ACL so only the current user (by SID) can read the secrets
+    $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    & icacls $tmp /inheritance:r /grant:r "*${sid}:(F)" | Out-Null
+    if ($LASTEXITCODE) { Remove-Item -Force $tmp; throw "Could not make $tmp owner-only (icacls exit $LASTEXITCODE); nothing was saved." }
+  }
   Move-Item -Force -Path $tmp -Destination $script:HelloIDConfigPath
-  Write-Host "  Saved to $($script:HelloIDConfigPath). It holds the secret in clear: keep the folder to yourself."
+  Write-Host "  Saved to $($script:HelloIDConfigPath) (owner-only). It holds the secret in clear: keep the folder to yourself."
 }
 
 function Read-DotEnv([string]$Path) {

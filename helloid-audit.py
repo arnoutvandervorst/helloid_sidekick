@@ -21,7 +21,7 @@ After that it just runs; --profile NAME picks another tenant, --setup asks again
 --list-profiles and --forget NAME manage the file. Environment variables and a .env file
 still work as before.
 
-Writes helloid-audit.json next to this script unless -o says otherwise. One file, one
+Writes exports/helloid-audit.json next to this script unless -o says otherwise. One file, one
 tenant, one window; rows keep the field names Kibana shows so anything here can be
 cross-checked there. Nothing is written to the terminal that carries the credential.
 
@@ -182,7 +182,7 @@ def tenant_of(api):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--days', type=int, default=400, help='how far back to read (default 400)')
-    p.add_argument('-o', '--out', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'helloid-audit.json'))
+    p.add_argument('-o', '--out', default=os.path.join(helloid_creds.EXPORTS, 'helloid-audit.json'))
     p.add_argument('--insecure', action='store_true', help='skip TLS verification (corporate proxies)')
     helloid_creds.add_arguments(p)
     args = p.parse_args()
@@ -216,7 +216,8 @@ def main():
         out[target].sort(key=lambda r: r.get('logDate', ''))
 
     step('Writing JSON …')
-    with open(args.out, 'w', encoding='utf-8') as fh:
+    os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+    with open(args.out, 'w', encoding='utf-8', opener=helloid_creds.private) as fh:
         json.dump(out, fh, ensure_ascii=False, separators=(',', ':'))
     size = os.path.getsize(args.out) / 1e6
     step(f'Wrote {args.out} ({size:.1f} MB) — {grand:,} rows over {api.requests} requests')

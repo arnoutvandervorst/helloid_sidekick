@@ -11,7 +11,7 @@
 
   const KEY = HR.workspace ? HR.workspace.key('hr.brand') : 'hr.brand';
   const AUTO = {
-    icon: ['assets/icon.svg', 'assets/icon.png'],
+    icon: ['assets/icon.png', 'assets/icon.svg'],   // the shipped mark is a PNG; probing SVG first 404s every load
     logo: ['assets/logo.svg', 'assets/logo.png'],
     logoLight: ['assets/logo-light.svg', 'assets/logo-light.png']
   };

@@ -43,6 +43,10 @@
   {
    "slot": "audit",
    "file": "audit.json"
+  },
+  {
+   "slot": "saconfig",
+   "file": "sa-config.json"
   }
  ]
 }

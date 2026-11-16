@@ -59,7 +59,7 @@
       chips.innerHTML = '';
       names.forEach((n, i) => chips.appendChild(el('span', { class: 'pill' }, [
         el('span', { text: n }),
-        el('button', { class: 'btn sm ghost', text: '×', title: T('no.remove'),
+        el('button', { class: 'btn sm ghost', text: '×', title: T('no.remove'), 'aria-label': T('no.remove'),
           onclick: () => { names.splice(i, 1); draw(); } })
       ])));
       if (!names.length) chips.appendChild(el('span', { class: 'note', text: T('no.none') }));

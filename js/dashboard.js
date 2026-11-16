@@ -26,6 +26,7 @@
   /* Decided at load, before the deployment file answers: the id alone picks the
      workspace, and every module that scopes a storage key reads it synchronously. */
   const currentId = resolveId();
+  try { localStorage.removeItem(KEY); } catch (e) { /* a choice older builds remembered */ }
   if (currentId && BUILTIN[currentId]) current = BUILTIN[currentId];
 
   /* The role decides the facets (js/access.js). A dashboard without one is HR — the safe
@@ -42,9 +43,8 @@
   }
   applyRole();
 
-  /** The sub-URL /d/<id> wins and is not remembered (the URL is the choice); then
-      ?dashboard= (off clears, otherwise remembered), the remembered one, the hostname's
-      first label. */
+  /** The sub-URL /d/<id> wins, then ?dashboard=, then the hostname's first label. None is
+      remembered: a crafted link must not lock this browser into a dashboard. */
   function resolveId() {
     try {
       const m = /^\/d\/([a-z0-9-]+)\/?$/i.exec(String(location.pathname || ''));
@@ -52,10 +52,9 @@
     } catch (e) { /* no location */ }
     try {
       const q = new URLSearchParams(location.search).get('dashboard');
-      if (q === 'off' || q === 'none') { try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ } return null; }
-      if (q) { try { localStorage.setItem(KEY, q); } catch (e) { /* ignore */ } return q; }
+      if (q === 'off' || q === 'none') return null;
+      if (q) return q;
     } catch (e) { /* no URL API */ }
-    try { const s = localStorage.getItem(KEY); if (s) return s; } catch (e) { /* storage blocked */ }
     const host = String(location.hostname || '').toLowerCase();
     for (const id of Object.keys(defs)) if (host.startsWith(id + '.') || host.startsWith('helloid-' + id + '.')) return id;
     return null;
@@ -96,5 +95,13 @@
   /** A dashboard's own URL on this host — served by the /d/ rule in nginx.conf. */
   const url = dashId => '/d/' + (dashId || currentId || 'hr');
 
-  HR.dashboard = { KEY, FILE, ready, active, id, is, views, landing, hides, readOnly, source, name, workspaceId, all, url };
+  /** The facets a dashboard's audience has — its role, narrowed by a legacy hide list. */
+  function facetsOf(dashId) {
+    const d = defs[dashId] || {};
+    const role = HR.access && HR.access.ROLES[d.role || 'hr'] ? d.role || 'hr' : 'hr';
+    const facets = HR.access ? HR.access.ROLES[role].facets : [];
+    return facets.filter(f => !(Array.isArray(d.hide) && d.hide.includes(f)));
+  }
+
+  HR.dashboard = { KEY, FILE, ready, active, id, is, views, landing, hides, readOnly, source, name, workspaceId, all, url, facetsOf };
 })(window.HR);

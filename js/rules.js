@@ -49,17 +49,20 @@
        which must not be split on the comma like a value list. */
     const isTimeFrame = /^time ?frame$/i.test(key);
     const unquote = v => v.replace(/^['"]|['"]$/g, '').trim();
+    /* A quoted value keeps its commas: 'Finance, HR & Legal' is one value. */
     const values = isTimeFrame ? [rest]
-      : rest.split(',').map(v => unquote(v.trim())).filter(Boolean);
+      : (rest.match(/\s*'[^']*'|\s*"[^"]*"|[^,]+/g) || []).map(v => unquote(v.trim())).filter(Boolean);
 
     return { facet: key, operator, values, raw: text, timeFrame: isTimeFrame };
   }
 
-  /** "Microsoft Active Directory - APP-X (avo.local/OU/APP-X)" -> normalised entitlement */
-  function parseEntitlement(raw) {
+  /** "Microsoft Active Directory - APP-X (avo.local/OU/APP-X)" -> normalised entitlement.
+      systems: known system names, longest first — "AFAS - Profit - X" is not system "AFAS". */
+  function parseEntitlement(raw, systems) {
     const text = String(raw || '').trim();
     if (!text) return null;
-    const sep = text.indexOf(' - ');
+    const known = (systems || []).find(s => text.startsWith(s + ' - '));
+    const sep = known ? known.length : text.indexOf(' - ');
     const system = sep > 0 ? text.slice(0, sep).trim() : '';
     const remainder = sep > 0 ? text.slice(sep + 3).trim() : text;
 
@@ -98,6 +101,9 @@
     header.forEach((h, i) => { col[h.toLowerCase().replace(/[^a-z]/g, '')] = i; });
     const get = (row, key) => col[key] == null ? '' : (row[col[key]] || '').trim();
 
+    /* Every "<System> - Account" grant names a system whole, dashes and all. */
+    const systems = HR.util.uniq(grid.slice(1).flatMap(r => splitCell(get(r, 'entitlements')))
+      .map(e => (/^(.+) - account$/i.exec(e) || [])[1]).filter(Boolean)).sort((a, b) => b.length - a.length);
     const rules = [];
     const warnings = [];
     let skipped = 0;
@@ -105,7 +111,7 @@
       const row = grid[i];
       const name = get(row, 'name');
       if (!name) { skipped++; continue; }
-      const entitlements = splitCell(get(row, 'entitlements')).map(parseEntitlement).filter(Boolean);
+      const entitlements = splitCell(get(row, 'entitlements')).map(e => parseEntitlement(e, systems)).filter(Boolean);
       const conditions = splitCell(get(row, 'conditions')).map(parseCondition).filter(Boolean);
       const declared = parseInt(get(row, 'entitlementcount'), 10);
       const persons = parseInt(get(row, 'personslatestevaluation'), 10);

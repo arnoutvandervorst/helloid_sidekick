@@ -232,8 +232,13 @@ Cloudflare tunnel — see `DEPLOY.md`. Only `index.html`, `css/`, `js/` and `ass
 enter the image; `.dockerignore` keeps exports out and nginx returns 403 for `.csv`/`.json`
 outside `/assets/` in case one is ever copied onto the host.
 
-Nothing needs protecting server-side: the page ships no data, makes no network calls, and
-every visitor starts empty and drags in their own exports.
+The app itself ships no customer data and every visitor starts empty and drags in their
+own exports; the analysis never leaves the browser. Two things do cross the wire: the
+page sends an anonymous same-origin usage beacon to `/u` (event name, view id, export
+kind, a coarse size bucket and the UI language — never a file name, value or count from
+your data; switch it off under Settings → Storage), and `/published/` serves the
+dashboard bundles a partner puts on the host, which are customer data — who may reach
+the hostname is the proxy's business.
 
 ## What the app stores in your browser
 
@@ -570,6 +575,15 @@ gitignored, shared by the Python and PowerShell collectors. After that it just r
 `--list-profiles` and `--forget NAME` manage the file. Environment variables and a `.env`
 file still work for scheduled runs (`.env.example`).
 
+Every collector (`helloid-export`, `helloid-sa-export`, `helloid-audit`, `collect-ad`,
+`collect-entra`) writes into `exports/` next to the script unless told otherwise — not
+the script folder itself, which is what `devserve.py` serves and what gets zipped.
+`exports/` is gitignored and dockerignored, and the files are owner-only (0600) on
+Linux/macOS. The tenant and Elastic URLs must be `https://`: the key and secret travel
+as Basic auth on every request, so a plain `http://` URL is refused. `helloid-sa-export.py`
+replaces hardcoded secrets in script bodies (`$password = '…'`, `ConvertTo-SecureString
+'…' -AsPlainText`) with `***REDACTED***` before writing; the Scripts view still flags them.
+
 The app cannot call the API itself — the proxy sends no CORS headers and the page's CSP
 forbids it, and an API key that reads a whole tenant does not belong in a browser. The
 file is imported like any other (Imports → HelloID audit log) and is gitignored. It feeds
@@ -628,7 +642,12 @@ collected and the value the mapping produces; `restore-ad.ps1` and
 has gone live and written over them — dry-run by default, printing before,
 predicted and live per attribute with what would happen (`same`, `restore`,
 `restore?` when something else changed it), writing only with `-Apply`, filtered
-by `-Account` / `-Attribute`, `-SkipUnexpected` to leave the unpredicted alone.
+by `-Account` / `-Attribute`. `restore?` rows are left alone unless `-IncludeUnexpected`
+(`-SkipUnexpected` is still accepted and now the default); re-enabling a disabled
+account needs `-AllowEnable`, so a leaver never comes back by accident. Only attributes
+a HelloID mapping writes are restored — anything else in the (editable) pack, such as
+userAccountControl or scriptPath, is refused — and AD accounts are found by their
+collected DN and sAMAccountName, never by name alone.
 AD moves the container back and renames the cn; Entra skips users synced from
 AD (restore them there) and the Graph read-only properties. The pack is a
 snapshot of its collection: re-collect and re-run just before go-live.

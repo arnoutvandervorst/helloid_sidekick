@@ -39,19 +39,24 @@
   const looksLikeServiceAutomation = data => !!data && data.kind === 'helloid-service-automation';
 
   /** ISO with or without fractional seconds; HelloID writes both. */
-  function parseDate(value) {
-    const s = String(value || '').trim();
-    if (!s) return null;
-    const d = new Date(s);
-    return isNaN(d.getTime()) ? null : d;
-  }
+  const parseDate = value => HR.util.parseDate(value);
 
   /** "540,00" — the tenant's own decimal separator, not necessarily this browser's. */
   function parsePrice(value) {
     const s = String(value == null ? '' : value).trim();
     if (!s) return null;
-    const cleaned = s.replace(/\s/g, '').replace(/\.(?=\d{3}\b)/g, '').replace(',', '.');
-    const n = parseFloat(cleaned);
+    /* The last separator is the decimal one when both appear; a lone separator is thousands only
+       when it repeats or is followed by exactly three digits after a non-zero integer ("1.250", not "0.125"). */
+    let c = s.replace(/[^\d.,-]/g, '');
+    const dec = Math.max(c.lastIndexOf('.'), c.lastIndexOf(','));
+    if (dec >= 0) {
+      const sep = c[dec], other = sep === '.' ? ',' : '.';
+      const thousands = !c.includes(other) &&
+        (c.split(sep).length > 2 || /^-?[1-9]\d{0,2}[.,]\d{3}$/.test(c));
+      c = thousands ? c.split(sep).join('')
+        : c.slice(0, dec).replace(/[.,]/g, '') + '.' + c.slice(dec + 1);
+    }
+    const n = parseFloat(c);
     return isNaN(n) ? null : n;
   }
 

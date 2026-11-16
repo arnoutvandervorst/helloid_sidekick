@@ -16,7 +16,13 @@
     same      the live value already equals the collected one — nothing to do
     restore   the live value is what the mapping predicted: HelloID wrote it
     restore?  the live value is neither — something else changed it since the
-              collection; still restored, unless you pass -SkipUnexpected
+              collection; left alone unless you pass -IncludeUnexpected
+
+  Only properties a HelloID Entra field mapping writes are restored (an allowlist
+  in this script); anything else in the pack is refused with a warning, since the
+  pack is a JSON file anyone could have edited. Accounts are found by object id
+  only. Re-enabling a disabled account (accountEnabled = true) needs -AllowEnable:
+  a leaver must not come back by accident.
 
   Users synced from on-premises AD are skipped: their properties are owned by AD
   (restore them there with restore-ad.ps1; Entra Connect syncs them). proxyAddresses
@@ -43,9 +49,16 @@
 .PARAMETER Attribute
   Only these properties (as named in the pack: jobTitle, department, …).
 
+.PARAMETER IncludeUnexpected
+  Also restore properties whose live value is neither the collected nor the
+  predicted one. Without it they are left alone.
+
+.PARAMETER AllowEnable
+  Allow accountEnabled = true to be restored, i.e. re-enable accounts that are
+  disabled now. Without it disabled accounts stay disabled.
+
 .PARAMETER SkipUnexpected
-  Leave properties alone whose live value is neither the collected nor the
-  predicted one.
+  Accepted for older command lines; skipping unexpected values is now the default.
 
 .PARAMETER AppOnly
   Sign in as the saved app registration instead of interactively.
@@ -57,7 +70,7 @@
   .\restore-entra.ps1 -Pack rollback-entra-2026-09-07.json
   .\restore-entra.ps1 -Pack rollback-entra-2026-09-07.json -Apply
   .\restore-entra.ps1 -Pack rollback-entra-2026-09-07.json -Apply -Account jan.jansen@corp.nl
-  .\restore-entra.ps1 -Pack rollback-entra-2026-09-07.json -Apply -Attribute jobTitle,department -SkipUnexpected
+  .\restore-entra.ps1 -Pack rollback-entra-2026-09-07.json -Apply -Attribute jobTitle,department -IncludeUnexpected
 #>
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '',
   Justification = 'Interactive console script; the table and the summary belong on the host, never in the pipeline.')]
@@ -69,6 +82,8 @@ param(
   [switch]$Apply,
   [string[]]$Account = @(),
   [string[]]$Attribute = @(),
+  [switch]$IncludeUnexpected,
+  [switch]$AllowEnable,
   [switch]$SkipUnexpected,
   [switch]$AppOnly,
   [string]$ProfileName = ''
@@ -94,6 +109,7 @@ if ($data.collectedAt) {
 if (@($data.skipped).Count) {
   Write-Host "Not in the pack (no collected value): $((@($data.skipped) | ForEach-Object { $_.field }) -join ', ')"
 }
+if ($SkipUnexpected) { Write-Host '-SkipUnexpected is the default now; -IncludeUnexpected opts in.' }
 if (-not $Apply) { Write-Host "DRY RUN — nothing is written. Add -Apply to restore." -ForegroundColor Yellow }
 
 # ---- sign in ------------------------------------------------------------------
@@ -112,6 +128,12 @@ Write-Step "Connected."
 
 # ---- helpers ------------------------------------------------------------------
 $readOnly = @('proxyAddresses', 'mail')
+# What a HelloID Entra field mapping can write (js/fieldmap.js ENTRA_PROPS). Anything else is refused.
+$restorable = @('displayName', 'givenName', 'surname', 'userPrincipalName', 'mailNickname', 'mail',
+  'proxyAddresses', 'otherMails', 'jobTitle', 'department', 'companyName', 'officeLocation',
+  'businessPhones', 'mobilePhone', 'streetAddress', 'city', 'state', 'postalCode', 'country',
+  'usageLocation', 'employeeId', 'employeeType', 'preferredLanguage', 'accountEnabled') +
+  @(1..15 | ForEach-Object { "onPremisesExtensionAttributes.extensionAttribute$_" })
 function Format-Value($v) {
   if ($null -eq $v) { return '' }
   if ($v -is [System.Array] -or $v -is [System.Collections.IList]) { return (@($v | ForEach-Object { [string]$_ }) -join '; ') }
@@ -168,10 +190,16 @@ foreach ($acc in $accounts) {
       status = $status; result = ''
     }
     $rows.Add($row)
+    if ($restorable -notcontains [string]$f.attribute) {
+      Write-Warning "$($acc.upn): '$($f.attribute)' is not a property a HelloID mapping restores here; refused."
+      $skipped++; $row.result = 'refused (not restorable)'; continue
+    }
     if ($status -eq 'same') { $same++; $row.result = '-'; continue }
     if ($readOnly -contains $f.attribute) { $skipped++; $row.result = 'skipped (read-only in Graph)'; continue }
-    if ($status -eq 'restore?' -and $SkipUnexpected) { $skipped++; $row.result = 'skipped (unexpected)'; continue }
-    if ($f.unverified) { Write-Warning "$($acc.upn): '$($f.attribute)' is not a property Sidekick knows; it is sent verbatim." }
+    if ($status -eq 'restore?' -and -not $IncludeUnexpected) { $skipped++; $row.result = 'skipped (unexpected; -IncludeUnexpected)'; continue }
+    if ($f.attribute -ieq 'accountEnabled' -and (Format-Value $f.before) -eq 'true' -and -not $AllowEnable) {
+      $skipped++; $row.result = 'skipped (re-enable needs -AllowEnable)'; continue
+    }
     if (-not $Apply) { $row.result = 'would restore'; continue }
     $target = "$($acc.upn) $($f.attribute)"
     try {

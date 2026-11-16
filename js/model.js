@@ -282,6 +282,10 @@
       model.activity = HR.activity.reconcile(model, granted, history);
       model.findings = model.findings.concat(HR.findings.runActivity(model));
     }
+    /* Every date question is asked on the day the data is about, not the day it is read.
+       A vault borrowed from another data point keeps its own day. */
+    const when = model.asOf ? new Date(model.asOf) : new Date();
+    if (vault && model.asOf && !(opts && opts.vaultBorrowed) && vault.activeAt !== +when) HR.vault.setActiveAt(vault, when);
     if (vault) {
       model.vault = vault;
       /* The vault as data rather than as input: what is missing, dangling or dead in it
@@ -289,7 +293,7 @@
       model.orgQuality = HR.org.quality(vault);
       model.findings = model.findings.concat(HR.findings.runVaultQuality(model));
       /* Who did these unowned accounts belong to? Answerable only with person data. */
-      model.correlation = HR.correlate.matchUnowned(model, vault);
+      model.correlation = HR.correlate.matchUnowned(model, vault, { when });
       model.linkedAccounts = HR.correlate.linkAccounts(model, vault, model.correlation);
       model.findings = model.findings.concat(HR.findings.runCorrelation(model));
     }
@@ -312,7 +316,7 @@
       /* With person data the conditions stop being decoration: rules can be evaluated,
          which turns group-level drift into per-person over- and under-provisioning. */
       if (vault) {
-        model.evaluation = HR.evaluate.evaluateAll(ruleSet, vault, { includeDrafts: true });
+        model.evaluation = HR.evaluate.evaluateAll(ruleSet, vault, { includeDrafts: true, when });
         model.provisioning = HR.compare.provisioning(model, ruleSet, vault, model.evaluation, model.correlation);
       }
       model.findings = model.findings

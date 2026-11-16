@@ -173,30 +173,96 @@
     catch (e) { return JSON.parse(JSON.stringify(p)); }
   }
 
-  /**
-   * @returns {{value:*}|{error:string}} — Fixed passes the literal through
-   * (a single space is a legitimate "empty but non-null" sentinel).
-   */
-  function evaluateField(field, actionSet, personObj, opts) {
-    const iteration = (opts && opts.iteration) || 0;
+  /* ---- the Complex sandbox ---------------------------------------------------
+
+     A Complex mapping is JavaScript from an imported file. Compiled in this page it
+     could read every workspace's storage, so it runs in a sandboxed frame instead: an
+     opaque origin (allow-scripts, never allow-same-origin) with no storage, no cookies
+     and no reach into this page. Each run is one message — every Complex field and
+     every person at once — so a 6000-user simulation is one round trip, and each
+     source is compiled once. The frame's script is sandboxMain's own source text; the
+     CSP in index.html allows exactly that text by its sha256 (test/fixes.test.js keeps
+     the two in step). The frame inherits this page's CSP, so 'unsafe-eval' stays. */
+  function sandboxMain() {
+    'use strict';
+    const ddm = s => String(s === undefined || s === null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const plain = v => (typeof v === 'function' || typeof v === 'symbol' || typeof v === 'bigint') ? String(v) : v;
+    addEventListener('message', e => {
+      const d = e.data;
+      if (e.source !== parent || !d || !d.fmId) return;
+      const results = d.codes.map(code => {
+        let fn;
+        try { fn = new Function('Person', 'Iteration', 'deleteDiacriticalMarks', code); }
+        catch (err) { return d.persons.map(() => ({ error: err.message })); }
+        /* a fresh copy per field: mappings in the wild mutate Person */
+        return d.persons.map(p => {
+          try { return { value: plain(fn(structuredClone(p), d.iteration, ddm)) }; }
+          catch (err) { return { error: (err && err.message) || String(err) }; }
+        });
+      });
+      try { parent.postMessage({ fmId: d.fmId, results }, '*'); }
+      catch (err) { parent.postMessage({ fmId: d.fmId, results: JSON.parse(JSON.stringify(results)) }, '*'); }
+    });
+    parent.postMessage('fm-ready', '*');
+  }
+  const SANDBOX_SRC = '(' + sandboxMain.toString() + ')()';
+
+  let sandbox = null, fmSeq = 0;
+  function sandboxFrame() {
+    if (sandbox) return sandbox;
+    sandbox = new Promise((resolve, reject) => {
+      const f = document.createElement('iframe');
+      f.setAttribute('sandbox', 'allow-scripts');
+      f.setAttribute('aria-hidden', 'true');
+      f.hidden = true;
+      f.srcdoc = '<script>' + SANDBOX_SRC + '<\/script>';
+      const ready = e => {
+        if (e.source !== f.contentWindow || e.data !== 'fm-ready') return;
+        clearTimeout(timer); removeEventListener('message', ready); resolve(f);
+      };
+      const timer = setTimeout(() => {
+        removeEventListener('message', ready); f.remove(); sandbox = null;
+        reject(new Error(HR.i18n ? HR.i18n.t('fm.sandboxFail') : 'mapping sandbox did not start'));
+      }, 5000);
+      addEventListener('message', ready);
+      document.body.appendChild(f);
+    });
+    return sandbox;
+  }
+
+  /** Every code against every person: results[code][person] = {value}|{error}. */
+  async function runComplex(codes, persons, iteration) {
+    if (!codes.length || !persons.length) return codes.map(() => []);
+    let f;
+    try { f = await sandboxFrame(); }
+    catch (e) { return codes.map(() => persons.map(() => ({ error: e.message }))); }
+    const fmId = ++fmSeq;
+    return new Promise(resolve => {
+      const done = e => {
+        if (e.source !== f.contentWindow || !e.data || e.data.fmId !== fmId) return;
+        removeEventListener('message', done); resolve(e.data.results);
+      };
+      addEventListener('message', done);
+      f.contentWindow.postMessage({ fmId, codes, persons, iteration: iteration || 0 }, '*');
+    });
+  }
+
+  /** None, Fixed and Field: plain reads, answered here. */
+  function evaluatePlain(actionSet, personObj) {
     if (!actionSet || actionSet.mode === 'None') return { value: undefined, scope: 'none' };
     if (actionSet.mode === 'Fixed') return { value: actionSet.value };
-    if (actionSet.mode === 'Field') {
-      const path = String(actionSet.value || '');
-      const v = pathGet({ Person: personObj }, path.startsWith('Person') ? path : 'Person.' + path);
-      return { value: v };
-    }
-    // Complex — the function is compiled once per action-set and cached on it:
-    // a 6000-user simulation would otherwise compile the same source per row.
-    try {
-      if (!actionSet._fn) {
-        actionSet._fn = new Function('Person', 'Iteration', 'deleteDiacriticalMarks',
-          wrapComplex(actionSet.value));
-      }
-      return { value: actionSet._fn(clonePerson(personObj), iteration, deleteDiacriticalMarks) };
-    } catch (e) {
-      return { error: e.message };
-    }
+    const path = String(actionSet.value || '');
+    return { value: pathGet({ Person: personObj }, path.startsWith('Person') ? path : 'Person.' + path) };
+  }
+
+  /**
+   * @returns {Promise<{value:*}|{error:string}>} — Fixed passes the literal through
+   * (a single space is a legitimate "empty but non-null" sentinel).
+   */
+  async function evaluateField(field, actionSet, personObj, opts) {
+    if (!actionSet || actionSet.mode !== 'Complex') return evaluatePlain(actionSet, personObj);
+    const res = await runComplex([wrapComplex(actionSet.value)], [personObj], (opts && opts.iteration) || 0);
+    return res[0][0];
   }
 
   /* ---- the evaluation-side Person objects --------------------------------- */
@@ -464,7 +530,7 @@
    * @param {Object} [opts] { action, personId } — `personId` narrows the run to
    *   that one vault person.
    */
-  function simulate(mapping, state, opts) {
+  async function simulate(mapping, state, opts) {
     const action = (opts && opts.action) || 'Update';
     const dir = state.directory;
     if (!dir) return { unavailable: 'no-directory' };
@@ -493,6 +559,7 @@
         noCounterpart: !currentValueOf(dir.users[0] || {}, x.field.name, cvOpts).known }]));
     let joined = 0;
 
+    const jobs = [];
     for (const raw of persons) {
       /* find the collected account via the vault person's Accounts[] userName */
       let user = null;
@@ -515,11 +582,20 @@
          carries an array — replace it with the collected account's view so
          Person.Accounts.<System>.<attr> chains resolve. */
       personObj.Accounts = accountsFor(user, dir.system);
+      jobs.push({ raw, user, personObj });
+    }
 
+    /* Every Complex field for every joined person, in one sandbox round trip. */
+    const complex = inScope.filter(x => x.set.mode === 'Complex');
+    const complexRes = await runComplex(complex.map(x => wrapComplex(x.set.value)), jobs.map(j => j.personObj), 0);
+    const complexIdx = new Map(complex.map((x, i) => [x, i]));
+
+    jobs.forEach(({ raw, user, personObj }, ji) => {
       const values = {};
       let anyChange = false;
-      for (const { field, set } of inScope) {
-        const res = evaluateField(field, set, personObj, { iteration: 0 });
+      for (const x of inScope) {
+        const { field, set } = x;
+        const res = complexIdx.has(x) ? complexRes[complexIdx.get(x)][ji] : evaluatePlain(set, personObj);
         const agg = perField.get(field.name);
         agg.evaluated++;
         if (res.error) {
@@ -536,7 +612,7 @@
         };
       }
       rows.push({ user, person: raw, values, anyChange });
-    }
+    });
 
     return {
       action, joined, personId,
@@ -626,6 +702,6 @@
   }
 
   HR.fieldmap = { looksLikeFieldMapping, looksLikeSourceMapping, parse, actionFor, attributeProfile,
-    evaluateField, personObjects, accountsFor, simulate, wrapComplex,
+    evaluateField, personObjects, accountsFor, simulate, wrapComplex, SANDBOX_SRC, sandboxMain,
     deleteDiacriticalMarks, ATTR_ALIASES, targetAttr, coverage, currentValueOf, rollbackPack, restoreAttribute };
 })(window.HR);

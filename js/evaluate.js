@@ -131,7 +131,8 @@
   /** Is this contract inside its rule window on the given date? */
   function contractInWindow(contract, frame, when) {
     const from = contract.startDate ? new Date(contract.startDate.getTime() - (frame.daysBeforeStart || 0) * DAY) : null;
-    const to = contract.endDate ? new Date(contract.endDate.getTime() + (frame.daysAfterEnd || 0) * DAY) : null;
+    /* The end date is inclusive: the whole day counts, as in the vault. */
+    const to = contract.endDate ? new Date(HR.vault.endOfDay(contract.endDate).getTime() + (frame.daysAfterEnd || 0) * DAY) : null;
     if (from && when < from) return false;
     if (to && when > to) return false;
     return true;

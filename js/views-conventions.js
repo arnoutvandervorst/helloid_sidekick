@@ -514,7 +514,7 @@
             el('span', { class: 'note', style: 'width:82px',
               text: i === 0 ? T('ng.lab.first') : T('ng.lab.taken', { n: i }) }),
             inp,
-            fs.variants.length > 1 ? el('button', { class: 'btn sm ghost', text: '×',
+            fs.variants.length > 1 ? el('button', { class: 'btn sm ghost', text: '×', 'aria-label': T('c.remove'), title: T('c.remove'),
               onclick: () => { fs.variants.splice(i, 1); draw(); resim(); } }) : ''
           ]));
         });

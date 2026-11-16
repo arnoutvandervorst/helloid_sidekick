@@ -19,8 +19,18 @@
   let dbPromise = null;
   let memory = new Map();
   let usingMemory = false;
+  let dbOk = false;   // the database opened: a failed write now is a real loss, not file:// or storage off
+
+  /* A dashboard viewer holds the published bundle in this tab's memory only: nothing of it
+     outlives the tab, and a failed fetch leaves nothing behind. The copy older builds kept
+     in the dashboard's own database is dropped. */
+  const viewer = !!(HR.dashboard && HR.dashboard.id());
+  if (viewer && HR.workspace && HR.workspace.active().dashboard) {
+    try { indexedDB.deleteDatabase(DB_NAME); } catch (e) { /* no IndexedDB */ }
+  }
 
   function open() {
+    if (viewer) { usingMemory = true; return Promise.reject(new Error('dashboard: memory only')); }
     /* Storage off: reject before touching the cached connection, so every
        caller drops into its existing in-memory fallback. Not cached, so
        re-enabling works without a reload. */
@@ -29,7 +39,7 @@
       return Promise.reject(new Error('storage disabled'));
     }
     if (dbPromise) return dbPromise;
-    dbPromise = openDb(DB_NAME).catch(err => { usingMemory = true; throw err; });
+    dbPromise = openDb(DB_NAME).then(db => { dbOk = true; return db; }).catch(err => { usingMemory = true; throw err; });
     return dbPromise;
   }
   /** Open any workspace's database with the same shape; a new name is created on the spot. */
@@ -81,15 +91,18 @@
 
   async function list() {
     try {
-      const rows = await tx('readonly', os => os.getAll());
-      return (rows || []).map(stripHeavy).sort((a, b) => b.importedAt - a.importedAt);
+      const rows = await tx('readonly', os => os.getAll()) || [];
+      /* A snapshot whose put failed lives in memory only; it is still this session's data point. */
+      const ids = new Set(rows.map(r => r.id));
+      memory.forEach((v, id) => { if (!ids.has(id)) rows.push(v); });
+      return rows.map(stripHeavy).sort((a, b) => b.importedAt - a.importedAt);
     } catch (e) {
       return Array.from(memory.values()).map(stripHeavy).sort((a, b) => b.importedAt - a.importedAt);
     }
   }
 
   async function get(id) {
-    try { return await tx('readonly', os => os.get(id)); }
+    try { return (await tx('readonly', os => os.get(id))) || memory.get(id) || null; }
     catch (e) { return memory.get(id) || null; }
   }
 
@@ -116,7 +129,12 @@
   async function saveContext(ctx) {
     contextMemory = Object.assign({}, contextMemory, ctx, { id: 'current', savedAt: Date.now() });
     try { await tx('readwrite', os => os.put(contextMemory), CONTEXT); return { persisted: true }; }
-    catch (e) { usingMemory = true; return { persisted: false, error: e }; }
+    catch (e) {
+      usingMemory = true;
+      /* The previous record stays behind and would come back after a reload: say so. */
+      if (dbOk && HR.util && HR.i18n) HR.util.toast(HR.i18n.t('toast.contextNotSaved'), 10000);
+      return { persisted: false, error: e };
+    }
   }
 
   async function loadContext() {
@@ -192,17 +210,39 @@
     return snaps.length;
   }
 
+  /* A dashboard's audience gets only what its facets cover — the file itself is stripped,
+     since hiding in the UI protects nothing once the bundle is on the host. Provisioning
+     rows feed person timelines; exclusions are governance; the rest of the log is audit. */
+  function stripContext(context, facets) {
+    const has = f => facets.includes(f);
+    const edit = (k, fn) => { try { const d = JSON.parse(context[k]); fn(d); context[k] = JSON.stringify(d); } catch (e) { delete context[k]; } };
+    if (context.audit && !has('audit')) edit('audit', d => Object.keys(d).forEach(k => {
+      if (Array.isArray(d[k]) && k !== 'provisioning' && !(k === 'reconciliation' && has('governance'))) d[k] = [];
+    }));
+    if (context.products && !has('money')) edit('products', d => (d.products || []).forEach(p => { delete p.price; delete p.showPrice; }));
+    return context;
+  }
+
   /** Everything a dashboard needs, in one file: every data point (vaults included) and
-      the companions loaded now. Published on the host; the dashboard fetches it. */
-  async function exportBundle(workspaceName) {
+      the companions loaded now. Published on the host; the dashboard fetches it.
+      facets (a dashboard's): strip what that audience may not see; omitted = everything. */
+  async function exportBundle(workspaceName, facets) {
     const ids = (await list()).map(s => s.id);
     const snapshots = [];
     for (const id of ids) { const s = await get(id); if (s) snapshots.push(s); }
+    /* Stored money figures cannot be re-derived without the prices, so they go too. */
+    const noMoney = facets && !facets.includes('money');
+    const shipped = noMoney ? snapshots.map(s => {
+      const summary = Object.assign({}, s.summary);
+      ['monthlyCost', 'wasteMonthly', 'remediationCost'].forEach(k => delete summary[k]);
+      return Object.assign({}, s, { summary });
+    }) : snapshots;
     const ctx = (await loadContext()) || {};
     const context = {};
     ['rules', 'granted', 'history', 'audit', 'products', 'assignments', 'fileNames', 'importedAt'].forEach(k => { if (ctx[k] != null) context[k] = ctx[k]; });
+    if (facets) stripContext(context, facets);
     return JSON.stringify({ kind: 'helloid-sidekick-bundle', version: 1, exportedAt: Date.now(),
-      workspace: workspaceName || null, snapshots, context });
+      workspace: workspaceName || null, snapshots: shipped, context });
   }
 
   /** The kill-switch's half: close the connection, delete the database, and
@@ -221,6 +261,6 @@
     });
   }
 
-  HR.store = { list, get, put, remove, clear, copyTo, makeSnapshot, dateFromName, exportAll, exportBundle, importJSON, isMemory,
+  HR.store = { list, get, put, remove, clear, copyTo, makeSnapshot, dateFromName, exportAll, exportBundle, stripContext, importJSON, isMemory,
     saveContext, loadContext, clearContext, wipeDb };
 })(window.HR);

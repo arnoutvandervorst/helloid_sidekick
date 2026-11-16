@@ -17,7 +17,7 @@
 
   const looksLikeAudit = peek => !!peek && peek.kind === 'helloid-audit' && Array.isArray(peek.provisioning);
 
-  const date = s => { const d = s ? new Date(s) : null; return d && !isNaN(d) ? d : null; };
+  const date = s => U.parseDate(s);
   /* "Issue has been excluded for 6 months (until 03/01/2027 00:00:00)" — the date is US-formatted. */
   const untilOf = desc => {
     const m = String(desc || '').match(/until (\d{1,2})\/(\d{1,2})\/(\d{4})/);

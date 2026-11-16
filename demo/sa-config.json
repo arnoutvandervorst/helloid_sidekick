@@ -1,0 +1,447 @@
+{
+ "kind": "helloid-sa-config",
+ "version": 1,
+ "tenant": "avondrood-demo.example",
+ "collectedAt": "2026-09-04T09:00:00Z",
+ "synthetic": true,
+ "variables": [
+  {
+   "name": "ADusersSearchOU",
+   "value": "OU=Medewerkers,DC=avo,DC=local",
+   "secret": false
+  },
+  {
+   "name": "HrApiBase",
+   "value": "https://hr.avondrood.example/api",
+   "secret": false
+  },
+  {
+   "name": "OldSmtpRelay",
+   "value": "smtp.avo.local",
+   "secret": false
+  },
+  {
+   "name": "HrApiKey",
+   "value": "***",
+   "secret": true
+  }
+ ],
+ "agentPools": [
+  {
+   "agentPoolGUID": "00000000-5a00-4000-8000-000000000900",
+   "name": "Avondrood on-premises"
+  }
+ ],
+ "dataSources": [
+  {
+   "dataSourceGUID": "00000000-5a00-4000-8000-000000000001",
+   "name": "AD - medewerkers zoeken",
+   "type": 4,
+   "runInCloud": false,
+   "script": "try {\n    $searchValue = $datasource.searchValue\n    $users = Get-ADUser -Filter \"Name -like '*$searchValue*'\" -SearchBase $ADusersSearchOU -Properties DisplayName, mail\n    foreach ($u in $users) {\n        Write-Output @{ DisplayName = $u.DisplayName; UserPrincipalName = $u.UserPrincipalName; ObjectGuid = [string]$u.ObjectGuid }\n    }\n} catch {\n    Write-Error \"Searching users failed: $($_.Exception.Message)\"\n}",
+   "model": [
+    {
+     "key": "DisplayName"
+    },
+    {
+     "key": "UserPrincipalName"
+    },
+    {
+     "key": "ObjectGuid"
+    }
+   ],
+   "input": [
+    {
+     "key": "searchValue"
+    }
+   ]
+  },
+  {
+   "dataSourceGUID": "00000000-5a00-4000-8000-000000000002",
+   "name": "AD - alle groepen",
+   "type": 4,
+   "runInCloud": false,
+   "script": "$groups = Get-ADGroup -Filter * -SearchBase \"OU=Groepen,DC=avo,DC=local\" -Properties Description\nforeach ($g in $groups) { Write-Output @{ Name = $g.Name; Description = $g.Description } }",
+   "model": [
+    {
+     "key": "Name"
+    },
+    {
+     "key": "Description"
+    }
+   ],
+   "input": []
+  },
+  {
+   "dataSourceGUID": "00000000-5a00-4000-8000-000000000003",
+   "name": "AD - groepen van medewerker",
+   "type": 4,
+   "runInCloud": false,
+   "script": "try {\n    $user = Get-ADUser -Identity $datasource.selectedUser.ObjectGuid -Properties MemberOf\n    foreach ($dn in $user.MemberOf) {\n        $g = Get-ADGroup -Identity $dn\n        Write-Output @{ Name = $g.Name }\n    }\n} catch {\n    Write-Error \"Reading memberships failed: $($_.Exception.Message)\"\n}",
+   "model": [
+    {
+     "key": "Name"
+    }
+   ],
+   "input": [
+    {
+     "key": "selectedUser"
+    }
+   ]
+  },
+  {
+   "dataSourceGUID": "00000000-5a00-4000-8000-000000000004",
+   "name": "HR - afdelingen",
+   "type": 4,
+   "runInCloud": false,
+   "script": "try {\n    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls\n    $pair = \"svc_hrlink:Zomer2026!\"\n    $headers = @{ Authorization = \"Basic \" + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($pair)) }\n    $deps = Invoke-RestMethod -Uri \"$HrApiBase/departments\" -Headers $headers\n    foreach ($d in $deps) { Write-Output @{ code = $d.code; name = $d.name } }\n} catch {\n    Write-Error \"Department list failed: $($_.Exception.Message)\"\n}",
+   "model": [
+    {
+     "key": "code"
+    },
+    {
+     "key": "name"
+    }
+   ],
+   "input": []
+  },
+  {
+   "dataSourceGUID": "00000000-5a00-4000-8000-000000000005",
+   "name": "AD - medewerker controleren",
+   "type": 4,
+   "runInCloud": false,
+   "script": "try {\n    $u = Get-ADUser -Identity $datasource.selectedUser.ObjectGuid\n    Set-ADUser -Identity $u -Replace @{ extensionAttribute9 = (Get-Date).ToString(\"s\") }\n    Write-Output @{ ObjectGuid = [string]$u.ObjectGuid; Checked = $true }\n} catch {\n    Write-Error \"Lookup failed: $($_.Exception.Message)\"\n}",
+   "model": [
+    {
+     "key": "ObjectGuid"
+    },
+    {
+     "key": "Checked"
+    }
+   ],
+   "input": [
+    {
+     "key": "selectedUser"
+    }
+   ]
+  }
+ ],
+ "dynamicForms": [
+  {
+   "dynamicFormGUID": "00000000-5a00-4000-8000-000000000101",
+   "formOriginalGUID": "00000000-5a00-4000-8000-000000000101",
+   "name": "Account - einddatum instellen",
+   "version": 1,
+   "formSchema": [
+    {
+     "key": "searchValue",
+     "type": "input",
+     "templateOptions": {
+      "label": "Zoek medewerker",
+      "required": true
+     }
+    },
+    {
+     "key": "gridUsers",
+     "type": "grid",
+     "templateOptions": {
+      "label": "Medewerker",
+      "required": true,
+      "grid": {
+       "columns": [
+        {
+         "field": "DisplayName",
+         "headerName": "DisplayName"
+        },
+        {
+         "field": "UserPrincipalName",
+         "headerName": "UserPrincipalName"
+        }
+       ]
+      },
+      "dataSourceConfig": {
+       "dataSourceGuid": "00000000-5a00-4000-8000-000000000001",
+       "input": {
+        "propertyInputs": [
+         {
+          "propertyName": "searchValue",
+          "otherFieldValue": {
+           "otherFieldKey": "searchValue"
+          }
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "key": "formRow",
+     "type": "formrow",
+     "fieldGroup": [
+      {
+       "key": "blnExpDate",
+       "type": "boolean",
+       "templateOptions": {
+        "label": "Einddatum instellen"
+       }
+      },
+      {
+       "key": "expireDate",
+       "type": "datetime",
+       "hideExpression": "!model[\"blnExpDate\"]",
+       "templateOptions": {
+        "label": "Einddatum"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "dynamicFormGUID": "00000000-5a00-4000-8000-000000000102",
+   "formOriginalGUID": "00000000-5a00-4000-8000-000000000102",
+   "name": "Groepslidmaatschap beheren",
+   "version": 2,
+   "formSchema": [
+    {
+     "key": "searchValue",
+     "type": "input",
+     "templateOptions": {
+      "label": "Zoek medewerker",
+      "required": true
+     }
+    },
+    {
+     "key": "gridUsers",
+     "type": "grid",
+     "templateOptions": {
+      "label": "Medewerker",
+      "required": true,
+      "grid": {
+       "columns": [
+        {
+         "field": "DisplayName",
+         "headerName": "DisplayName"
+        },
+        {
+         "field": "Department",
+         "headerName": "Department"
+        }
+       ]
+      },
+      "dataSourceConfig": {
+       "dataSourceGuid": "00000000-5a00-4000-8000-000000000001",
+       "input": {
+        "propertyInputs": [
+         {
+          "propertyName": "searchValue",
+          "otherFieldValue": {
+           "otherFieldKey": "searchValue"
+          }
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "key": "groupsToAdd",
+     "type": "duallist",
+     "templateOptions": {
+      "label": "Groepen",
+      "useDataSource": true,
+      "dualList": {
+       "optionKeyProperty": "Name",
+       "optionDisplayProperty": "Name"
+      },
+      "dataSourceConfig": {
+       "dataSourceGuid": "00000000-5a00-4000-8000-000000000002"
+      },
+      "destinationDataSourceConfig": {
+       "dataSourceGuid": "00000000-5a00-4000-8000-000000000003",
+       "input": {
+        "propertyInputs": [
+         {
+          "propertyName": "selectedUser",
+          "otherFieldValue": {
+           "otherFieldKey": "gridUsers"
+          }
+         }
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "dynamicFormGUID": "00000000-5a00-4000-8000-000000000103",
+   "formOriginalGUID": "00000000-5a00-4000-8000-000000000103",
+   "name": "Wachtwoord resetten",
+   "version": 1,
+   "formSchema": [
+    {
+     "key": "searchValue",
+     "type": "input",
+     "templateOptions": {
+      "label": "Zoek medewerker",
+      "required": true
+     }
+    },
+    {
+     "key": "gridUsers",
+     "type": "grid",
+     "templateOptions": {
+      "label": "Medewerker",
+      "required": true,
+      "grid": {
+       "columns": [
+        {
+         "field": "DisplayName",
+         "headerName": "DisplayName"
+        },
+        {
+         "field": "UserPrincipalName",
+         "headerName": "UserPrincipalName"
+        }
+       ]
+      },
+      "dataSourceConfig": {
+       "dataSourceGuid": "00000000-5a00-4000-8000-000000000001",
+       "input": {
+        "propertyInputs": [
+         {
+          "propertyName": "searchValue",
+          "otherFieldValue": {
+           "otherFieldKey": "searchValue"
+          }
+         }
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "dynamicFormGUID": "00000000-5a00-4000-8000-000000000104",
+   "formOriginalGUID": "00000000-5a00-4000-8000-000000000104",
+   "name": "Afdelingswijziging aanvragen",
+   "version": 1,
+   "formSchema": [
+    {
+     "key": "department",
+     "type": "dropdown",
+     "templateOptions": {
+      "label": "Nieuwe afdeling",
+      "useDataSource": true,
+      "valueField": "code",
+      "textField": "title",
+      "dataSourceConfig": {
+       "dataSourceGuid": "00000000-5a00-4000-8000-000000000004"
+      }
+     }
+    },
+    {
+     "key": "reason",
+     "type": "dropdown",
+     "templateOptions": {
+      "label": "Reden",
+      "options": [
+       "Option 1",
+       "Option 2"
+      ]
+     }
+    }
+   ]
+  }
+ ],
+ "delegatedFormCategories": [
+  {
+   "delegatedFormCategoryGuid": "00000000-5a00-4000-8000-000000000800",
+   "name": {
+    "en": "Accounts",
+    "nl": "Accounts"
+   }
+  }
+ ],
+ "delegatedForms": [
+  {
+   "delegatedFormGUID": "00000000-5a00-4000-8000-000000000201",
+   "name": "Account - einddatum instellen",
+   "dynamicFormGUID": "00000000-5a00-4000-8000-000000000101",
+   "isEnabled": true,
+   "categoryGuids": [
+    "00000000-5a00-4000-8000-000000000800"
+   ],
+   "accessGroups": [
+    {
+     "name": "Servicedesk"
+    }
+   ],
+   "task": {
+    "script": "try {\n    $user = $form.gridUsers\n    Set-ADUser -Identity $user.ObjectGuid -AccountExpirationDate $form.expireDate -ErrorAction Stop\n    Write-Information -Tags \"Audit\" -MessageData @{ Action = \"UpdateAccount\"; System = \"ActiveDirectory\"; Message = \"Expiry set for $($user.DisplayName)\"; IsError = $false; TargetDisplayName = $user.DisplayName; TargetIdentifier = $user.ObjectGuid }\n} catch {\n    Write-Error \"Setting expiry failed: $($_.Exception.Message)\"\n}",
+    "runInCloud": false,
+    "agentPoolId": "00000000-5a00-4000-8000-000000000900"
+   }
+  },
+  {
+   "delegatedFormGUID": "00000000-5a00-4000-8000-000000000202",
+   "name": "Groepslidmaatschap beheren",
+   "dynamicFormGUID": "00000000-5a00-4000-8000-000000000102",
+   "isEnabled": true,
+   "categoryGuids": [
+    "00000000-5a00-4000-8000-000000000800"
+   ],
+   "accessGroups": [
+    {
+     "name": "Servicedesk"
+    },
+    {
+     "name": "Teamleiders"
+    }
+   ],
+   "task": {
+    "script": "$user = $form.gridUsers\nforeach ($g in $form.groupsToAdd.right) {\n    try {\n        Add-ADGroupMember -Identity $g.Name -Members $user.ObjectGuid\n        Write-Host \"Added $($user.DisplayName) to $($g.Name)\"\n    } catch { }\n}",
+    "runInCloud": false,
+    "agentPoolId": "00000000-5a00-4000-8000-000000000900"
+   }
+  },
+  {
+   "delegatedFormGUID": "00000000-5a00-4000-8000-000000000203",
+   "name": "Wachtwoord resetten",
+   "dynamicFormGUID": "00000000-5a00-4000-8000-000000000103",
+   "isEnabled": true,
+   "categoryGuids": [
+    "00000000-5a00-4000-8000-000000000800"
+   ],
+   "accessGroups": [
+    {
+     "name": "Servicedesk"
+    }
+   ],
+   "task": {
+    "script": "try {\n    $user = $form.gridUsers\n    $new = ConvertTo-SecureString \"Welkom2026!\" -AsPlainText -Force\n    Set-ADAccountPassword -Identity $user.ObjectGuid -NewPassword $new -Reset -ErrorAction Stop\n    Set-ADUser -Identity $user.ObjectGuid -ChangePasswordAtLogon $true -ErrorAction Stop\n    Hid-Add-TaskResult -ResultValue \"Password reset for $($form.gridUser.DisplayName)\"\n} catch {\n    Write-Error \"Password reset failed: $($_.Exception.Message)\"\n}",
+    "runInCloud": false,
+    "agentPoolId": "00000000-5a00-4000-8000-000000000900"
+   }
+  },
+  {
+   "delegatedFormGUID": "00000000-5a00-4000-8000-000000000204",
+   "name": "Afdelingswijziging aanvragen",
+   "dynamicFormGUID": "00000000-5a00-4000-8000-000000000104",
+   "isEnabled": true,
+   "categoryGuids": [
+    "00000000-5a00-4000-8000-000000000800"
+   ],
+   "accessGroups": [
+    {
+     "name": "Teamleiders"
+    }
+   ],
+   "task": null
+  }
+ ],
+ "products": [],
+ "scheduledTasks": []
+}

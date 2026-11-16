@@ -1164,6 +1164,9 @@ class DemoSet:
         if os.path.exists(os.path.join(outdir, 'nedap-book.json')):
             manifest['files'].append({'slot': 'nedapbook', 'file': 'nedap-book.json'})
         manifest['files'].append({'slot': 'audit', 'file': 'audit.json'})
+        # Hand-written, invented Service Automation export (demo/sa-config.json): kept, not generated.
+        if os.path.exists(os.path.join(outdir, 'sa-config.json')):
+            manifest['files'].append({'slot': 'saconfig', 'file': 'sa-config.json'})
         with open(os.path.join(outdir, 'manifest.json'), 'w', encoding='utf-8') as fh:
             json.dump(manifest, fh, indent=1)
             fh.write('\n')

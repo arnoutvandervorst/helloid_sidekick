@@ -109,20 +109,23 @@
 
   function sheetRows(xml, sst) {
     const rows = [];
-    const rowRe = /<row [^>]*?r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g;
+    /* An empty row is self-closing; matching it as open would swallow the next row. */
+    const rowRe = /<row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g;
     const cellRe = /<c ([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
-    let rm;
+    let rm, prev = -1;
     while ((rm = rowRe.exec(xml)) !== null) {
-      const r = parseInt(rm[1], 10) - 1;
+      const rAttr = /\br="(\d+)"/.exec(rm[1]);
+      const r = prev = rAttr ? parseInt(rAttr[1], 10) - 1 : prev + 1;
+      if (!rm[2]) continue;
       const cells = [];
       let cm;
       while ((cm = cellRe.exec(rm[2])) !== null) {
         const attrs = cm[1];
         const body = cm[2] || '';
-        const refM = /r="([A-Z]+)\d+"/.exec(attrs);
+        const refM = /\br="([A-Z]+)\d+"/.exec(attrs);
         if (!refM) continue;
         const col = colIndex(refM[1]);
-        const typeM = /t="(\w+)"/.exec(attrs);
+        const typeM = /\bt="(\w+)"/.exec(attrs);
         const type = typeM ? typeM[1] : '';
         let value = '';
         if (type === 'inlineStr') {
@@ -162,9 +165,12 @@
     const sst = sharedStrings(await opt('xl/sharedStrings.xml'));
 
     const rels = new Map();
-    const relRe = /<Relationship [^>]*?Id="([^"]+)"[^>]*?Target="([^"]+)"[^>]*?\/?>/g;
+    const relRe = /<Relationship\b[^>]*>/g;
     let m;
-    while ((m = relRe.exec(relsXml)) !== null) rels.set(m[1], m[2]);
+    while ((m = relRe.exec(relsXml)) !== null) {
+      const id = /\sId="([^"]+)"/.exec(m[0]), target = /\sTarget="([^"]+)"/.exec(m[0]);
+      if (id && target) rels.set(id[1], target[1]);
+    }
 
     const sheets = new Map();
     const sheetRe = /<sheet [^>]*?\/>/g;
@@ -183,5 +189,5 @@
   }
 
   window.HR = window.HR || {};
-  window.HR.xlsx = { read, isZip };
+  window.HR.xlsx = { read, isZip, sheetRows };
 })();

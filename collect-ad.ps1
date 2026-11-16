@@ -13,7 +13,8 @@
   read the directory — any domain user can, by default.
 
 .PARAMETER OutFile
-  Where to write the JSON envelope. Default: directory-ad.json
+  Where to write the JSON envelope. Default: exports\directory-ad.json next to the script
+  (kept out of the script folder, which is what gets zipped and served; owner-only on Linux/macOS).
 
 .PARAMETER SearchBase
   Optional OU to limit the export, e.g. "OU=Employees,DC=corp,DC=local".
@@ -34,7 +35,7 @@
   Justification = 'Interactive console script; progress and the PII warning belong on the host, never in the pipeline.')]
 [CmdletBinding()]
 param(
-  [string]$OutFile = "directory-ad.json",
+  [string]$OutFile = (Join-Path $PSScriptRoot 'exports/directory-ad.json'),
   [string]$SearchBase = "",
   [string[]]$ExtraAttributes = @()
 )
@@ -223,7 +224,9 @@ $envelope = [ordered]@{
 }
 
 Write-Step "Writing JSON..."
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent ($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutFile))) | Out-Null
 $envelope | ConvertTo-Json -Depth 8 -Compress | Out-File -FilePath $OutFile -Encoding utf8
+if ($IsLinux -or $IsMacOS) { & chmod 600 $OutFile }
 
 $nested = ($groups | ForEach-Object { $_.memberGroups.Count } | Measure-Object -Sum).Sum
 $edges = ($groups | ForEach-Object { $_.memberUsers.Count } | Measure-Object -Sum).Sum

@@ -17,7 +17,7 @@
   How far back to read. Default 400.
 
 .PARAMETER OutFile
-  Where to write the JSON. Default: helloid-audit.json next to the script.
+  Where to write the JSON. Default: exports\helloid-audit.json next to the script (owner-only on Linux/macOS).
 
 .PARAMETER ProfileName
   A saved profile name. Default: the config file's default profile.
@@ -44,7 +44,7 @@
 [CmdletBinding()]
 param(
   [int]$Days = 400,
-  [string]$OutFile = (Join-Path $PSScriptRoot 'helloid-audit.json'),
+  [string]$OutFile = (Join-Path $PSScriptRoot 'exports/helloid-audit.json'),
   [string]$ProfileName = '',
   [switch]$Setup,
   [switch]$ListProfiles,
@@ -93,6 +93,7 @@ $Sources = @(
 
 $creds = Resolve-HelloIDCredential -Kind elastic -ProfileName $ProfileName -Setup:$Setup -EnvFile $EnvFile
 $base = $creds.Url.TrimEnd('/')
+if ($base -notmatch '^https://') { throw "The Elastic URL must start with https:// (got '$base'): plain http would send the Elastic secret in clear." }
 $headers = @{ Authorization = (Get-HelloIDBasicAuth $creds.Key $creds.Secret); Accept = 'application/json' }
 $script:Requests = 0
 
@@ -202,7 +203,9 @@ foreach ($src in $Sources) {
 }
 
 Write-Step 'Writing JSON ...'
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent ($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutFile))) | Out-Null
 $out | ConvertTo-Json -Depth 12 -Compress | Set-Content -Path $OutFile -Encoding UTF8
+if ($IsLinux -or $IsMacOS) { & chmod 600 $OutFile }
 $size = [Math]::Round((Get-Item $OutFile).Length / 1MB, 1)
 Write-Step ("Wrote {0} ({1} MB) - {2:N0} rows over {3} requests" -f $OutFile, $size, $grand, $script:Requests)
 Write-Host ''

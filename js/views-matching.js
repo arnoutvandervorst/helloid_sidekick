@@ -571,7 +571,7 @@
           { key: 'when', label: T('mt.decidedAt'), value: r => r.d.decidedAt || '',
             render: r => r.d.decidedAt ? U.fmtDate(Date.parse(r.d.decidedAt)) : '—' },
           { key: 'undo', label: '', sortable: false,
-            render: r => el('button', { class: 'btn sm danger', text: '✕', onclick: e => {
+            render: r => el('button', { class: 'btn sm danger', text: '✕', 'aria-label': T('c.remove'), title: T('c.remove'), onclick: e => {
               e.stopPropagation();
               HR.config.setMatchDecision(r.key, null);
               HR.app.rebuildBusy().then(() => U.toast(T('mt.toastUndone'), 3000));

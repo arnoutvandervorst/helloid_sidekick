@@ -6,6 +6,9 @@
 
   const U = HR.util;
   const el = U.el;
+  const T = (k, p) => HR.i18n.t(k, p);
+  /* Every SVG chart is one image to a screen reader, named by what it shows. */
+  const label = (s, text) => { s.setAttribute('role', 'img'); s.setAttribute('aria-label', text); return s; };
   const SVGNS = 'http://www.w3.org/2000/svg';
 
   const slot = i => 'var(--series-' + (((i - 1) % 8) + 1) + ')';
@@ -134,7 +137,7 @@
         Math.round(maxV * t)));
     });
     s.appendChild(n('line', { x1: padL, x2: W - padR, y1: padT + plotH, y2: padT + plotH, stroke: 'var(--axis)', 'stroke-width': 1 }));
-    return s;
+    return label(s, opts.label || T('ch.histogram', { n: U.fmtInt(values.length), max: U.fmtInt(maxV), top: U.fmtInt(maxC) }));
   }
 
   /* --------------------------------------------------------------- scatter */
@@ -182,7 +185,8 @@
       if (p.onClick) { c.style.cursor = 'pointer'; c.addEventListener('click', p.onClick); }
       s.appendChild(c);
     });
-    return s;
+    return label(s, opts.label || T('ch.scatter', { n: U.fmtInt(points.length) }) +
+      (opts.xLabel && opts.yLabel ? ' ' + T('ch.axes', { x: opts.xLabel, y: opts.yLabel }) : ''));
   }
 
   /* ------------------------------------------------------------------ line */
@@ -219,7 +223,50 @@
         s.appendChild(c);
       });
     });
-    return s;
+    return label(s, opts.label || seriesSummary(series, xLabels, opts.formatY));
+  }
+
+  /** "Grants: latest 4, peak 31 · Revokes: …", over the first and last label. */
+  function seriesSummary(series, xLabels, fmt) {
+    const f = fmt || U.fmtInt;
+    return T('ch.series', { from: xLabels[0] || '', to: xLabels[xLabels.length - 1] || '' }) + ' ' + series.map(se => {
+      const ys = se.points.map(p => p.y);
+      return T('ch.seriesOne', { label: se.label, last: f(ys[ys.length - 1] || 0), max: f(Math.max(0, ...ys)) });
+    }).join(' \u00b7 ');
+  }
+
+  /* -------------------------------------------------------------- columns */
+  /** Grouped columns: series [{label, color, values:[]}] over labelled buckets. */
+  function columns(series, xLabels, opts) {
+    opts = opts || {};
+    const W = 640, H = opts.height || 220, padL = 46, padB = 30, padT = 12, padR = 8;
+    const s = svg(W, H);
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const maxY = Math.max(1, ...series.flatMap(se => se.values));
+    const sy = v => padT + plotH * (1 - v / maxY);
+    [0, .5, 1].forEach(t => {
+      const y = padT + plotH * (1 - t);
+      s.appendChild(n('line', { x1: padL, x2: W - padR, y1: y, y2: y, stroke: 'var(--grid)', 'stroke-width': 1 }));
+      s.appendChild(n('text', { x: padL - 6, y: y + 4, 'text-anchor': 'end', fill: 'var(--muted)', 'font-size': 11 }, U.fmtInt(maxY * t)));
+    });
+    const bw = plotW / Math.max(1, xLabels.length), gap = Math.min(4, bw * .2);
+    const cw = Math.max(1, (bw - gap) / series.length);
+    const every = Math.ceil(xLabels.length / 8);
+    xLabels.forEach((lb, i) => {
+      const x0 = padL + i * bw + gap / 2;
+      series.forEach((se, k) => {
+        const v = se.values[i] || 0;
+        const r = n('rect', { x: x0 + k * cw, y: sy(v), width: Math.max(1, cw - 1), height: Math.max(v ? 1 : 0, padT + plotH - sy(v)), rx: Math.min(2, cw / 3), fill: se.color });
+        U.tip(r, () => '<div class="t-title">' + U.esc(lb) + '</div>' + series.map(x =>
+          '<div class="t-row"><span>' + U.esc(x.label) + '</span><b>' + U.fmtInt(x.values[i] || 0) + '</b></div>').join(''));
+        s.appendChild(r);
+      });
+      if (i % every === 0) s.appendChild(n('text', { x: x0 + (bw - gap) / 2, y: H - 10, 'text-anchor': 'middle', fill: 'var(--muted)', 'font-size': 11 }, lb));
+    });
+    s.appendChild(n('line', { x1: padL, x2: W - padR, y1: padT + plotH, y2: padT + plotH, stroke: 'var(--axis)', 'stroke-width': 1 }));
+    const wrap = el('div', {}, [label(s, opts.label || seriesSummary(series.map(se => ({ label: se.label, points: se.values.map(y => ({ y })) })), xLabels)),
+      legend(series.map(se => ({ label: se.label, color: se.color })))]);
+    return wrap;
   }
 
   /* ----------------------------------------------------------------- spark */
@@ -247,6 +294,7 @@
     const lastI = values.length - 1;
     if (values[lastI] != null) s.appendChild(n('circle', { cx: sx(lastI), cy: sy(values[lastI]), r: 2.5, fill: opts.color || 'var(--accent)' }));
     s.setAttribute('class', 'chart spark');
+    label(s, opts.label || T('ch.spark', { v: opts.format ? opts.format(nums[nums.length - 1]) : U.fmtNum(nums[nums.length - 1], Number.isInteger(nums[nums.length - 1]) ? 0 : 1) }));
     s.style.width = opts.fluid ? '100%' : W + 'px';
     if (opts.fluid) s.setAttribute('preserveAspectRatio', 'none');
     return s;
@@ -272,7 +320,8 @@
         td.textContent = c.value ? U.fmtInt(c.value) : '·';
         if (c.value) {
           td.style.background = seqStep(c.value / max);
-          td.style.color = (c.value / max) > .45 ? '#fff' : 'var(--text-primary)';
+          /* The ramp is the same in both themes, so the ink follows the step, not the theme. */
+          td.style.color = Math.floor(c.value / max * 6) >= 3 ? 'var(--on-primary)' : 'var(--seq-ink)';
         }
         if (c.onClick) { td.style.cursor = 'pointer'; td.addEventListener('click', c.onClick); }
         U.tip(td, () => c.tip || null);
@@ -284,5 +333,5 @@
     return el('div', { class: 'tbl-wrap' }, table);
   }
 
-  HR.charts = { barList, stackedBar, histogram, scatter, line, spark, heatmap, legend, slot, STATUS, seqStep };
+  HR.charts = { barList, stackedBar, histogram, scatter, line, columns, spark, heatmap, legend, slot, STATUS, seqStep };
 })(window.HR);

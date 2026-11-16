@@ -8,7 +8,7 @@ window.HR = window.HR || {};
 
   const el = (tag, attrs, children) => {
     const n = document.createElement(tag);
-    if (attrs) for (const k in attrs) {
+    if (attrs) for (const k of Object.keys(attrs)) {
       const v = attrs[k];
       if (v == null || v === false) continue;
       if (k === 'class') n.className = v;
@@ -84,13 +84,41 @@ window.HR = window.HR || {};
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   }
 
-  function toCSV(rows, columns) {
+  /** opts.raw: an internal round-trip the app parses itself, so no formula guard. */
+  function toCSV(rows, columns, opts) {
     const cols = columns || Object.keys(rows[0] || {});
+    const raw = !!(opts && opts.raw);
     const cell = v => {
-      const s = v == null ? '' : String(v);
+      let s = v == null ? '' : String(v);
+      // a spreadsheet would run it as a formula; a plain negative number is left alone
+      if (!raw && /^[=+\-@\t\r]/.test(s) && !/^-\d+([.,]\d+)?$/.test(s)) s = "'" + s;
       return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     };
     return [cols.join(',')].concat(rows.map(r => cols.map(c => cell(r[c])).join(','))).join('\r\n');
+  }
+
+  /** One strict date reader for every import: ISO date or datetime (zoneless read as UTC, like
+      date-only), or day-first dd-mm-yyyy / dd/mm/yyyy. Anything else is null, never a guess. */
+  function parseDate(v) {
+    if (v == null || v === '') return null;
+    if (v instanceof Date) return isNaN(v) ? null : v;
+    if (typeof v === 'number') { const d = new Date(v); return isNaN(d) ? null : d; }
+    const s = String(v).trim();
+    let m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-]\d{2}:?\d{2})?)?$/i);
+    let y, mo, d, h = 0, mi = 0, se = 0, ms = 0, zone = null;
+    if (m) {
+      [y, mo, d] = [+m[1], +m[2], +m[3]];
+      if (m[4] != null) { h = +m[4]; mi = +m[5]; se = +(m[6] || 0); ms = +((m[7] || '0') + '00').slice(0, 3); }
+      zone = m[8] && m[8].toUpperCase() !== 'Z' ? m[8] : null;
+    } else if ((m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/))) {
+      [d, mo, y] = [+m[1], +m[2], +m[3]];
+      if (m[4] != null) { h = +m[4]; mi = +m[5]; se = +(m[6] || 0); }
+    } else return null;
+    let t = Date.UTC(y, mo - 1, d, h, mi, se, ms);
+    const back = new Date(t);
+    if (back.getUTCMonth() !== mo - 1 || back.getUTCDate() !== d || h > 23 || mi > 59 || se > 59) return null;
+    if (zone) { const z = zone.replace(':', ''); t -= (z[0] === '-' ? -1 : 1) * (+z.slice(1, 3) * 60 + +z.slice(3, 5)) * 60000; }
+    return new Date(t);
   }
 
   let toastTimer;
@@ -124,6 +152,6 @@ window.HR = window.HR || {};
 
   HR.util = {
     el, esc, t, fmtInt, fmtNum, fmtPct, fmtPctFloor, fmtMoney, fmtDate, sum, uniq, by, counts, sortMap,
-    clamp, hash, severityRank, download, toCSV, toast, tip, showTip, hideTip
+    clamp, hash, severityRank, download, toCSV, parseDate, toast, tip, showTip, hideTip
   };
 })(window.HR);

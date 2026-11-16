@@ -22,6 +22,13 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = os.path.join(HERE, 'helloid-config.json')
+# Collector output lands here, never in the script folder that devserve.py serves and people zip.
+EXPORTS = os.path.join(HERE, 'exports')
+
+
+def private(path, flags):
+    """open(..., opener=private): a new file is created owner-only (0600), never readable first."""
+    return os.open(path, flags, 0o600)
 
 # What each script needs: profile field → (env variable, prompt label, hidden)
 KINDS = {
@@ -74,7 +81,7 @@ def load():
 
 def save(data):
     tmp = CONFIG + '.tmp'
-    with open(tmp, 'w', encoding='utf-8') as fh:
+    with open(tmp, 'w', encoding='utf-8', opener=private) as fh:
         json.dump(data, fh, indent=2)
     try:
         os.chmod(tmp, stat.S_IRUSR | stat.S_IWUSR)
@@ -199,4 +206,7 @@ def resolve(kind, args):
 
 
 def _pack(src, fields, name):
+    if fields[0] in ('url', 'elasticUrl') and not str(src[fields[0]]).lower().startswith('https://'):
+        # Basic auth carries the key and secret on every request: never over plain http
+        raise SystemExit(f'{fields[0]} must start with https:// (got {src[fields[0]]!r}); plain http would send the secret in clear.')
     return {'url': src[fields[0]], 'key': src[fields[1]], 'secret': src[fields[2]], 'profile': name}
