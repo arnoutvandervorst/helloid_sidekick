@@ -235,6 +235,7 @@
     const shipped = noMoney ? snapshots.map(s => {
       const summary = Object.assign({}, s.summary);
       ['monthlyCost', 'wasteMonthly', 'remediationCost'].forEach(k => delete summary[k]);
+      if (Array.isArray(summary.departments)) summary.departments = summary.departments.map(({ costPerHead, ...d }) => d);
       return Object.assign({}, s, { summary });
     }) : snapshots;
     const ctx = (await loadContext()) || {};
