@@ -18,6 +18,13 @@
 
   const ENTRIES = [
     {
+      version: '2026.11.3', date: '2026-11-18',
+      changes: [
+        "Rule journey (Design): the business-rule export explained in four steps. Explore puts every rule in a plain sentence and lets you search and filter on rule, department, title or entitlement, and shows which rules grant the same entitlement. Stack picks a person from the vault, or a profile made from the values the rules select on, and shows the rules stacking layer by layer: what each adds and what was already there. Timeline follows one person through their contracts, with a lane per rule, the stacked total on top, and zoom on a joiner, mover or leaver; stretches that hold only through a rule's time frame are hatched. Tidy up lists rules that add nothing, entitlements granted twice except in the time frame, drafts and rules that reach few people, over a rules × entitlements matrix.",
+        "Business rules: \"Person: active\" now needs an active contract, as in HelloID. People whose contracts have all ended no longer match any rule, so the selected-people counts can drop."
+      ]
+    },
+    {
       version: '2026.11.2', date: '2026-11-16',
       changes: [
         "A published dashboard for a role without cost figures no longer carries each department's cost per head."
