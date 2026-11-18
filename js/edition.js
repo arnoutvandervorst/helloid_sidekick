@@ -32,7 +32,7 @@
     health: {
       groups: [
         ['state', ['overview', 'audit', 'risk']],
-        ['model', ['rules', 'scripts', 'mining', 'activity', 'explain', 'conventions', 'matching']],
+        ['model', ['rules', 'journey', 'scripts', 'mining', 'activity', 'explain', 'conventions', 'matching']],
         ['who', ['accounts', 'permissions', 'people']],
         ['data', ['diff', 'snapshots', 'sources']],
         ['out', ['board', 'settings']]
@@ -41,7 +41,7 @@
     },
     consult: {
       groups: [
-        ['model', ['mining', 'conventions', 'fieldmap', 'nedap', 'matching', 'products', 'scripts', 'rules']],
+        ['model', ['mining', 'conventions', 'fieldmap', 'nedap', 'matching', 'products', 'scripts', 'rules', 'journey']],
         ['who', ['people', 'org', 'accounts', 'permissions']],
         ['data', ['sources', 'snapshots']],
         ['out', ['settings']]
@@ -52,7 +52,7 @@
       groups: [
         ['state', ['overview', 'policies', 'audit', 'risk', 'cost']],
         ['who', ['accounts', 'permissions', 'people', 'matching', 'org', 'conventions']],
-        ['model', ['mining', 'rules', 'products', 'scripts', 'nedap', 'fieldmap', 'activity', 'explain']],
+        ['model', ['mining', 'rules', 'journey', 'products', 'scripts', 'nedap', 'fieldmap', 'activity', 'explain']],
         ['data', ['diff', 'snapshots', 'sources']],
         ['out', ['board', 'settings']]
       ],

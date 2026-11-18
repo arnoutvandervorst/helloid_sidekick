@@ -269,7 +269,7 @@
     overview: ['recon'], policies: ['recon'], audit: ['audit'], risk: ['recon'], cost: ['recon'],
     accounts: ['recon'], permissions: ['recon'],
     people: ['vault|recon'], org: ['vault'], matching: ['recon', 'vault'],
-    mining: ['vault'], rules: ['rules'],
+    mining: ['vault'], rules: ['rules'], journey: ['rules'],
     products: ['products|assignments'], activity: ['granted|history'],
     explain: ['recon'], diff: ['recon'], board: ['recon'],
     conventions: ['recon|vault']

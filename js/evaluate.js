@@ -164,11 +164,13 @@
       if (cond.timeFrame) continue;
       const facet = norm(cond.facet);
 
-      /* "Person: active" — the state flags HelloID keeps on the person itself. */
+      /* "Person: active" — HelloID counts a person as active only with at least one active
+         contract (docs: Business rules › Conditions › Person status), the time frame
+         stretching what active means; plus the state flags kept on the person itself. */
       if (facet === 'person') {
         const wants = cond.values.map(norm);
         let ok = true;
-        if (wants.includes('active')) ok = !person.blocked && !person.excluded;
+        if (wants.includes('active')) ok = !person.blocked && !person.excluded && eligible.length > 0;
         else if (wants.includes('blocked')) ok = person.blocked;
         else if (wants.includes('excluded')) ok = person.excluded;
         else ok = null;

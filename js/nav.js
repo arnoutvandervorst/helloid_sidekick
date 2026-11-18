@@ -48,14 +48,15 @@
     fieldmap: 'M4 6h6M4 12h6M4 18h6M14 6h6M14 12h6M14 18h6M10 6l4 6M10 12l4-6M10 12l4 6M10 18l4-6',
     policies: 'M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3zM9 12l2 2 4-4',
     audit: 'M5 4h10l4 4v12H5zM14 4v5h5M8 13h8M8 17h5',
-    scripts: 'M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 5l-3 14'
+    scripts: 'M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 5l-3 14',
+    journey: 'M6 19a2 2 0 100-4 2 2 0 000 4zM18 9a2 2 0 100-4 2 2 0 000 4zM8 17h7a3 3 0 000-6H9a3 3 0 010-6h7'
   };
 
   /* The groups are the questions somebody arrives with, not the modules that answer them. */
   const GROUPS = [
     { key: 'state', views: ['overview', 'policies', 'audit', 'risk', 'cost'] },
     { key: 'who', views: ['accounts', 'permissions', 'people', 'matching', 'org', 'conventions'] },
-    { key: 'model', views: ['mining', 'rules', 'products', 'scripts', 'nedap', 'fieldmap', 'activity', 'explain'] },
+    { key: 'model', views: ['mining', 'rules', 'journey', 'products', 'scripts', 'nedap', 'fieldmap', 'activity', 'explain'] },
     { key: 'data', views: ['diff', 'snapshots', 'sources'] },
     { key: 'out', views: ['board', 'settings'] }
   ];
